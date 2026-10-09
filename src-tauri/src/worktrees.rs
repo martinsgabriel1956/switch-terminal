@@ -1,0 +1,508 @@
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Config {
+    #[serde(default = "default_timeout")]
+    stop_timeout_ms: u64,
+    projects: Vec<ProjectCfg>,
+}
+
+fn default_timeout() -> u64 {
+    5000
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectCfg {
+    name: String,
+    api: SideCfg,
+    front: SideCfg,
+    #[serde(default)]
+    manual_pairs: Vec<Pair>,
+    base_branch: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SideCfg {
+    repo: String,
+    start_command: Option<String>,
+    setup_command: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct Pair {
+    api: String,
+    front: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigView {
+    stop_timeout_ms: u64,
+    projects: Vec<ProjectView>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectView {
+    name: String,
+    error: Option<String>,
+    worktrees: Vec<WorktreeView>,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+pub struct WorktreeView {
+    id: String,
+    label: String,
+    api: Option<SideView>,
+    front: Option<SideView>,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SideView {
+    path: String,
+    start_command: Option<String>,
+    setup_command: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct Wt {
+    branch: String,
+    path: String,
+}
+
+fn home() -> String {
+    std::env::var("HOME").unwrap_or_default()
+}
+
+fn expand(p: &str) -> String {
+    match p.strip_prefix("~/") {
+        Some(rest) => format!("{}/{}", home(), rest),
+        None => p.to_string(),
+    }
+}
+
+pub fn config_path() -> String {
+    format!("{}/.config/switch-terminal/config.json", home())
+}
+
+/// Saída de `git worktree list --porcelain`: blocos separados por linha em branco.
+fn parse_porcelain(out: &str) -> Vec<Wt> {
+    out.split("\n\n")
+        .filter_map(|block| {
+            let mut path = None;
+            let mut branch = None;
+            for line in block.lines() {
+                // bare: o repo em si; prunable: a pasta da worktree não existe mais.
+                if line == "bare" || line.starts_with("prunable") {
+                    return None;
+                }
+                if let Some(p) = line.strip_prefix("worktree ") {
+                    path = Some(p.to_string());
+                }
+                if let Some(b) = line.strip_prefix("branch refs/heads/") {
+                    branch = Some(b.to_string());
+                }
+            }
+            let path = path?;
+            // Detached HEAD: usa o nome da pasta como "branch".
+            let branch = branch.unwrap_or_else(|| path.rsplit('/').next().unwrap_or(&path).to_string());
+            Some(Wt { branch, path })
+        })
+        .collect()
+}
+
+/// Pares manuais primeiro, depois pelo nome exato da branch; o que sobra vira solo.
+fn pair(api: Vec<Wt>, front: Vec<Wt>, manual: &[Pair]) -> Vec<(Option<Wt>, Option<Wt>)> {
+    let mut fronts: HashMap<String, Wt> = front.iter().map(|w| (w.branch.clone(), w.clone())).collect();
+    let manual: HashMap<&str, &str> = manual.iter().map(|p| (p.api.as_str(), p.front.as_str())).collect();
+
+    let mut out: Vec<(Option<Wt>, Option<Wt>)> = api
+        .into_iter()
+        .map(|a| {
+            let f = manual
+                .get(a.branch.as_str())
+                .and_then(|fb| fronts.remove(*fb))
+                .or_else(|| fronts.remove(&a.branch));
+            (Some(a), f)
+        })
+        .collect();
+    // Solos do front na ordem original do git.
+    out.extend(front.into_iter().filter(|f| fronts.contains_key(&f.branch)).map(|f| (None, Some(f))));
+    out
+}
+
+fn git(repo: &str, args: &[&str]) -> Result<String, String> {
+    let out = Command::new("git").arg("-C").arg(repo).args(args).output().map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(format!("{}: {}", repo, String::from_utf8_lossy(&out.stderr).trim()));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+fn git_worktrees(repo: &str) -> Result<Vec<Wt>, String> {
+    git(repo, &["worktree", "list", "--porcelain"]).map(|out| parse_porcelain(&out))
+}
+
+fn side(w: &Option<Wt>, cfg: &SideCfg) -> Option<SideView> {
+    w.as_ref().map(|w| SideView {
+        path: w.path.clone(),
+        start_command: cfg.start_command.clone(),
+        setup_command: cfg.setup_command.clone(),
+    })
+}
+
+fn view(p: &ProjectCfg, pairs: Vec<(Option<Wt>, Option<Wt>)>) -> Vec<WorktreeView> {
+    pairs
+        .into_iter()
+        .map(|(a, f)| {
+            let ab = a.as_ref().map(|w| w.branch.as_str()).unwrap_or("");
+            let fb = f.as_ref().map(|w| w.branch.as_str()).unwrap_or("");
+            let label = match (ab, fb) {
+                ("", x) | (x, "") => x.to_string(),
+                (x, y) if x == y => x.to_string(),
+                (x, y) => format!("{x} ↔ {y}"),
+            };
+            WorktreeView { id: format!("{ab}|{fb}"), label, api: side(&a, &p.api), front: side(&f, &p.front) }
+        })
+        .collect()
+}
+
+fn read_config() -> Result<Config, String> {
+    let path = config_path();
+    let raw = std::fs::read_to_string(&path).map_err(|e| format!("Não consegui ler {path}: {e}"))?;
+    serde_json::from_str(&raw).map_err(|e| format!("{path} inválido: {e}"))
+}
+
+#[tauri::command]
+pub fn load_config() -> Result<ConfigView, String> {
+    let cfg = read_config()?;
+
+    let projects = cfg
+        .projects
+        .iter()
+        .map(|p| {
+            let (error, worktrees) = match (git_worktrees(&expand(&p.api.repo)), git_worktrees(&expand(&p.front.repo))) {
+                (Ok(a), Ok(f)) => (None, view(p, pair(a, f, &p.manual_pairs))),
+                (Err(e), _) | (_, Err(e)) => (Some(e), vec![]),
+            };
+            ProjectView { name: p.name.clone(), error, worktrees }
+        })
+        .collect();
+
+    Ok(ConfigView { stop_timeout_ms: cfg.stop_timeout_ms, projects })
+}
+
+/// Pasta padrão das worktrees: repo bare (`repo/.bare` + uma pasta por branch) → `repo/`; repo normal → `<repo>.worktrees/`.
+fn default_dir(repo: &str) -> Result<PathBuf, String> {
+    let bare = git(repo, &["config", "--bool", "core.bare"]).unwrap_or_default() == "true";
+    if bare {
+        let common = git(repo, &["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
+        Ok(Path::new(&common).parent().ok_or("repo sem pasta pai")?.to_path_buf())
+    } else {
+        Ok(PathBuf::from(format!("{}.worktrees", repo.trim_end_matches('/'))))
+    }
+}
+
+/// (locais, remotas), sem os `origin/HEAD`.
+fn branches(repo: &str) -> Result<(Vec<String>, Vec<String>), String> {
+    let out = git(repo, &["for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes"])?;
+    let (mut local, mut remote) = (vec![], vec![]);
+    for r in out.lines() {
+        if let Some(b) = r.strip_prefix("refs/heads/") {
+            local.push(b.to_string());
+        } else if let Some(b) = r.strip_prefix("refs/remotes/") {
+            if !b.ends_with("/HEAD") {
+                remote.push(b.to_string());
+            }
+        }
+    }
+    Ok((local, remote))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SideDefaults {
+    dir: String,
+    local: Vec<String>,
+    remote: Vec<String>,
+    default_base: String,
+}
+
+#[derive(Serialize)]
+pub struct WorktreeDefaults {
+    api: Result<SideDefaults, String>,
+    front: Result<SideDefaults, String>,
+}
+
+fn side_defaults(side: &SideCfg, base_branch: &Option<String>) -> Result<SideDefaults, String> {
+    let repo = expand(&side.repo);
+    let (local, remote) = branches(&repo)?;
+    let default_base = [base_branch.as_deref(), Some("main"), Some("master")]
+        .into_iter()
+        .flatten()
+        .find(|b| local.iter().any(|x| x == b))
+        .map(str::to_string)
+        .or_else(|| local.first().or(remote.first()).cloned())
+        .unwrap_or_default();
+    Ok(SideDefaults { dir: default_dir(&repo)?.to_string_lossy().into(), local, remote, default_base })
+}
+
+/// Valores iniciais do formulário de nova worktree: pasta padrão e branches de cada repo.
+#[tauri::command]
+pub async fn worktree_defaults(project: String) -> Result<WorktreeDefaults, String> {
+    let cfg = read_config()?;
+    let p = cfg.projects.iter().find(|p| p.name == project).ok_or("projeto não encontrado")?;
+    Ok(WorktreeDefaults { api: side_defaults(&p.api, &p.base_branch), front: side_defaults(&p.front, &p.base_branch) })
+}
+
+/// Cria `<dir>/<branch>`. Branch que já existe (local ou `origin/<branch>`) é reaproveitada e `base` é ignorada.
+fn add_one(repo: &str, dir: &str, branch: &str, base: &str) -> Result<(), String> {
+    // Também barra "..", espaços etc.: o nome vira caminho no disco.
+    git(repo, &["check-ref-format", "--branch", branch])?;
+    let dir = expand(dir.trim());
+    if !Path::new(&dir).is_absolute() {
+        return Err(format!("diretório precisa ser um caminho absoluto: {dir}"));
+    }
+    let path = Path::new(&dir).join(branch);
+    let path = path.to_str().ok_or("caminho inválido")?;
+    let has = |r: &str| git(repo, &["rev-parse", "--verify", "--quiet", r]).is_ok();
+    if has(&format!("refs/heads/{branch}")) || has(&format!("refs/remotes/origin/{branch}")) {
+        git(repo, &["worktree", "add", path, branch])?;
+    } else {
+        if base.is_empty() {
+            return Err("escolha a branch de origem".into());
+        }
+        git(repo, &["worktree", "add", "-b", branch, path, base])?;
+    }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+pub struct SideRequest {
+    dir: String,
+    base: String,
+}
+
+/// Cria a worktree na API, no front ou nos dois. async: o checkout pode demorar e não deve travar a UI.
+#[tauri::command]
+pub async fn add_worktree(project: String, branch: String, api: Option<SideRequest>, front: Option<SideRequest>) -> Result<(), String> {
+    let cfg = read_config()?;
+    let p = cfg.projects.iter().find(|p| p.name == project).ok_or("projeto não encontrado")?;
+    let branch = branch.trim();
+    if branch.is_empty() || (api.is_none() && front.is_none()) {
+        return Err("Informe a branch e marque API, front ou os dois.".into());
+    }
+    let mut done = vec![];
+    for (req, label, side) in [(api, "API", &p.api), (front, "Front", &p.front)] {
+        let Some(req) = req else { continue };
+        add_one(&expand(&side.repo), &req.dir, branch, req.base.trim()).map_err(|e| {
+            let partial = if done.is_empty() { String::new() } else { format!(" ({} já foi criada)", done.join(", ")) };
+            format!("{label}: {e}{partial}")
+        })?;
+        done.push(label);
+    }
+    Ok(())
+}
+
+// ---------- novo projeto ----------
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewSide {
+    repo: String,
+    start_command: String,
+    setup_command: String,
+}
+
+#[derive(Deserialize)]
+pub struct NewProject {
+    name: String,
+    api: NewSide,
+    front: NewSide,
+}
+
+/// `/home/x/dev/api` → `~/dev/api`, para o config continuar legível.
+fn contract(p: &str) -> String {
+    let home = home();
+    match p.strip_prefix(&format!("{home}/")) {
+        Some(rest) if !home.is_empty() => format!("~/{rest}"),
+        _ => p.to_string(),
+    }
+}
+
+fn side_json(label: &str, s: &NewSide) -> Result<serde_json::Value, String> {
+    let repo = expand(s.repo.trim()).trim_end_matches('/').to_string();
+    if repo.is_empty() {
+        return Err(format!("{label}: escolha o repositório"));
+    }
+    git(&repo, &["rev-parse", "--git-dir"]).map_err(|_| format!("{label}: {repo} não é um repositório git"))?;
+    let mut side = serde_json::json!({ "repo": contract(&repo) });
+    for (k, v) in [("startCommand", &s.start_command), ("setupCommand", &s.setup_command)] {
+        if !v.trim().is_empty() {
+            side[k] = v.trim().into();
+        }
+    }
+    Ok(side)
+}
+
+/// Acrescenta o projeto ao config sem mexer no resto (ordem e campos que o usuário editou à mão).
+fn add_project_to(path: &str, project: &NewProject) -> Result<(), String> {
+    let name = project.name.trim();
+    if name.is_empty() {
+        return Err("Dê um nome ao projeto.".into());
+    }
+    let mut cfg: serde_json::Value = match std::fs::read_to_string(path) {
+        // JSON quebrado: recusa em vez de sobrescrever o que o usuário escreveu.
+        Ok(raw) => serde_json::from_str(&raw).map_err(|e| format!("{path} inválido, corrija antes: {e}"))?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => serde_json::json!({ "projects": [] }),
+        Err(e) => return Err(format!("Não consegui ler {path}: {e}")),
+    };
+    let entry = serde_json::json!({
+        "name": name,
+        "api": side_json("API", &project.api)?,
+        "front": side_json("Front", &project.front)?,
+    });
+    let projects = cfg
+        .as_object_mut()
+        .ok_or(format!("{path}: a raiz precisa ser um objeto"))?
+        .entry("projects")
+        .or_insert_with(|| serde_json::json!([]))
+        .as_array_mut()
+        .ok_or(format!("{path}: \"projects\" precisa ser uma lista"))?;
+    if projects.iter().any(|p| p["name"] == name) {
+        return Err(format!("Já existe um projeto chamado \"{name}\"."));
+    }
+    projects.push(entry);
+
+    // Escrita atômica: grava ao lado e renomeia, para nunca deixar o config pela metade.
+    let path = Path::new(path);
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    let body = serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())? + "\n";
+    std::fs::write(&tmp, body).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn add_project(project: NewProject) -> Result<(), String> {
+    add_project_to(&config_path(), &project)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn wt(b: &str) -> Wt {
+        Wt { branch: b.into(), path: format!("/r/{b}") }
+    }
+
+    #[test]
+    fn parses_porcelain() {
+        let out = "worktree /r/main\nHEAD abc\nbranch refs/heads/main\n\nworktree /r/feat\nHEAD def\nbranch refs/heads/feat/x\n\nworktree /r/det\nHEAD 123\ndetached\n\nworktree /r/bare\nbare\n\nworktree /tmp/gone\nHEAD 456\ndetached\nprunable gitdir file points to non-existent location\n";
+        assert_eq!(
+            parse_porcelain(out),
+            vec![
+                Wt { branch: "main".into(), path: "/r/main".into() },
+                Wt { branch: "feat/x".into(), path: "/r/feat".into() },
+                Wt { branch: "det".into(), path: "/r/det".into() },
+            ]
+        );
+    }
+
+    #[test]
+    fn pairs_manual_then_by_name_then_solos() {
+        let manual = vec![Pair { api: "feat/x".into(), front: "feature/x".into() }];
+        let got = pair(
+            vec![wt("main"), wt("feat/x"), wt("fix")],
+            vec![wt("main"), wt("feature/x"), wt("only-front")],
+            &manual,
+        );
+        assert_eq!(
+            got,
+            vec![
+                (Some(wt("main")), Some(wt("main"))),
+                (Some(wt("feat/x")), Some(wt("feature/x"))),
+                (Some(wt("fix")), None),
+                (None, Some(wt("only-front"))),
+            ]
+        );
+    }
+
+    #[test]
+    fn creates_worktrees_and_lists_branches() {
+        let tmp = std::env::temp_dir().join(format!("switch-terminal-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let sh = |cmd: &str| assert!(Command::new("sh").arg("-c").arg(cmd).current_dir(&tmp).status().unwrap().success(), "{cmd}");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let git_id = "-c user.name=t -c user.email=t@t";
+        sh(&format!("git init -q -b main normal && git -C normal {git_id} commit -q --allow-empty -m init && git -C normal branch old"));
+        sh("mkdir bare && git clone -q --bare normal bare/.bare && echo 'gitdir: ./.bare' > bare/.git");
+        let path = |d: &str| tmp.join(d).to_str().unwrap().to_string();
+
+        // Pasta padrão: bare → dentro do repo; normal → <repo>.worktrees.
+        assert_eq!(default_dir(&path("bare")).unwrap(), tmp.join("bare"));
+        assert_eq!(default_dir(&path("normal")).unwrap(), tmp.join("normal.worktrees"));
+
+        let (mut local, remote) = branches(&path("bare")).unwrap();
+        local.sort();
+        assert_eq!((local, remote), (vec!["main".to_string(), "old".to_string()], vec![]));
+
+        // Branch nova (com barra) a partir de outra; branch existente ignora a base.
+        add_one(&path("bare"), &path("bare"), "feat/x", "old").unwrap();
+        add_one(&path("bare"), &path("bare"), "old", "").unwrap();
+        // Diretório escolhido pelo usuário.
+        add_one(&path("normal"), &path("custom"), "feat/y", "main").unwrap();
+        assert!(tmp.join("bare/feat/x/.git").exists());
+        assert!(tmp.join("bare/old/.git").exists());
+        assert!(tmp.join("custom/feat/y/.git").exists());
+
+        assert!(add_one(&path("bare"), &path("bare"), "../fora", "main").is_err());
+        assert!(add_one(&path("bare"), "relativo", "feat/z", "main").is_err());
+        assert!(add_one(&path("bare"), &path("bare"), "feat/sem-base", "").is_err());
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn adds_project_keeping_existing_config() {
+        let tmp = std::env::temp_dir().join(format!("switch-terminal-cfg-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        assert!(Command::new("git").args(["init", "-q"]).arg(tmp.join("repo")).status().unwrap().success());
+        let repo = tmp.join("repo").to_str().unwrap().to_string();
+        let side = |start: &str| NewSide { repo: repo.clone(), start_command: start.into(), setup_command: "".into() };
+        let proj = |name: &str| NewProject { name: name.into(), api: side("npm run dev"), front: side("") };
+        let cfg = tmp.join("cfg/config.json");
+        let cfg_s = cfg.to_str().unwrap();
+
+        // Sem arquivo: cria do zero.
+        add_project_to(cfg_s, &proj("a")).unwrap();
+        // Com arquivo: mantém campos e ordem que já existiam.
+        let raw = std::fs::read_to_string(&cfg).unwrap().replacen('{', "{\n  \"stopTimeoutMs\": 9000,", 1);
+        std::fs::write(&cfg, raw).unwrap();
+        add_project_to(cfg_s, &proj("b")).unwrap();
+
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
+        assert_eq!(v.as_object().unwrap().keys().next().unwrap(), "stopTimeoutMs");
+        assert_eq!(v["stopTimeoutMs"], 9000);
+        assert_eq!(v["projects"][1]["name"], "b");
+        assert_eq!(v["projects"][1]["api"]["startCommand"], "npm run dev");
+        assert!(v["projects"][1]["front"].get("startCommand").is_none());
+
+        assert!(add_project_to(cfg_s, &proj("a")).is_err(), "nome repetido");
+        assert!(add_project_to(cfg_s, &NewProject { name: "c".into(), api: NewSide { repo: tmp.to_str().unwrap().into(), start_command: "".into(), setup_command: "".into() }, front: side("") }).is_err(), "pasta que não é repo");
+        std::fs::write(&cfg, "{ quebrado").unwrap();
+        assert!(add_project_to(cfg_s, &proj("d")).is_err(), "não sobrescreve JSON inválido");
+        assert_eq!(std::fs::read_to_string(&cfg).unwrap(), "{ quebrado");
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+}
