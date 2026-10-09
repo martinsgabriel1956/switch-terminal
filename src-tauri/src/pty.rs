@@ -123,6 +123,21 @@ pub fn pty_kill(ptys: State<Ptys>, id: u32) {
 }
 
 
+/// Quais terminais têm processo em primeiro plano (o estado RODANDO do painel). Id desconhecido = false.
+#[tauri::command]
+pub fn pty_status(ptys: State<Ptys>, ids: Vec<u32>) -> Vec<bool> {
+    let map = ptys.map.lock().unwrap();
+    ids.iter().map(|id| map.get(id).is_some_and(|p| p.busy().is_some())).collect()
+}
+
+/// "Forçar agora" no aviso de troca: SIGKILL no que estiver rodando, sem esperar o prazo.
+#[tauri::command]
+pub fn pty_force(ptys: State<Ptys>, id: u32) {
+    if let Some(pg) = ptys.busy(id) {
+        unsafe { libc::killpg(pg, libc::SIGKILL) };
+    }
+}
+
 #[tauri::command]
 pub fn pty_kill_all(ptys: State<Ptys>) {
     ptys.kill_all();

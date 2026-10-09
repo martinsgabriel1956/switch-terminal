@@ -1,0 +1,319 @@
+---
+name: switch-terminal
+description: Painel de partidas para trocar de worktree; cada projeto é uma plataforma, cada worktree uma linha com palheta de estado.
+colors:
+  board: "#131417"
+  rail: "#18191d"
+  flap: "#222428"
+  flap-hi: "#2b2d32"
+  seam: "#0a0b0d"
+  rule: "#2e3036"
+  ink: "#ecebe6"
+  ink-2: "#a5a59f"
+  ink-3: "#6c6d6a"
+  run: "#4cc38a"
+  start: "#f2b33d"
+  wait: "#f2b33d"
+  stop: "#f26d6d"
+  scrim: "rgb(10 11 13 / 72%)"
+  selection: "rgb(236 235 230 / 22%)"
+  board-day: "#f4f5f3"
+  rail-day: "#ebece9"
+  flap-day: "#dcddd9"
+  flap-hi-day: "#e4e5e1"
+  seam-day: "#b9bbb6"
+  rule-day: "#cfd1cc"
+  ink-day: "#15161a"
+  ink-2-day: "#4f5156"
+  ink-3-day: "#8b8d90"
+  run-day: "#0d6a3f"
+  start-day: "#855000"
+  wait-day: "#855000"
+  stop-day: "#b3261e"
+  scrim-day: "rgb(244 245 243 / 78%)"
+  selection-day: "rgb(21 22 26 / 16%)"
+typography:
+  display:
+    fontFamily: "Barlow Semi Condensed, system-ui, sans-serif"
+    fontSize: "22px"
+    fontWeight: 600
+  headline:
+    fontFamily: "Barlow Semi Condensed, system-ui, sans-serif"
+    fontSize: "19px"
+    fontWeight: 600
+  title:
+    fontFamily: "Barlow Semi Condensed, system-ui, sans-serif"
+    fontSize: "17px"
+    fontWeight: 600
+  body:
+    fontFamily: "Barlow Semi Condensed, system-ui, sans-serif"
+    fontSize: "15px"
+    fontWeight: 500
+    lineHeight: 1.35
+    fontFeature: "tnum"
+  small:
+    fontFamily: "Barlow Semi Condensed, system-ui, sans-serif"
+    fontSize: "13px"
+    fontWeight: 500
+  label:
+    fontFamily: "Barlow Semi Condensed, system-ui, sans-serif"
+    fontSize: "12px"
+    fontWeight: 700
+    lineHeight: 1
+    letterSpacing: "0.08em"
+  flap:
+    fontFamily: "Barlow Semi Condensed, system-ui, sans-serif"
+    fontSize: "12px"
+    fontWeight: 700
+    lineHeight: 1
+    letterSpacing: "0.06em"
+  mono:
+    fontFamily: "JetBrainsMono Nerd Font, Hack Nerd Font Mono, monospace"
+    fontSize: "12px"
+    lineHeight: 1.5
+  terminal:
+    fontFamily: "JetBrainsMono Nerd Font, Hack Nerd Font Mono, monospace"
+    fontSize: "14px"
+    lineHeight: 1.15
+rounded:
+  flap: "2px"
+  control: "4px"
+  surface: "6px"
+spacing:
+  xs: "4px"
+  sm: "6px"
+  md: "8px"
+  row: "10px"
+  gutter: "14px"
+  card: "22px"
+components:
+  flap:
+    backgroundColor: "{colors.flap}"
+    textColor: "{colors.ink-2}"
+    typography: "{typography.flap}"
+    rounded: "{rounded.flap}"
+    height: "22px"
+    width: "calc(7ch + 14px)"
+  flap-run:
+    textColor: "{colors.run}"
+  flap-start:
+    textColor: "{colors.start}"
+  flap-wait:
+    textColor: "{colors.wait}"
+  flap-stop:
+    textColor: "{colors.stop}"
+  line:
+    textColor: "{colors.ink-2}"
+    typography: "{typography.body}"
+    padding: "5px 10px 5px 14px"
+  line-current:
+    backgroundColor: "{colors.flap}"
+    textColor: "{colors.ink}"
+  tab:
+    textColor: "{colors.ink-2}"
+    typography: "{typography.label}"
+    rounded: "{rounded.flap}"
+    padding: "0 12px"
+    height: "26px"
+  tab-selected:
+    backgroundColor: "{colors.flap}"
+    textColor: "{colors.ink}"
+  button:
+    textColor: "{colors.ink}"
+    rounded: "{rounded.control}"
+    padding: "0 14px"
+    height: "32px"
+  button-hover:
+    backgroundColor: "{colors.flap}"
+  button-primary:
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.board}"
+    rounded: "{rounded.control}"
+    padding: "0 14px"
+    height: "32px"
+  button-primary-hover:
+    backgroundColor: "{colors.ink-2}"
+  icon-button:
+    textColor: "{colors.ink-2}"
+    rounded: "{rounded.control}"
+    size: "28px"
+  icon-button-hover:
+    backgroundColor: "{colors.flap}"
+    textColor: "{colors.ink}"
+  input:
+    backgroundColor: "{colors.board}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.control}"
+    padding: "0 10px"
+    height: "34px"
+  floating-surface:
+    backgroundColor: "{colors.rail}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.surface}"
+    padding: "22px 24px"
+  tag:
+    textColor: "{colors.ink-2}"
+    typography: "{typography.label}"
+    rounded: "{rounded.flap}"
+    padding: "0 4px"
+---
+
+# Design System: switch-terminal
+
+## Overview
+
+**Creative North Star: "O Painel de Partidas"**
+
+A janela é um painel de partidas de estação. Cada projeto é uma plataforma, cada worktree uma linha, e o estado de cada linha é uma palheta split-flap: um bloco com a linha de corte no meio e caracteres em caixa-alta condensada. Trocar de worktree é o painel virando. O terminal é o conteúdo e ocupa todo o resto da janela, sobre o mesmo fundo do painel.
+
+Há dois materiais, escolhidos pelo sistema operacional (`prefers-color-scheme`): à noite, painel grafite; de dia, tabela impressa em esmalte branco. Os dois têm a mesma estrutura e os mesmos papéis; muda só a tinta. A densidade é de quadro de horários: linhas compactas, colunas fixas, números tabulares, nenhum cartão no painel. A hierarquia vem da tinta (cheia no que está em serviço, meia-tinta no resto) e não de tamanho nem de cor.
+
+O mundo recusa a árvore de arquivos estilo IDE (Explorer + quick-open em cinza VS Code). O movimento é mecânico, em passos discretos sem easing, e só acontece quando um estado muda.
+
+**Key Characteristics:**
+- Palheta split-flap de 7 caracteres como assinatura do estado.
+- Uma cor por estado, e nenhuma outra cor na interface.
+- Tinta cheia só no que está em serviço; meia-tinta no resto.
+- Barlow Semi Condensed em caixa-alta para rótulos, números tabulares em tudo.
+- Plano: profundidade só nas superfícies flutuantes.
+- Movimento em degraus (`steps`), nunca em curva.
+
+## Colors
+
+Neutros quentes de grafite (noite) ou esmalte (dia), com três cores de sinal reservadas aos estados. Cada token tem par diurno (sufixo `-day` no frontmatter), aplicado por `@media (prefers-color-scheme: light)` sobre as mesmas custom properties.
+
+### Primary
+- **Tinta Cheia** (`ink`): texto do que está em serviço (branch da worktree ativa ou rodando, destino, títulos), botão primário (`--primary`), anel de foco, caret e seleção (`--focus`, `--selection` são a mesma tinta). É a voz principal do sistema; não há acento cromático.
+
+### Secondary
+- **Verde Rodando** (`run`): só o estado RODANDO, o interruptor da marca na barra lateral e a confirmação positiva de formulário (`.side-error.ok`).
+- **Âmbar Subindo/Aguarda** (`start`, `wait`): estados SUBINDO e AGUARDA; os dois tokens têm o mesmo valor e continuam separados por papel.
+- **Vermelho Parando** (`stop`): estado PARANDO, erros de projeto e de formulário.
+
+### Neutral
+- **Fundo do Painel** (`board`): chão da janela, do terminal (`--term-bg`) e dos campos de formulário.
+- **Trilho** (`rail`): barra lateral e todas as superfícies flutuantes (aviso de troca, paleta, ajuda, diálogos), e blocos de código no estado vazio.
+- **Palheta** (`flap`, `flap-hi`): as duas metades de toda palheta (`flap-hi` em cima, `flap` embaixo); `flap` sozinho é o fundo de hover e da linha atual.
+- **Corte** (`seam`): a linha de 1px no meio da palheta.
+- **Fio** (`rule`): toda borda de 1px, divisórias e o polegar da barra de rolagem.
+- **Meia-tinta** (`ink-2`): texto em repouso, prefixo da branch, ícones, dicas, estado PARADA.
+- **Tinta Apagada** (`ink-3`): palheta em branco (nunca aberta), separador `/`, ícone desabilitado. Não serve para texto que precise ser lido.
+- **Véu** (`scrim`): atrás do aviso de troca e dos diálogos modais.
+
+A marca na barra lateral redesenha a geometria da logo com `--mark-bg` / `--mark-prompt` (palheta e tinta à noite; tinta e esmalte de dia) e o interruptor em `run`. O arquivo `app-icon.svg` é compromisso de marca e mantém as próprias cores.
+
+### Named Rules
+**A Regra de Uma Cor por Estado.** Verde é rodando, âmbar é subindo ou aguardando, vermelho é parando ou erro. Nenhuma outra cor entra na interface: foco, caret, seleção, botão primário e checkbox (`accent-color`) são tinta neutra.
+
+**A Regra da Tinta em Serviço.** Só o que está em serviço (worktree atual ou rodando/subindo/aguardando) recebe tinta cheia; todo o resto fica em meia-tinta. Ênfase nunca vem de cor.
+
+**A Regra do Terminal sem Moldura.** O terminal fica sobre `board`, o mesmo fundo do painel, sem borda nem cartão. O tema ANSI do xterm (`TERM_THEME`) segue o fundo, o cursor e a seleção do sistema e alinha vermelho/verde/amarelo aos tokens de estado; as outras cores ANSI pertencem ao conteúdo do terminal, não à interface.
+
+## Typography
+
+**Display Font:** Barlow Semi Condensed (com system-ui, sans-serif), auto-hospedada via @fontsource nos pesos 500, 600 e 700
+**Body Font:** Barlow Semi Condensed (mesma família)
+**Label/Mono Font:** JetBrainsMono Nerd Font (com Hack Nerd Font Mono, monospace)
+
+**Character:** Uma condensada só, de quadro de horários, em três pesos; a mono aparece apenas onde há comando ou caminho de verdade. Números tabulares (`font-variant-numeric: tabular-nums`) em toda a raiz.
+
+### Hierarchy
+- **Display** (600, 22px): título do estado vazio.
+- **Headline** (600, 19px): título dos diálogos; o aviso de troca usa 18px.
+- **Title** (600, 17px): a faixa de destino (plataforma / branch).
+- **Body** (500, 15px, 1.35): texto padrão, linhas do painel, campos.
+- **Small** (500–600, 13px): par divergente, dicas, rótulos de campo (600, 0.02em), erros.
+- **Label** (700, 12–13px, 0.08em, caixa-alta): nome da plataforma, abas API | FRONT, nome do projeto no destino e na paleta, títulos da ajuda, legendas de fieldset (0.06em).
+- **Flap** (700, 12px, 0.06em, caixa-alta): texto das palhetas e etiquetas SÓ API / SÓ FRONT.
+- **Mono** (12px, 1.5): erros brutos, prévia de caminho, código no estado vazio.
+- **Terminal** (14px, 1.15): xterm.
+
+### Named Rules
+**A Regra da Caixa-Alta com Conteúdo.** Caixa-alta espaçada é para nomes reais (plataforma, projeto, lado, estado) e títulos de seção da ajuda. Nunca para rótulos inventados acima de títulos.
+
+## Layout
+
+Duas colunas: a barra lateral (`--sidebar-w`, padrão 280px, redimensionável por uma alça de 5px; `Ctrl+Shift+B` recolhe) e a área principal. Ambas abrem com uma faixa de 44px separada por um fio de 1px (marca à esquerda; destino, abas, outros rodando e ajuda à direita). O terminal ocupa todo o restante, com respiro de `8px 4px 4px 12px`.
+
+O ritmo é denso e regular em passos de 2px: 4, 6, 8, 10, 14 e 22px. A margem lateral do painel é 14px (`gutter`) em todas as linhas, cabeçalhos de plataforma e no botão "Novo projeto"; linhas têm 5px de respiro vertical; plataformas se separam por 10px. A palheta ocupa uma coluna fixa de `7ch + 14px` à esquerda do nome, então os nomes alinham numa só coluna. Superfícies flutuantes: aviso 440px, paleta 560px, diálogos 500px, ajuda 360px, todas limitadas a 90–92% da viewport.
+
+## Elevation & Depth
+
+O sistema é plano. A profundidade do painel vem de tons (`board` < `rail` < `flap`) e de fios de 1px, não de sombras. A linha atual é marcada por fundo `flap` e fios internos em cima e embaixo (`inset 0 ±1px 0 rule`), não por elevação. Só as superfícies que flutuam acima do terminal (paleta, ajuda, diálogos) recebem uma sombra curta, e sempre junto de uma borda de 1px em `rule`. O aviso de troca fica sobre o véu, sem sombra.
+
+### Shadow Vocabulary
+- **Flutuante** (`box-shadow: 0 4px 8px rgb(0 0 0 / 28%)`): paleta, popover de ajuda, diálogos de formulário.
+
+### Named Rules
+**A Regra do Plano no Painel.** Nada no painel ou na faixa de destino tem sombra. Sombra existe só para o que flutua sobre o terminal, e é curta.
+
+## Shapes
+
+Cantos quase retos em três degraus: 2px para palhetas, abas e etiquetas; 4px para botões, campos, fieldsets e teclas; 6px para superfícies flutuantes. A linha de corte de 1px no meio (gradiente `flap-hi 50% / flap 50%` + traço `seam`) é a forma recorrente: palheta de estado, placa com o nome da plataforma e aba selecionada. O corte fica atrás das letras para não virar tachado.
+
+Ícones são SVG desenhados em traço único: viewBox 16, 16px, `stroke-width: 1.5`, pontas e junções arredondadas, `stroke: currentColor`, sem preenchimento; a variante inline tem 12px. O marcador de `<details>` é um chevron desenhado em CSS com o mesmo traço de 1.5px.
+
+## Components
+
+### Palheta (assinatura)
+O estado de cada worktree em 7 caracteres.
+- **Forma:** bloco de `7ch + 14px` × 22px, raio 2px, metade de cima `flap-hi`, de baixo `flap`, corte `seam` de 1px no meio.
+- **Estados:** RODANDO (`run`), SUBINDO (`start`), AGUARDA (`wait`), PARANDO (`stop`), PARADA (meia-tinta, `ink-2`), em branco (nunca aberta, palheta vazia).
+- **Movimento:** vira em 3 quadros discretos (`180ms steps(3, jump-none)`, `scaleY 1 → 0.12 → 1` no texto) e só quando o estado daquela palheta muda. Com `prefers-reduced-motion: reduce`, a troca é seca, sem animação.
+
+### Linhas do painel
+- **Estrutura:** grade palheta | nome; branch com prefixo (`feat/`) em meia-tinta e nome em tinta cheia quando em serviço; par divergente numa segunda linha (13px, seta de par desenhada em SVG inline); etiqueta SÓ API / SÓ FRONT nas solo.
+- **Estados:** repouso transparente com texto `ink-2`; hover `flap`; atual `flap` com fios internos `rule` em cima e embaixo.
+
+### Abas (API | FRONT)
+- **Forma:** 26px de altura, raio 2px, rótulo em caixa-alta 12px/700.
+- **Não selecionada:** contorno `rule`, texto `ink-2`. **Selecionada:** vira palheta (gradiente + corte), sem contorno, texto `ink`.
+
+### Buttons
+- **Shape:** cantos discretos (4px), 32px de altura, `0 14px`, 600.
+- **Primary:** fundo `ink` (`--primary`), texto `board` (`--primary-ink`); hover em `ink-2`. Vem primeiro no DOM (Enter envia por ele) e aparece à direita (`row-reverse`).
+- **Secondary:** contorno `rule`, fundo transparente, texto `ink`; hover `flap`.
+- **Ícone:** 28×28, raio 4px, ícone `ink-2`; hover fundo `flap` e ícone `ink`; desabilitado em `ink-3`.
+- **Quiet (rodapé do painel):** linha de 40px com fio superior, texto `ink-2`, hover `ink` sobre `flap`.
+- **Disabled:** opacidade 0.5.
+
+### Chips
+- **Etiqueta:** contorno `rule` de 1px, raio 2px, `0 4px`, 12px/700 com 0.06em, texto `ink-2`.
+- **Tecla (`kbd`):** fundo `flap`, contorno `rule` com base de 2px, raio 3px, 12px/600.
+
+### Cards / Containers
+- **Corner Style:** 6px.
+- **Background:** `rail`.
+- **Shadow Strategy:** sombra Flutuante na paleta, ajuda e diálogos; o aviso de troca usa só o véu.
+- **Border:** 1px `rule`.
+- **Internal Padding:** 22px 24px (aviso), 20px 22px (diálogos), 16px 18px (ajuda).
+
+### Inputs / Fields
+- **Style:** 34px, fundo `board`, contorno `rule` 1px, raio 4px, 15px/500; placeholder `ink-2`; select com seta desenhada em gradiente; checkbox com `accent-color: ink`.
+- **Focus:** anel neutro de 2px em `--focus` (tinta), afastado 2px, em todos os controles.
+- **Error / Disabled:** erro em texto `stop` 13px abaixo do campo; fieldset desabilitado a 0.45.
+
+### Navigation
+- **Paleta de troca** (`Ctrl+Shift+K`): busca de 44px com ícone de lupa, lista com nome do projeto em rótulo caixa-alta; item selecionado igual à linha atual (`flap` + fios internos).
+- **Faixa de destino:** projeto em rótulo caixa-alta `ink-2`, separador `ink-3`, branch em 17px/600.
+
+## Do's and Don'ts
+
+### Do:
+- **Do** mostrar estado só pela palheta e pelas três cores de estado (`run`, `start`/`wait`, `stop`).
+- **Do** usar tinta cheia (`ink`) apenas no que está em serviço; o resto em `ink-2`.
+- **Do** desenhar ícones como SVG de traço 1.5 em viewBox 16 (16px, inline 12px), em `currentColor`.
+- **Do** animar só em degraus (`steps`), só na mudança de estado, e desligar com `prefers-reduced-motion`.
+- **Do** dar a toda superfície flutuante borda `rule` de 1px, raio 6px, fundo `rail` e a sombra `0 4px 8px`.
+- **Do** manter o terminal sobre `board`, sem moldura.
+- **Do** definir todo valor novo nas duas paletas (noite e dia) com contraste AA.
+
+### Don't:
+- **Don't** introduzir cor de acento na interface: foco, seleção e botão primário são tinta neutra.
+- **Don't** pôr cartões ou sombras no painel; linhas são linhas, separadas por respiro e fio.
+- **Don't** usar easing em curva nem transições contínuas.
+- **Don't** usar caracteres ou glifos como ícone; setas e chevrons são desenhados.
+- **Don't** usar `ink-3` para texto que precise ser lido.
+- **Don't** recolorir `app-icon.svg`; a logo é compromisso de marca.
+- **Don't** voltar à árvore de arquivos estilo IDE (Explorer + quick-open em cinza VS Code).

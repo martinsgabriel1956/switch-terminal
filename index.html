@@ -7,73 +7,124 @@
     <script type="module" src="/src/main.ts"></script>
   </head>
   <body>
-    <aside id="sidebar"></aside>
+    <aside id="sidebar" aria-label="Painel de worktrees">
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 1024 1024" aria-hidden="true">
+          <rect x="32" y="32" width="960" height="960" rx="216" fill="var(--mark-bg)" />
+          <polyline points="252,332 444,512 252,692" fill="none" stroke="var(--mark-prompt)" stroke-width="96" stroke-linecap="round" stroke-linejoin="round" />
+          <rect x="512" y="604" width="272" height="136" rx="68" fill="var(--run)" />
+          <circle cx="716" cy="672" r="48" fill="var(--mark-bg)" />
+        </svg>
+        <span>switch-terminal</span>
+      </div>
+      <nav id="board" aria-label="Projetos"></nav>
+      <button id="new-project" type="button" class="quiet">
+        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>
+        Novo projeto
+      </button>
+    </aside>
     <div id="sidebar-handle" role="separator" aria-orientation="vertical" aria-controls="sidebar" aria-label="Redimensionar barra lateral" tabindex="0" title="Arraste para redimensionar · duplo clique restaura"></div>
     <main>
       <header>
-        <button id="toggle-sidebar" title="Recolher barra lateral" aria-label="Recolher barra lateral" aria-controls="sidebar" aria-expanded="true">☰</button>
-        <nav id="tabs"></nav>
-        <span id="title"></span>
+        <button id="toggle-sidebar" type="button" class="icon-btn" aria-controls="sidebar" aria-expanded="true">
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5" /><path d="M6 3v10" /></svg>
+        </button>
+        <div id="destination" aria-live="polite"></div>
+        <div id="tabs" role="tablist" aria-label="Terminal"></div>
+        <div id="running" aria-label="Rodando em outros projetos"></div>
+        <button id="help-btn" type="button" class="icon-btn" popovertarget="help" aria-label="Atalhos e legenda" title="Atalhos e legenda">
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" /><path d="M6.3 6.2a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.4" /><path d="M8 11.6v.1" /></svg>
+        </button>
       </header>
       <div id="panes">
         <div id="empty"></div>
         <div id="wait" role="status" aria-live="polite" hidden></div>
       </div>
     </main>
-    <dialog id="add-dialog" class="form">
+
+    <div id="help" popover>
+      <h2>Atalhos</h2>
+      <dl class="keys">
+        <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>K</kbd></dt><dd>Trocar de worktree (abre na anterior)</dd>
+        <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>J</kbd></dt><dd>Alternar API e Front</dd>
+        <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></dt><dd>Nova worktree</dd>
+        <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>E</kbd></dt><dd>Ir para o painel (setas navegam, Esc volta)</dd>
+        <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd></dt><dd>Recolher ou abrir o painel</dd>
+      </dl>
+      <h2>Estados</h2>
+      <dl class="legend">
+        <dt><span class="flap" data-state="run"><span>RODANDO</span></span></dt><dd>Há processo rodando nos terminais</dd>
+        <dt><span class="flap" data-state="start"><span>SUBINDO</span></span></dt><dd>O comando de start acabou de ser enviado</dd>
+        <dt><span class="flap" data-state="wait"><span>AGUARDA</span></span></dt><dd>Esperando a anterior do projeto parar</dd>
+        <dt><span class="flap" data-state="stop"><span>PARANDO</span></span></dt><dd>Sendo encerrada para a troca</dd>
+        <dt><span class="flap" data-state="idle"><span>PARADA</span></span></dt><dd>Terminais abertos, nada rodando</dd>
+        <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Em branco: ainda não aberta nesta sessão</dd>
+      </dl>
+    </div>
+
+    <dialog id="add-dialog" class="form" aria-labelledby="add-title">
       <form method="dialog">
-        <h2>Nova worktree</h2>
-        <label>
-          Projeto
-          <select name="project"></select>
-        </label>
-        <label>
-          Branch
-          <input name="branch" required placeholder="feat/minha-feature" spellcheck="false" autocomplete="off" />
-          <small>Se a branch já existir, ela é usada e "a partir de" é ignorado.</small>
-        </label>
+        <h2 id="add-title">Nova worktree</h2>
+        <div class="row-2">
+          <label>
+            Projeto
+            <select name="project"></select>
+          </label>
+          <label>
+            Branch
+            <input name="branch" required placeholder="feat/minha-feature" spellcheck="false" autocomplete="off" />
+          </label>
+        </div>
+        <p class="hint">Se a branch já existir, ela é usada e a origem é ignorada.</p>
         <fieldset class="side" data-side="api">
           <legend><label><input type="checkbox" name="api" checked /> API</label></legend>
-          <label>
-            Diretório
-            <span class="dir-row">
-              <input name="api-dir" required spellcheck="false" autocomplete="off" />
-              <button type="button" class="pick">Escolher…</button>
-            </span>
-          </label>
-          <small class="preview"></small>
-          <label>
-            A partir de
-            <select name="api-base"></select>
-          </label>
-          <p class="side-error"></p>
+          <p class="preview"></p>
+          <details class="more">
+            <summary>Alterar diretório ou origem</summary>
+            <label>
+              Diretório
+              <span class="dir-row">
+                <input name="api-dir" required spellcheck="false" autocomplete="off" />
+                <button type="button" class="pick">Escolher…</button>
+              </span>
+            </label>
+            <label>
+              A partir de
+              <select name="api-base"></select>
+            </label>
+          </details>
+          <p class="side-error" role="alert"></p>
         </fieldset>
         <fieldset class="side" data-side="front">
           <legend><label><input type="checkbox" name="front" checked /> Front</label></legend>
-          <label>
-            Diretório
-            <span class="dir-row">
-              <input name="front-dir" required spellcheck="false" autocomplete="off" />
-              <button type="button" class="pick">Escolher…</button>
-            </span>
-          </label>
-          <small class="preview"></small>
-          <label>
-            A partir de
-            <select name="front-base"></select>
-          </label>
-          <p class="side-error"></p>
+          <p class="preview"></p>
+          <details class="more">
+            <summary>Alterar diretório ou origem</summary>
+            <label>
+              Diretório
+              <span class="dir-row">
+                <input name="front-dir" required spellcheck="false" autocomplete="off" />
+                <button type="button" class="pick">Escolher…</button>
+              </span>
+            </label>
+            <label>
+              A partir de
+              <select name="front-base"></select>
+            </label>
+          </details>
+          <p class="side-error" role="alert"></p>
         </fieldset>
         <p class="error" role="alert"></p>
         <menu>
+          <button value="ok" class="primary">Criar worktree</button>
           <button value="cancel" formnovalidate>Cancelar</button>
-          <button value="ok" class="primary">Criar</button>
         </menu>
       </form>
     </dialog>
-    <dialog id="project-dialog" class="form">
+
+    <dialog id="project-dialog" class="form" aria-labelledby="project-title">
       <form method="dialog">
-        <h2>Novo projeto</h2>
+        <h2 id="project-title">Novo projeto</h2>
         <label>
           Nome
           <input name="name" required placeholder="meu-projeto" spellcheck="false" autocomplete="off" />
@@ -86,17 +137,21 @@
               <input name="api-repo" required spellcheck="false" autocomplete="off" />
               <button type="button" class="pick">Escolher…</button>
             </span>
-            <small>No layout bare, é a pasta que contém o <code>.bare</code>.</small>
           </label>
+          <p class="hint">No layout bare, é a pasta que contém o <code>.bare</code>.</p>
           <label>
             Comando de start
             <input name="api-start" value="npm run dev" spellcheck="false" autocomplete="off" />
           </label>
-          <label>
-            Comando de setup (opcional)
-            <input name="api-setup" placeholder="npm install" spellcheck="false" autocomplete="off" />
-            <small>Roda antes do start só na primeira vez de uma worktree criada pelo app.</small>
-          </label>
+          <details class="more">
+            <summary>Comando de setup (opcional)</summary>
+            <label>
+              Setup
+              <input name="api-setup" placeholder="npm install" spellcheck="false" autocomplete="off" />
+            </label>
+            <p class="hint">Roda antes do start só na primeira vez de uma worktree criada pelo app.</p>
+          </details>
+          <p class="side-error" role="alert"></p>
         </fieldset>
         <fieldset data-side="front">
           <legend>Front</legend>
@@ -106,28 +161,36 @@
               <input name="front-repo" required spellcheck="false" autocomplete="off" />
               <button type="button" class="pick">Escolher…</button>
             </span>
-            <small>No layout bare, é a pasta que contém o <code>.bare</code>.</small>
           </label>
+          <p class="hint">No layout bare, é a pasta que contém o <code>.bare</code>.</p>
           <label>
             Comando de start
             <input name="front-start" value="npm run dev" spellcheck="false" autocomplete="off" />
           </label>
-          <label>
-            Comando de setup (opcional)
-            <input name="front-setup" placeholder="npm install" spellcheck="false" autocomplete="off" />
-            <small>Roda antes do start só na primeira vez de uma worktree criada pelo app.</small>
-          </label>
+          <details class="more">
+            <summary>Comando de setup (opcional)</summary>
+            <label>
+              Setup
+              <input name="front-setup" placeholder="npm install" spellcheck="false" autocomplete="off" />
+            </label>
+            <p class="hint">Roda antes do start só na primeira vez de uma worktree criada pelo app.</p>
+          </details>
+          <p class="side-error" role="alert"></p>
         </fieldset>
         <p class="error" role="alert"></p>
         <menu>
-          <button value="cancel" formnovalidate>Cancelar</button>
           <button value="ok" class="primary">Criar projeto</button>
+          <button value="cancel" formnovalidate>Cancelar</button>
         </menu>
       </form>
     </dialog>
+
     <div id="palette" hidden>
-      <input placeholder="Trocar de worktree…" spellcheck="false" />
-      <ul></ul>
+      <div class="search">
+        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3 3" /></svg>
+        <input role="combobox" aria-expanded="true" aria-controls="palette-list" aria-autocomplete="list" aria-label="Trocar de worktree" placeholder="Trocar de worktree…" spellcheck="false" />
+      </div>
+      <ul id="palette-list" role="listbox" aria-label="Worktrees"></ul>
     </div>
   </body>
 </html>

@@ -191,7 +191,8 @@ pub fn load_config() -> Result<ConfigView, String> {
         .map(|p| {
             let (error, worktrees) = match (git_worktrees(&expand(&p.api.repo)), git_worktrees(&expand(&p.front.repo))) {
                 (Ok(a), Ok(f)) => (None, view(p, pair(a, f, &p.manual_pairs))),
-                (Err(e), _) | (_, Err(e)) => (Some(e), vec![]),
+                (Err(e), _) => (Some(format!("API: {e}")), vec![]),
+                (_, Err(e)) => (Some(format!("Front: {e}")), vec![]),
             };
             ProjectView { name: p.name.clone(), error, worktrees }
         })
@@ -263,6 +264,20 @@ pub async fn worktree_defaults(project: String) -> Result<WorktreeDefaults, Stri
     Ok(WorktreeDefaults { api: side_defaults(&p.api, &p.base_branch), front: side_defaults(&p.front, &p.base_branch) })
 }
 
+/// Erro de formulário: `side` aponta o bloco do campo culpado ("api"/"front"); `created` lista o que já deu certo.
+#[derive(Serialize, Debug)]
+pub struct FormError {
+    side: Option<&'static str>,
+    message: String,
+    created: Vec<&'static str>,
+}
+
+impl FormError {
+    fn general(message: impl Into<String>) -> Self {
+        FormError { side: None, message: message.into(), created: vec![] }
+    }
+}
+
 /// Cria `<dir>/<branch>`. Branch que já existe (local ou `origin/<branch>`) é reaproveitada e `base` é ignorada.
 fn add_one(repo: &str, dir: &str, branch: &str, base: &str) -> Result<(), String> {
     // Também barra "..", espaços etc.: o nome vira caminho no disco.
@@ -293,21 +308,23 @@ pub struct SideRequest {
 
 /// Cria a worktree na API, no front ou nos dois. async: o checkout pode demorar e não deve travar a UI.
 #[tauri::command]
-pub async fn add_worktree(project: String, branch: String, api: Option<SideRequest>, front: Option<SideRequest>) -> Result<(), String> {
-    let cfg = read_config()?;
-    let p = cfg.projects.iter().find(|p| p.name == project).ok_or("projeto não encontrado")?;
+pub async fn add_worktree(project: String, branch: String, api: Option<SideRequest>, front: Option<SideRequest>) -> Result<(), FormError> {
+    let cfg = read_config().map_err(FormError::general)?;
+    let p = cfg.projects.iter().find(|p| p.name == project).ok_or(FormError::general("Projeto não encontrado."))?;
     let branch = branch.trim();
-    if branch.is_empty() || (api.is_none() && front.is_none()) {
-        return Err("Informe a branch e marque API, front ou os dois.".into());
+    if branch.is_empty() {
+        return Err(FormError::general("Informe o nome da branch."));
     }
-    let mut done = vec![];
-    for (req, label, side) in [(api, "API", &p.api), (front, "Front", &p.front)] {
+    if api.is_none() && front.is_none() {
+        return Err(FormError::general("Marque API, Front ou os dois."));
+    }
+    let mut created = vec![];
+    for (req, key, side) in [(api, "api", &p.api), (front, "front", &p.front)] {
         let Some(req) = req else { continue };
-        add_one(&expand(&side.repo), &req.dir, branch, req.base.trim()).map_err(|e| {
-            let partial = if done.is_empty() { String::new() } else { format!(" ({} já foi criada)", done.join(", ")) };
-            format!("{label}: {e}{partial}")
-        })?;
-        done.push(label);
+        if let Err(message) = add_one(&expand(&side.repo), &req.dir, branch, req.base.trim()) {
+            return Err(FormError { side: Some(key), message, created });
+        }
+        created.push(key);
     }
     Ok(())
 }
@@ -338,12 +355,13 @@ fn contract(p: &str) -> String {
     }
 }
 
-fn side_json(label: &str, s: &NewSide) -> Result<serde_json::Value, String> {
+fn side_json(key: &'static str, s: &NewSide) -> Result<serde_json::Value, FormError> {
+    let err = |message: String| FormError { side: Some(key), message, created: vec![] };
     let repo = expand(s.repo.trim()).trim_end_matches('/').to_string();
     if repo.is_empty() {
-        return Err(format!("{label}: escolha o repositório"));
+        return Err(err("Escolha a pasta do repositório.".into()));
     }
-    git(&repo, &["rev-parse", "--git-dir"]).map_err(|_| format!("{label}: {repo} não é um repositório git"))?;
+    git(&repo, &["rev-parse", "--git-dir"]).map_err(|_| err(format!("{repo} não é um repositório git.")))?;
     let mut side = serde_json::json!({ "repo": contract(&repo) });
     for (k, v) in [("startCommand", &s.start_command), ("setupCommand", &s.setup_command)] {
         if !v.trim().is_empty() {
@@ -354,47 +372,51 @@ fn side_json(label: &str, s: &NewSide) -> Result<serde_json::Value, String> {
 }
 
 /// Acrescenta o projeto ao config sem mexer no resto (ordem e campos que o usuário editou à mão).
-fn add_project_to(path: &str, project: &NewProject) -> Result<(), String> {
+fn add_project_to(path: &str, project: &NewProject) -> Result<(), FormError> {
+    fn general(m: impl Into<String>) -> FormError {
+        FormError::general(m)
+    }
     let name = project.name.trim();
     if name.is_empty() {
-        return Err("Dê um nome ao projeto.".into());
+        return Err(general("Dê um nome ao projeto."));
     }
     let mut cfg: serde_json::Value = match std::fs::read_to_string(path) {
         // JSON quebrado: recusa em vez de sobrescrever o que o usuário escreveu.
-        Ok(raw) => serde_json::from_str(&raw).map_err(|e| format!("{path} inválido, corrija antes: {e}"))?,
+        Ok(raw) => serde_json::from_str(&raw).map_err(|e| general(format!("{path} tem JSON inválido; corrija o arquivo antes: {e}")))?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => serde_json::json!({ "projects": [] }),
-        Err(e) => return Err(format!("Não consegui ler {path}: {e}")),
+        Err(e) => return Err(general(format!("Não consegui ler {path}: {e}"))),
     };
     let entry = serde_json::json!({
         "name": name,
-        "api": side_json("API", &project.api)?,
-        "front": side_json("Front", &project.front)?,
+        "api": side_json("api", &project.api)?,
+        "front": side_json("front", &project.front)?,
     });
     let projects = cfg
         .as_object_mut()
-        .ok_or(format!("{path}: a raiz precisa ser um objeto"))?
+        .ok_or(general(format!("{path}: a raiz precisa ser um objeto.")))?
         .entry("projects")
         .or_insert_with(|| serde_json::json!([]))
         .as_array_mut()
-        .ok_or(format!("{path}: \"projects\" precisa ser uma lista"))?;
+        .ok_or(general(format!("{path}: \"projects\" precisa ser uma lista.")))?;
     if projects.iter().any(|p| p["name"] == name) {
-        return Err(format!("Já existe um projeto chamado \"{name}\"."));
+        return Err(general(format!("Já existe um projeto chamado \"{name}\".")));
     }
     projects.push(entry);
 
     // Escrita atômica: grava ao lado e renomeia, para nunca deixar o config pela metade.
+    let io = |e: std::io::Error| general(format!("Não consegui gravar o config: {e}"));
     let path = Path::new(path);
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(dir).map_err(io)?;
     }
     let tmp = path.with_extension("json.tmp");
-    let body = serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())? + "\n";
-    std::fs::write(&tmp, body).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, path).map_err(|e| e.to_string())
+    let body = serde_json::to_string_pretty(&cfg).map_err(|e| general(e.to_string()))? + "\n";
+    std::fs::write(&tmp, body).map_err(io)?;
+    std::fs::rename(&tmp, path).map_err(io)
 }
 
 #[tauri::command]
-pub fn add_project(project: NewProject) -> Result<(), String> {
+pub fn add_project(project: NewProject) -> Result<(), FormError> {
     add_project_to(&config_path(), &project)
 }
 
@@ -499,7 +521,8 @@ mod tests {
         assert!(v["projects"][1]["front"].get("startCommand").is_none());
 
         assert!(add_project_to(cfg_s, &proj("a")).is_err(), "nome repetido");
-        assert!(add_project_to(cfg_s, &NewProject { name: "c".into(), api: NewSide { repo: tmp.to_str().unwrap().into(), start_command: "".into(), setup_command: "".into() }, front: side("") }).is_err(), "pasta que não é repo");
+        let e = add_project_to(cfg_s, &NewProject { name: "c".into(), api: NewSide { repo: tmp.to_str().unwrap().into(), start_command: "".into(), setup_command: "".into() }, front: side("") }).unwrap_err();
+        assert_eq!(e.side, Some("api"), "pasta que não é repo aponta o lado");
         std::fs::write(&cfg, "{ quebrado").unwrap();
         assert!(add_project_to(cfg_s, &proj("d")).is_err(), "não sobrescreve JSON inválido");
         assert_eq!(std::fs::read_to_string(&cfg).unwrap(), "{ quebrado");

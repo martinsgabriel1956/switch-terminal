@@ -1,8 +1,11 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
-import { Terminal } from "@xterm/xterm";
+import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import "@fontsource/barlow-semi-condensed/latin-500.css";
+import "@fontsource/barlow-semi-condensed/latin-600.css";
+import "@fontsource/barlow-semi-condensed/latin-700.css";
 import "./styles.css";
 
 type Side = { path: string; startCommand: string | null; setupCommand: string | null };
@@ -12,25 +15,87 @@ type Config = { stopTimeoutMs: number; projects: Project[] };
 type Tab = "api" | "front";
 type Pane = { term: Terminal; fit: FitAddon; el: HTMLElement; ptyId: number; side: Side };
 type Env = { project: string; root: HTMLElement; panes: Partial<Record<Tab, Pane>>; ready: Promise<void> };
+/** Estado de uma linha do painel: o que a palheta mostra. */
+type LineState = "run" | "start" | "wait" | "stop" | "idle" | "none";
 
 const TABS: Tab[] = ["api", "front"];
 const TAB_LABEL: Record<Tab, string> = { api: "API", front: "Front" };
+const FLAP: Record<LineState, string> = { run: "RODANDO", start: "SUBINDO", wait: "AGUARDA", stop: "PARANDO", idle: "PARADA", none: "" };
+const SPOKEN: Record<LineState, string> = {
+  run: "rodando",
+  start: "subindo",
+  wait: "aguardando a anterior parar",
+  stop: "parando",
+  idle: "parada",
+  none: "não aberta",
+};
 const CONFIG_EXAMPLE = `{
-  "stopTimeoutMs": 5000,
   "projects": [
     {
       "name": "meu-projeto",
-      "api":   { "repo": "~/dev/meu-api", "startCommand": "pnpm dev" },
-      "front": { "repo": "~/dev/meu-web", "startCommand": "pnpm dev" },
-      "manualPairs": [{ "api": "feat/x", "front": "feature/x" }]
+      "api":   { "repo": "~/dev/meu-api", "startCommand": "npm run dev" },
+      "front": { "repo": "~/dev/meu-web", "startCommand": "npm run dev" }
     }
   ]
 }`;
 
+// Cores ANSI dos terminais por tema. São conteúdo (saída dos programas), não paleta da interface.
+const TERM_THEME: Record<"dark" | "light", ITheme> = {
+  dark: {
+    background: "#131417",
+    foreground: "#e6e5df",
+    cursor: "#ecebe6",
+    cursorAccent: "#131417",
+    selectionBackground: "rgba(236, 235, 230, 0.22)",
+    black: "#1b1c20",
+    red: "#f26d6d",
+    green: "#4cc38a",
+    yellow: "#f2b33d",
+    blue: "#6ea8fe",
+    magenta: "#c792ea",
+    cyan: "#5ccfe6",
+    white: "#d6d5cf",
+    brightBlack: "#6c6d6a",
+    brightRed: "#ff8a8a",
+    brightGreen: "#6fd9a5",
+    brightYellow: "#ffcb66",
+    brightBlue: "#93bdff",
+    brightMagenta: "#ddb3f5",
+    brightCyan: "#8be2f2",
+    brightWhite: "#f4f3ee",
+  },
+  light: {
+    background: "#f4f5f3",
+    foreground: "#1d1e22",
+    cursor: "#15161a",
+    cursorAccent: "#f4f5f3",
+    selectionBackground: "rgba(21, 22, 26, 0.16)",
+    black: "#1d1e22",
+    red: "#b3261e",
+    green: "#0d6a3f",
+    yellow: "#855000",
+    blue: "#1f5fbf",
+    magenta: "#8e3fa8",
+    cyan: "#0b6e7a",
+    white: "#6c6e72",
+    brightBlack: "#55575c",
+    brightRed: "#d0362b",
+    brightGreen: "#13824f",
+    brightYellow: "#9a5f00",
+    brightBlue: "#2c6fd6",
+    brightMagenta: "#a24fbd",
+    brightCyan: "#0f7f8c",
+    brightWhite: "#3a3c40",
+  },
+};
+const scheme = matchMedia("(prefers-color-scheme: light)");
+const termTheme = () => TERM_THEME[scheme.matches ? "light" : "dark"];
+
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
-const sidebar = $("#sidebar");
+const board = $("#board");
 const tabsEl = $("#tabs");
-const titleEl = $("#title");
+const destEl = $("#destination");
+const runningEl = $("#running");
 const panesEl = $("#panes");
 const emptyEl = $("#empty");
 const waitEl = $("#wait");
@@ -41,43 +106,96 @@ const paletteList = $("#palette ul");
 let config: Config = { stopTimeoutMs: 5000, projects: [] };
 let configError: string | null = null;
 const envs = new Map<string, Env>();
-// Projeto em troca: qual worktree está sendo encerrada e se já passou do Ctrl+C para o SIGKILL.
-const stopping = new Map<string, { fromId: string; from: string; forcing: boolean }>();
+// Projeto em troca: qual worktree está sendo encerrada, os terminais dela e se já passou do Ctrl+C para o SIGKILL.
+type Stopping = { fromId: string; from: string; fromWt: Worktree | undefined; panes: Pane[]; forcing: boolean };
+const stopping = new Map<string, Stopping>();
 const queues = new Map<string, Promise<void>>();
 // Worktrees recém-criadas pelo app: na primeira subida rodam o setupCommand antes do startCommand.
 const fresh = new Set<string>();
+// Estado real, vindo do backend: envs com processo rodando, e envs cujo start acabou de ser enviado.
+let running = new Set<string>();
+const starting = new Map<string, number>();
 let current: { project: string; wt: Worktree } | null = null;
 let tab: Tab = "api";
 
 const key = (project: string, id: string) => `${project}\u0000${id}`;
 const currentKey = () => (current ? key(current.project, current.wt.id) : null);
 
-// Última worktree ativa por projeto. localStorage basta: é estado local deste app.
-let active: Record<string, string> = {};
-try {
-  active = JSON.parse(localStorage.getItem("active") ?? "{}");
-} catch {}
-const saveActive = () => {
+function load<T>(name: string, fallback: T): T {
   try {
-    localStorage.setItem("active", JSON.stringify(active));
+    return JSON.parse(localStorage.getItem(name) ?? "null") ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+function save(name: string, value: unknown) {
+  try {
+    localStorage.setItem(name, JSON.stringify(value));
   } catch {}
-};
+}
 
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]> = {}, ...children: (Node | string)[]) {
+// Última worktree ativa por projeto e as mais recentes (a paleta abre na anterior).
+const active: Record<string, string> = load("active", {});
+let recent: string[] = load("recent", []);
+const saveActive = () => save("active", active);
+
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]> = {}, ...children: (Node | string | null)[]) {
   const e = Object.assign(document.createElement(tag), props);
-  e.append(...children);
+  e.append(...children.filter((c): c is Node | string => c !== null));
   return e;
+}
+
+// ---------- palheta ----------
+
+// Último estado mostrado por cada palheta: ela só vira quando o estado muda.
+const shown = new Map<string, LineState>();
+
+function flap(state: LineState, id: string) {
+  const changed = shown.has(id) && shown.get(id) !== state;
+  shown.set(id, state);
+  const f = el("span", { className: `flap${changed ? " flip" : ""}` }, el("span", { textContent: FLAP[state] }));
+  f.dataset.state = state;
+  f.setAttribute("aria-hidden", "true");
+  return f;
+}
+
+function lineState(project: string, wt: Worktree): LineState {
+  const k = key(project, wt.id);
+  const st = stopping.get(project);
+  if (st?.fromId === wt.id) return "stop";
+  if (st && active[project] === wt.id) return "wait";
+  if (running.has(k)) return "run";
+  if (starting.has(k)) return "start";
+  if (envs.has(k)) return "idle";
+  return "none";
+}
+
+const PAIR_ICON = "M3 5.5h10M10.5 3 13 5.5 10.5 8M13 10.5H3M5.5 8 3 10.5 5.5 13";
+const FROM_ICON = "M13 8H3M6.5 4.5 3 8l3.5 3.5";
+
+/** Rótulo "api ↔ front" com a seta desenhada em SVG, não em caractere. */
+function labelNodes(label: string): (Node | string)[] {
+  const [a, f] = label.split(" ↔ ");
+  return f === undefined ? [label] : [a, icon(PAIR_ICON, "inline"), f];
+}
+
+/** "feat/scrap-movement": prefixo em meia-tinta, nome em tinta cheia. */
+function branchText(branch: string) {
+  const cut = branch.lastIndexOf("/") + 1;
+  return [el("span", { className: "prefix", textContent: branch.slice(0, cut) }), branch.slice(cut)];
 }
 
 // ---------- terminais ----------
 
 async function createPane(side: Side, parent: HTMLElement): Promise<Pane> {
   const paneEl = el("div", { className: "pane off" });
+  paneEl.setAttribute("role", "tabpanel");
   parent.append(paneEl);
   const term = new Terminal({
     fontFamily: "'JetBrainsMono Nerd Font', 'Hack Nerd Font Mono', monospace",
     fontSize: 14,
-    theme: { background: "#1e1e1e" },
+    lineHeight: 1.15,
+    theme: termTheme(),
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
@@ -87,6 +205,7 @@ async function createPane(side: Side, parent: HTMLElement): Promise<Pane> {
   const onData = new Channel<ArrayBuffer>();
   onData.onmessage = (buf) => term.write(new Uint8Array(buf));
   const ptyId = await invoke<number>("pty_spawn", { cwd: side.path, cols: term.cols, rows: term.rows, onData });
+  paneEl.id = `pane-${ptyId}`;
   term.onData((data) => invoke("pty_write", { id: ptyId, data }));
   term.onResize(({ cols, rows }) => invoke("pty_resize", { id: ptyId, cols, rows }));
   return { term, fit, el: paneEl, ptyId, side };
@@ -119,9 +238,11 @@ function disposeEnv(k: string, env: Env) {
   envs.delete(k);
 }
 
-function writeStart(pane: Pane, isFresh: boolean) {
+function writeStart(k: string, pane: Pane, isFresh: boolean) {
   const cmd = [isFresh && pane.side.setupCommand, pane.side.startCommand].filter(Boolean).join(" && ");
-  if (cmd) invoke("pty_write", { id: pane.ptyId, data: cmd + "\r" });
+  if (!cmd) return;
+  starting.set(k, Date.now());
+  invoke("pty_write", { id: pane.ptyId, data: cmd + "\r" });
 }
 const stopPane = (pane: Pane) => invoke("pty_stop", { id: pane.ptyId, timeoutMs: config.stopTimeoutMs });
 
@@ -135,31 +256,32 @@ function activate(project: string, wt: Worktree, created: boolean) {
   const run = async () => {
     const prevEnv = prev && prev !== wt.id ? envs.get(key(project, prev)) : undefined;
     if (prevEnv) {
-      const from = config.projects.find((p) => p.name === project)?.worktrees.find((w) => w.id === prev)?.label ?? prev;
-      const state = { fromId: prev, from, forcing: false };
+      const fromWt = config.projects.find((p) => p.name === project)?.worktrees.find((w) => w.id === prev);
+      await prevEnv.ready;
+      const state: Stopping = { fromId: prev, from: fromWt?.label ?? prev, fromWt, panes: Object.values(prevEnv.panes), forcing: false };
       stopping.set(project, state);
       // O backend manda SIGKILL ao estourar o prazo; aqui só avisa que chegou nessa fase.
       const forceTimer = setTimeout(() => {
         state.forcing = true;
         render();
       }, config.stopTimeoutMs);
-      render();
-      await prevEnv.ready;
-      await Promise.all(Object.values(prevEnv.panes).map(stopPane));
+      render(true);
+      await Promise.all(state.panes.map(stopPane));
       clearTimeout(forceTimer);
       stopping.delete(project);
+      running.delete(key(project, prev));
     }
     // Trocou de novo enquanto parava: quem vier depois na fila sobe a certa.
     if (active[project] === wt.id) {
-      const env = envs.get(key(project, wt.id));
+      const k = key(project, wt.id);
+      const env = envs.get(k);
       if (env) {
         await env.ready;
-        const k = key(project, wt.id);
-        Object.values(env.panes).forEach((pane) => writeStart(pane, fresh.has(k)));
+        Object.values(env.panes).forEach((pane) => writeStart(k, pane, fresh.has(k)));
         fresh.delete(k);
       }
     }
-    render();
+    render(currentKey() === key(project, wt.id));
   };
   // Trocas do mesmo projeto em fila, para nunca subir duas worktrees ao mesmo tempo.
   queues.set(project, (queues.get(project) ?? Promise.resolve()).then(run, run));
@@ -167,55 +289,88 @@ function activate(project: string, wt: Worktree, created: boolean) {
 
 async function select(project: string, wt: Worktree) {
   current = { project, wt };
+  const k = key(project, wt.id);
+  recent = [k, ...recent.filter((r) => r !== k)].slice(0, 30);
+  save("recent", recent);
   const { env, created } = ensureEnv(project, wt);
   activate(project, wt, created);
-  render();
+  render(true);
   await env.ready;
-  render();
+  render(true);
 }
 
 // ---------- render ----------
 
-function render() {
-  renderSidebar();
+/** Redesenha tudo. `focus`: devolve o foco ao terminal (ou ao aviso de troca); só em ações do usuário. */
+function render(focus = false) {
+  renderBoard();
+  renderRunning();
 
   const ck = currentKey();
   for (const [k, env] of envs) env.root.classList.toggle("off", k !== ck);
   emptyEl.hidden = !!current;
   tabsEl.replaceChildren();
-  titleEl.textContent = "";
+  destEl.replaceChildren();
+
+  // Durante a troca o terminal novo não aceita digitação: ela entraria antes do startCommand.
+  for (const e of envs.values()) for (const p of Object.values(e.panes)) p.term.options.disableStdin = stopping.has(e.project);
 
   if (!current) {
     waitEl.hidden = true;
-    emptyEl.replaceChildren(
-      ...(configError
-        ? [
-            el("p", { textContent: configError }),
-            el("p", {}, el("button", { textContent: "Criar projeto", onclick: () => openProjectDialog() })),
-            el("p", { textContent: "Ou edite o config à mão. Exemplo:" }),
-            el("pre", { textContent: CONFIG_EXAMPLE }),
-          ]
-        : [el("p", {}, "Use ", el("kbd", { textContent: "Ctrl+Shift+K" }), " ou a barra lateral para escolher uma worktree.")]),
-    );
+    renderEmpty();
     return;
   }
 
   const { project, wt } = current;
   if (!wt[tab]) tab = wt.api ? "api" : "front";
+  const env = envs.get(ck!);
+  const state = lineState(project, wt);
+  destEl.append(
+    flap(state, `head:${ck}`),
+    el("span", { className: "where" }, el("span", { className: "project", textContent: project }), el("span", { className: "sep", textContent: "/" }), ...labelNodes(wt.label)),
+  );
+  destEl.setAttribute("aria-label", `${project}, ${wt.label}: ${SPOKEN[state]}`);
   for (const t of TABS) {
     if (!wt[t]) continue;
-    tabsEl.append(el("button", { textContent: TAB_LABEL[t], className: t === tab ? "on" : "", onclick: () => setTab(t) }));
+    const b = el("button", { type: "button", id: `tab-${t}`, tabIndex: t === tab ? 0 : -1, onclick: () => setTab(t, true) }, el("span", { textContent: TAB_LABEL[t] }));
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", String(t === tab));
+    const pane = env?.panes[t];
+    if (pane) b.setAttribute("aria-controls", pane.el.id);
+    tabsEl.append(b);
   }
-  titleEl.textContent = `${project} · ${wt.label}`;
   renderWait(project, wt);
 
-  const env = envs.get(ck!);
   for (const t of TABS) env?.panes[t]?.el.classList.toggle("off", t !== tab);
   const pane = env?.panes[tab];
-  if (pane) {
-    pane.fit.fit();
-    if (palette.hidden && !document.querySelector("dialog[open]")) pane.term.focus();
-  }
+  pane?.fit.fit();
+  if (!focus || !palette.hidden || document.querySelector("dialog[open]")) return;
+  if (stopping.has(project)) {
+    if (!waitEl.contains(document.activeElement)) waitEl.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+  } else pane?.term.focus();
+}
+
+function renderEmpty() {
+  const missing = configError?.includes("Não consegui ler");
+  emptyEl.replaceChildren(
+    ...(configError
+      ? [
+          el("h2", { textContent: missing ? "Nenhum projeto configurado" : "O config tem um problema" }),
+          el("p", { textContent: missing ? "Crie o primeiro projeto apontando os repositórios da API e do front." : configError }),
+          el("p", {}, el("button", { type: "button", className: "btn primary", textContent: "Criar projeto", onclick: () => openProjectDialog() })),
+          el("p", { textContent: "Ou edite ~/.config/switch-terminal/config.json à mão:" }),
+          el("pre", { textContent: CONFIG_EXAMPLE }),
+        ]
+      : config.projects.length
+        ? [
+            el("h2", { textContent: "Nenhuma worktree aberta" }),
+            el("p", {}, "Escolha uma no painel ou use ", el("kbd", { textContent: "Ctrl" }), el("kbd", { textContent: "Shift" }), el("kbd", { textContent: "K" }), "."),
+          ]
+        : [
+            el("h2", { textContent: "Nenhum projeto ainda" }),
+            el("p", {}, el("button", { type: "button", className: "btn primary", textContent: "Criar projeto", onclick: () => openProjectDialog() })),
+          ]),
+  );
 }
 
 /** Aviso sobre os terminais enquanto a worktree anterior do projeto é encerrada. */
@@ -223,52 +378,183 @@ function renderWait(project: string, wt: Worktree) {
   const st = stopping.get(project);
   waitEl.hidden = !st;
   if (!st) return;
+  const goingBack = active[project] === st.fromId;
+  const detail = goingBack
+    ? `A troca foi cancelada. ${st.from} reinicia assim que os processos saírem.`
+    : st.forcing
+      ? "Não parou com Ctrl+C a tempo; os processos estão sendo encerrados à força (SIGKILL)."
+      : `Aguardando os processos saírem e liberarem as portas para iniciar ${wt.label}.`;
+  const force = el("button", {
+    type: "button",
+    className: "btn primary",
+    textContent: "Forçar agora",
+    title: "Envia SIGKILL aos processos sem esperar o prazo",
+    disabled: st.forcing,
+    onclick: () => {
+      st.forcing = true;
+      for (const p of st.panes) invoke("pty_force", { id: p.ptyId });
+      render();
+    },
+  });
+  const back = el("button", {
+    type: "button",
+    className: "btn",
+    textContent: `Voltar para ${st.from}`,
+    title: `Cancela a troca e reinicia ${st.from}`,
+    disabled: goingBack || !st.fromWt,
+    onclick: () => st.fromWt && select(project, st.fromWt),
+  });
+  const hadFocus = waitEl.contains(document.activeElement);
   waitEl.replaceChildren(
     el(
       "div",
       { className: "wait-card" },
-      el("span", { className: "spinner big" }),
-      el("strong", { textContent: st.forcing ? `Forçando o encerramento de ${st.from}…` : `Encerrando ${st.from}…` }),
-      el("p", {
-        textContent: st.forcing
-          ? `Não parou com Ctrl+C em ${config.stopTimeoutMs / 1000}s; enviando SIGKILL.`
-          : `Aguardando os processos saírem e liberarem as portas para iniciar ${wt.label}.`,
-      }),
-    ),
-  );
-}
-
-function renderSidebar() {
-  sidebar.replaceChildren(
-    ...config.projects.flatMap((p) => [
       el(
         "div",
-        { className: "project" },
-        el("h3", { textContent: p.name }),
-        el("button", { textContent: "+", title: `Nova worktree em ${p.name}`, ariaLabel: `Nova worktree em ${p.name}`, onclick: () => openAddDialog(p.name) }),
+        { className: "wait-head" },
+        flap("stop", `wait:${project}`),
+        el("strong", { textContent: st.forcing ? `Forçando o encerramento de ${st.from}` : `Encerrando ${st.from}` }),
       ),
-      ...(p.error ? [el("div", { className: "error", textContent: p.error })] : []),
-      ...p.worktrees.map((wt) => {
-        const isActive = active[p.name] === wt.id;
-        const dot =
-          stopping.get(p.name)?.fromId === wt.id
-            ? el("span", { className: "dot" }, el("span", { className: "spinner", title: "Encerrando…" }))
-            : el("span", { className: "dot" + (isActive ? " active" : ""), textContent: isActive ? "◉" : envs.has(key(p.name, wt.id)) ? "●" : "○" });
-        const solo = wt.api && wt.front ? "" : wt.api ? " · só API" : " · só front";
-        return el("button", {
-          className: currentKey() === key(p.name, wt.id) ? "current" : "",
-          title: wt.label + solo,
-          onclick: () => select(p.name, wt),
-        }, dot, wt.label + solo);
+      el("p", { textContent: detail }),
+      el("div", { className: "actions" }, force, back),
+    ),
+  );
+  if (hadFocus) waitEl.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+}
+
+/** Erro de git do projeto em uma linha legível; o texto cru fica no detalhe. */
+function projectErrorSummary(error: string) {
+  const side = error.startsWith("Front:") ? "Front" : "API";
+  const raw = error.toLowerCase();
+  const reason = raw.includes("not a git repository")
+    ? "a pasta não é um repositório git"
+    : raw.includes("cannot change to") || raw.includes("no such file")
+      ? "repositório não encontrado"
+      : "não consegui ler as worktrees";
+  return `${side}: ${reason}`;
+}
+
+function lineButton(project: string, wt: Worktree) {
+  const k = key(project, wt.id);
+  const state = lineState(project, wt);
+  const [api, front] = wt.id.split("|");
+  const branch = api || front;
+  const tag = !api ? el("span", { className: "tag", textContent: "SÓ FRONT" }) : !front ? el("span", { className: "tag", textContent: "SÓ API" }) : null;
+  const pair = api && front && api !== front ? el("span", { className: "pair" }, icon(PAIR_ICON, "inline"), front) : null;
+  const live = state === "run" || state === "start" || state === "wait";
+  const b = el(
+    "button",
+    {
+      type: "button",
+      className: `line${live ? " live" : ""}`,
+      title: wt.label,
+      ariaLabel: `${wt.label}${tag ? (api ? ", só API" : ", só front") : ""}: ${SPOKEN[state]}`,
+      onclick: () => select(project, wt),
+    },
+    flap(state, `line:${k}`),
+    el("span", { className: "name" }, el("span", { className: "top" }, el("span", { className: "branch" }, ...branchText(branch)), tag), pair),
+  );
+  b.dataset.key = k;
+  if (currentKey() === k) b.setAttribute("aria-current", "true");
+  return b;
+}
+
+function renderBoard() {
+  // O painel é recriado a cada render; o foco do teclado volta para a mesma linha.
+  const focusedKey = board.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.key : undefined;
+  board.replaceChildren(
+    ...config.projects.map((p) => {
+      const add = el(
+        "button",
+        {
+          type: "button",
+          className: "icon-btn",
+          title: p.error ? "Corrija o erro do projeto para criar worktrees" : `Nova worktree em ${p.name} (Ctrl+Shift+N)`,
+          ariaLabel: `Nova worktree em ${p.name}`,
+          disabled: !!p.error,
+          onclick: () => openAddDialog(p.name),
+        },
+        icon("M8 3v10M3 8h10"),
+      );
+      const problem = p.error
+        ? el(
+            "details",
+            { className: "problem" },
+            el("summary", { textContent: projectErrorSummary(p.error) }),
+            el("code", { textContent: p.error }),
+            el("p", { textContent: "Ajuste o caminho no config.json e volte para a janela." }),
+          )
+        : null;
+      // A worktree em serviço fica no topo da plataforma; as outras na ordem do git.
+      const lines = [...p.worktrees].sort((a, b) => Number(b.id === active[p.name]) - Number(a.id === active[p.name]));
+      return el(
+        "section",
+        { className: "platform", ariaLabel: p.name },
+        el("div", { className: "platform-head" }, el("h3", {}, el("span", { className: "tile" }, el("span", { textContent: p.name }))), add),
+        problem,
+        el("ul", { className: "lines" }, ...lines.map((wt) => el("li", {}, lineButton(p.name, wt)))),
+      );
+    }),
+  );
+  if (focusedKey) board.querySelector<HTMLElement>(`.line[data-key="${CSS.escape(focusedKey)}"]`)?.focus();
+}
+
+/** Com o painel recolhido, o cabeçalho mostra o que roda nos outros projetos. */
+function renderRunning() {
+  runningEl.replaceChildren(
+    ...config.projects
+      .filter((p) => p.name !== current?.project && active[p.name])
+      .flatMap((p) => {
+        const wt = p.worktrees.find((w) => w.id === active[p.name]);
+        if (!wt) return [];
+        const state = lineState(p.name, wt);
+        return [el("span", { className: "other", title: `${p.name} / ${wt.label}: ${SPOKEN[state]}` }, flap(state, `run:${p.name}`), `${p.name} / ${wt.label}`)];
       }),
-    ]),
-    el("button", { className: "new-project", textContent: "+ Novo projeto", onclick: () => openProjectDialog() }),
   );
 }
 
-function setTab(t: Tab) {
+function icon(d: string, extra = "") {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("class", `icon ${extra}`.trim());
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", d);
+  svg.append(path);
+  return svg;
+}
+
+function setTab(t: Tab, focus = false) {
   tab = t;
-  render();
+  render(focus);
+}
+
+// Abas: setas trocam de aba, como em qualquer tablist.
+tabsEl.addEventListener("keydown", (e) => {
+  if (!current?.wt.api || !current.wt.front || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+  e.preventDefault();
+  setTab(tab === "api" ? "front" : "api");
+  $<HTMLButtonElement>(`#tab-${tab}`).focus();
+});
+
+// Painel pelo teclado: setas andam pelas linhas, Esc volta ao terminal.
+board.addEventListener("keydown", (e) => {
+  const lines = [...board.querySelectorAll<HTMLButtonElement>(".line")];
+  const i = lines.indexOf(document.activeElement as HTMLButtonElement);
+  if (i < 0) return;
+  if (e.key === "ArrowDown") lines[Math.min(i + 1, lines.length - 1)].focus();
+  else if (e.key === "ArrowUp") lines[Math.max(i - 1, 0)].focus();
+  else if (e.key === "Home") lines[0].focus();
+  else if (e.key === "End") lines[lines.length - 1].focus();
+  else if (e.key === "Escape") render(true);
+  else return;
+  e.preventDefault();
+});
+
+function focusBoard() {
+  if (document.body.classList.contains("sidebar-off")) setSidebar(true);
+  const lines = board.querySelectorAll<HTMLButtonElement>(".line");
+  (board.querySelector<HTMLButtonElement>('.line[aria-current="true"]') ?? lines[0])?.focus();
 }
 
 // ---------- config / worktrees ----------
@@ -297,11 +583,29 @@ async function refresh() {
   saveActive();
 
   if (current) {
-    const fresh = alive.get(currentKey()!);
-    if (fresh) current.wt = fresh;
+    const freshWt = alive.get(currentKey()!);
+    if (freshWt) current.wt = freshWt;
     else if (loaded.has(current.project)) current = null;
   }
   render();
+}
+
+/** Consulta quais terminais têm processo rodando; só redesenha quando algo muda. */
+async function pollStatus() {
+  const panes = [...envs].flatMap(([k, e]) => Object.values(e.panes).map((p) => ({ k, id: p.ptyId })));
+  if (!panes.length) return;
+  const busy = await invoke<boolean[]>("pty_status", { ids: panes.map((p) => p.id) });
+  const next = new Set(panes.filter((_, i) => busy[i]).map((p) => p.k));
+  let changed = next.size !== running.size || [...next].some((k) => !running.has(k));
+  for (const [k, t] of starting) {
+    // Start enviado: vira RODANDO quando o processo aparece, ou desiste depois de 15 s.
+    if (next.has(k) || Date.now() - t > 15000) {
+      starting.delete(k);
+      changed = true;
+    }
+  }
+  running = next;
+  if (changed) render();
 }
 
 // ---------- paleta ----------
@@ -319,13 +623,33 @@ const fuzzy = (q: string, text: string) => {
 
 function renderPalette() {
   const q = paletteInput.value.toLowerCase().replace(/\s+/g, "");
-  items = config.projects.flatMap((p) => p.worktrees.map((wt) => ({ project: p.name, wt }))).filter((it) => fuzzy(q, `${it.project}${it.wt.label}`.toLowerCase()));
+  const rank = (it: Item) => {
+    const r = recent.indexOf(key(it.project, it.wt.id));
+    return r < 0 ? Infinity : r;
+  };
+  items = config.projects
+    .flatMap((p) => p.worktrees.map((wt) => ({ project: p.name, wt })))
+    .filter((it) => fuzzy(q, `${it.project}${it.wt.label}`.toLowerCase()))
+    .sort((a, b) => rank(a) - rank(b));
   sel = Math.min(sel, Math.max(items.length - 1, 0));
   paletteList.replaceChildren(
-    ...items.map((it, i) =>
-      el("li", { className: i === sel ? "sel" : "", onclick: () => choose(it) }, it.wt.label, el("small", { textContent: it.project })),
-    ),
+    ...(items.length
+      ? items.map((it, i) => {
+          const li = el(
+            "li",
+            { id: `opt-${i}`, onclick: () => choose(it) },
+            flap(lineState(it.project, it.wt), `pal:${key(it.project, it.wt.id)}`),
+            el("span", { className: "label" }, ...labelNodes(it.wt.label)),
+            el("span", { className: "project", textContent: it.project }),
+          );
+          li.setAttribute("role", "option");
+          li.setAttribute("aria-selected", String(i === sel));
+          return li;
+        })
+      : [el("li", { className: "none", textContent: q ? `Nenhuma worktree corresponde a "${paletteInput.value.trim()}".` : "Nenhuma worktree ainda." })]),
   );
+  if (items.length) paletteInput.setAttribute("aria-activedescendant", `opt-${sel}`);
+  else paletteInput.removeAttribute("aria-activedescendant");
   paletteList.children[sel]?.scrollIntoView({ block: "nearest" });
 }
 
@@ -334,18 +658,24 @@ function openPalette() {
   paletteInput.value = "";
   sel = 0;
   renderPalette();
+  // Como no Alt+Tab: abre selecionando a anterior, então Ctrl+Shift+K e Enter voltam para ela.
+  if (items.length > 1 && currentKey() === key(items[0].project, items[0].wt.id)) {
+    sel = 1;
+    renderPalette();
+  }
   paletteInput.focus();
   refresh().then(renderPalette);
 }
 
 function closePalette() {
   palette.hidden = true;
-  render();
+  render(true);
 }
 
 function choose(it: Item | undefined) {
-  closePalette();
+  palette.hidden = true;
   if (it) select(it.project, it.wt);
+  else render(true);
 }
 
 paletteInput.addEventListener("input", () => {
@@ -367,6 +697,10 @@ paletteInput.addEventListener("blur", () => !palette.hidden && closePalette());
 
 // ---------- nova worktree ----------
 
+type FormError = { side: Tab | null; message: string; created: Tab[] };
+const asFormError = (err: unknown): FormError =>
+  err && typeof err === "object" && "message" in err ? (err as FormError) : { side: null, message: String(err), created: [] };
+
 type SideDefaults = { dir: string; local: string[]; remote: string[]; defaultBase: string };
 type Defaults = Record<Tab, { Ok: SideDefaults } | { Err: string }>;
 
@@ -380,15 +714,17 @@ const sideBox = (t: Tab) => addForm.querySelector<HTMLFieldSetElement>(`fieldset
 const sideCheck = (t: Tab) => field<HTMLInputElement>(t);
 const sideDir = (t: Tab) => field<HTMLInputElement>(`${t}-dir`);
 const sideBase = (t: Tab) => field<HTMLSelectElement>(`${t}-base`);
+const sideMsg = (t: Tab) => sideBox(t).querySelector<HTMLElement>(".side-error")!;
 let defaultsReq = 0;
 
 function openAddDialog(project?: string) {
-  if (!config.projects.length) return;
-  projectSel.replaceChildren(...config.projects.map((p) => el("option", { value: p.name, textContent: p.name })));
-  projectSel.value = project ?? current?.project ?? config.projects[0].name;
+  const usable = config.projects.filter((p) => !p.error);
+  if (!usable.length) return;
+  projectSel.replaceChildren(...config.projects.map((p) => el("option", { value: p.name, textContent: p.name, disabled: !!p.error })));
+  const wanted = [project, current?.project].find((n) => usable.some((p) => p.name === n));
+  projectSel.value = wanted ?? usable[0].name;
   branchInput.value = "";
   addError.textContent = "";
-  for (const t of TABS) sideCheck(t).checked = true;
   loadDefaults();
   addDialog.showModal();
   branchInput.focus();
@@ -398,10 +734,15 @@ function openAddDialog(project?: string) {
 async function loadDefaults() {
   const req = ++defaultsReq;
   for (const t of TABS) {
+    sideCheck(t).checked = true;
+    sideCheck(t).disabled = false;
     sideDir(t).value = "";
     sideBase(t).replaceChildren(el("option", { value: "", textContent: "Carregando…" }));
-    sideBox(t).querySelector(".side-error")!.textContent = "";
+    sideMsg(t).textContent = "";
+    sideMsg(t).classList.remove("ok");
+    sideBox(t).querySelector<HTMLDetailsElement>("details")!.open = false;
   }
+  syncSides();
   let defaults: Defaults;
   try {
     defaults = await invoke<Defaults>("worktree_defaults", { project: projectSel.value });
@@ -415,7 +756,7 @@ async function loadDefaults() {
     if ("Err" in d) {
       sideCheck(t).checked = false;
       sideBase(t).replaceChildren();
-      sideBox(t).querySelector(".side-error")!.textContent = d.Err;
+      sideMsg(t).textContent = d.Err;
     } else {
       sideDir(t).value = d.Ok.dir;
       const group = (label: string, list: string[]) =>
@@ -433,12 +774,16 @@ function syncSides() {
   for (const t of TABS) {
     sideBox(t).disabled = !sideCheck(t).checked;
     const dir = sideDir(t).value.trim().replace(/\/+$/, "");
-    sideBox(t).querySelector(".preview")!.textContent = dir ? `Será criada em ${dir}/${branch}` : "";
+    const base = sideBase(t).value;
+    sideBox(t)
+      .querySelector(".preview")!
+      .replaceChildren(...(dir ? [`${dir}/${branch}`, ...(base ? [icon(FROM_ICON, "inline"), base] : [])] : ["Carregando…"]));
   }
 }
 
 projectSel.addEventListener("change", loadDefaults);
 addForm.addEventListener("input", syncSides);
+addForm.addEventListener("change", syncSides);
 for (const t of TABS) {
   sideBox(t).querySelector<HTMLButtonElement>(".pick")!.addEventListener("click", async () => {
     const dir = await pickFolder({ directory: true, defaultPath: sideDir(t).value || undefined, title: `Diretório das worktrees (${TAB_LABEL[t]})` });
@@ -458,21 +803,38 @@ addForm.addEventListener("submit", async (e) => {
   const api = side("api");
   const front = side("front");
   if (!api && !front) {
-    addError.textContent = "Marque API, front ou os dois.";
+    addError.textContent = "Marque API, Front ou os dois.";
     return;
   }
   const submit = e.submitter as HTMLButtonElement;
   submit.disabled = true;
   submit.textContent = "Criando…";
   addError.textContent = "";
+  for (const t of TABS) if (!sideMsg(t).classList.contains("ok")) sideMsg(t).textContent = "";
   try {
     await invoke("add_worktree", { project, branch, api, front });
     addDialog.close();
   } catch (err) {
-    addError.textContent = String(err);
+    const fe = asFormError(err);
+    // O que já foi criado sai do próximo envio: desmarcado e travado, com aviso.
+    for (const t of fe.created) {
+      sideCheck(t).checked = false;
+      sideCheck(t).disabled = true;
+      sideMsg(t).textContent = `Já criada em ${sideDir(t).value.replace(/\/+$/, "")}/${branch}.`;
+      sideMsg(t).classList.add("ok");
+    }
+    syncSides();
+    if (fe.side) {
+      sideMsg(fe.side).textContent = fe.message;
+      sideBox(fe.side).querySelector<HTMLDetailsElement>("details")!.open = true;
+      sideDir(fe.side).focus();
+    } else {
+      addError.textContent = fe.message;
+      branchInput.focus();
+    }
   } finally {
     submit.disabled = false;
-    submit.textContent = "Criar";
+    submit.textContent = "Criar worktree";
   }
   // Mesmo com erro parcial (ex.: API criada, front falhou) o que foi criado aparece na lista.
   await refresh();
@@ -483,7 +845,7 @@ addForm.addEventListener("submit", async (e) => {
   }
 });
 
-addDialog.addEventListener("close", () => render());
+addDialog.addEventListener("close", () => render(true));
 
 // ---------- novo projeto ----------
 
@@ -491,10 +853,12 @@ const projectDialog = $<HTMLDialogElement>("#project-dialog");
 const projectForm = projectDialog.querySelector("form")!;
 const projectError = projectDialog.querySelector<HTMLElement>(".error")!;
 const pfield = (name: string) => projectForm.elements.namedItem(name) as HTMLInputElement;
+const pSideMsg = (t: Tab) => projectForm.querySelector<HTMLElement>(`fieldset[data-side="${t}"] .side-error`)!;
 
 function openProjectDialog() {
   projectForm.reset();
   projectError.textContent = "";
+  for (const t of TABS) pSideMsg(t).textContent = "";
   projectDialog.showModal();
   pfield("name").focus();
 }
@@ -512,19 +876,30 @@ projectForm.addEventListener("submit", async (e) => {
   const side = (t: Tab) => ({ repo: pfield(`${t}-repo`).value, startCommand: pfield(`${t}-start`).value, setupCommand: pfield(`${t}-setup`).value });
   const submit = e.submitter as HTMLButtonElement;
   submit.disabled = true;
+  submit.textContent = "Criando…";
   projectError.textContent = "";
+  for (const t of TABS) pSideMsg(t).textContent = "";
   try {
     await invoke("add_project", { project: { name: pfield("name").value, api: side("api"), front: side("front") } });
     projectDialog.close();
     await refresh();
   } catch (err) {
-    projectError.textContent = String(err);
+    const fe = asFormError(err);
+    if (fe.side) {
+      pSideMsg(fe.side).textContent = fe.message;
+      pfield(`${fe.side}-repo`).focus();
+    } else {
+      projectError.textContent = fe.message;
+      pfield("name").focus();
+    }
   } finally {
     submit.disabled = false;
+    submit.textContent = "Criar projeto";
   }
 });
 
-projectDialog.addEventListener("close", () => render());
+projectDialog.addEventListener("close", () => render(true));
+$("#new-project").addEventListener("click", () => openProjectDialog());
 
 // ---------- barra lateral ----------
 
@@ -532,58 +907,58 @@ const toggleBtn = $("#toggle-sidebar");
 
 function setSidebar(open: boolean) {
   document.body.classList.toggle("sidebar-off", !open);
-  const label = open ? "Recolher barra lateral" : "Abrir barra lateral";
+  const label = open ? "Recolher o painel" : "Abrir o painel";
   toggleBtn.title = `${label} (Ctrl+Shift+B)`;
   toggleBtn.setAttribute("aria-label", label);
   toggleBtn.setAttribute("aria-expanded", String(open));
-  try {
-    localStorage.setItem("sidebar", open ? "open" : "off");
-  } catch {}
+  save("sidebar", open ? "open" : "off");
   // O ResizeObserver dos painéis reajusta os terminais à nova largura.
 }
 
 const toggleSidebar = () => setSidebar(document.body.classList.contains("sidebar-off"));
 toggleBtn.addEventListener("click", () => {
   toggleSidebar();
-  render();
+  render(true);
 });
-let sidebarPref: string | null = null;
-try {
-  sidebarPref = localStorage.getItem("sidebar");
-} catch {}
-setSidebar(sidebarPref !== "off");
+setSidebar(load<string>("sidebar", "open") !== "off");
 
 // Largura arrastável da barra lateral, lembrada entre sessões.
-const SIDEBAR_W = { min: 160, max: 480, default: 220 };
+const SIDEBAR_W = { min: 200, max: 480, default: 280 };
 const handle = $("#sidebar-handle");
+const sidebarEl = $("#sidebar");
 
 function setSidebarWidth(w: number) {
   const px = Math.round(Math.min(SIDEBAR_W.max, Math.max(SIDEBAR_W.min, w)));
   document.body.style.setProperty("--sidebar-w", `${px}px`);
   handle.setAttribute("aria-valuenow", String(px));
-  try {
-    localStorage.setItem("sidebarWidth", String(px));
-  } catch {}
+  save("sidebarWidth", px);
 }
 
 handle.setAttribute("aria-valuemin", String(SIDEBAR_W.min));
 handle.setAttribute("aria-valuemax", String(SIDEBAR_W.max));
+let dragPointer: number | null = null;
 handle.addEventListener("pointerdown", (e) => {
+  if (dragPointer !== null || e.button !== 0) return; // um segundo ponteiro não sequestra o arraste
   e.preventDefault();
+  dragPointer = e.pointerId;
   handle.setPointerCapture(e.pointerId);
   document.body.classList.add("resizing");
 });
+window.addEventListener("blur", () => {
+  if (dragPointer !== null && handle.hasPointerCapture(dragPointer)) handle.releasePointerCapture(dragPointer);
+});
 handle.addEventListener("pointermove", (e) => {
-  if (handle.hasPointerCapture(e.pointerId)) setSidebarWidth(e.clientX - sidebar.getBoundingClientRect().left);
+  if (handle.hasPointerCapture(e.pointerId)) setSidebarWidth(e.clientX - sidebarEl.getBoundingClientRect().left);
 });
 handle.addEventListener("lostpointercapture", () => {
+  dragPointer = null;
   document.body.classList.remove("resizing");
-  render();
+  render(true);
 });
 handle.addEventListener("dblclick", () => setSidebarWidth(SIDEBAR_W.default));
 handle.addEventListener("keydown", (e) => {
   const step = e.shiftKey ? 40 : 10;
-  const w = sidebar.getBoundingClientRect().width;
+  const w = sidebarEl.getBoundingClientRect().width;
   if (e.key === "ArrowLeft") setSidebarWidth(w - step);
   else if (e.key === "ArrowRight") setSidebarWidth(w + step);
   else if (e.key === "Home") setSidebarWidth(SIDEBAR_W.min);
@@ -591,11 +966,7 @@ handle.addEventListener("keydown", (e) => {
   else return;
   e.preventDefault();
 });
-let savedWidth = NaN;
-try {
-  savedWidth = Number(localStorage.getItem("sidebarWidth"));
-} catch {}
-setSidebarWidth(savedWidth || SIDEBAR_W.default);
+setSidebarWidth(Number(load("sidebarWidth", SIDEBAR_W.default)) || SIDEBAR_W.default);
 
 // ---------- atalhos e janela ----------
 
@@ -605,9 +976,14 @@ window.addEventListener(
   (e) => {
     if (!e.ctrlKey || !e.shiftKey) return;
     if (e.code === "KeyK") palette.hidden ? openPalette() : closePalette();
-    else if (e.code === "KeyB") toggleSidebar();
-    else if (e.code === "KeyJ") {
-      if (current?.wt.api && current.wt.front) setTab(tab === "api" ? "front" : "api");
+    else if (e.code === "KeyB") {
+      toggleSidebar();
+      render(true);
+    } else if (e.code === "KeyE") focusBoard();
+    else if (e.code === "KeyN") {
+      if (!document.querySelector("dialog[open]")) openAddDialog(current?.project);
+    } else if (e.code === "KeyJ") {
+      if (current?.wt.api && current.wt.front) setTab(tab === "api" ? "front" : "api", true);
     } else return;
     e.preventDefault();
     e.stopPropagation();
@@ -617,10 +993,13 @@ window.addEventListener(
 
 window.addEventListener("focus", () => refresh());
 
+scheme.addEventListener("change", () => {
+  for (const env of envs.values()) for (const pane of Object.values(env.panes)) pane.term.options.theme = termTheme();
+});
+
 new ResizeObserver(() => {
   for (const env of envs.values()) for (const pane of Object.values(env.panes)) pane.fit.fit();
 }).observe(panesEl);
-
 
 // ---------- início: restaura a última worktree ativa de cada projeto ----------
 
@@ -635,4 +1014,9 @@ for (const p of config.projects) {
   activate(p.name, wt, created);
   current ??= { project: p.name, wt };
 }
-render();
+if (current) {
+  const k = key(current.project, current.wt.id);
+  recent = [k, ...recent.filter((r) => r !== k)];
+}
+render(true);
+setInterval(pollStatus, 1200);

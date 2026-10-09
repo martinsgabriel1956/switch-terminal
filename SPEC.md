@@ -77,24 +77,18 @@ Estado persistido no `localStorage` do webview: `{ "<projeto>": "<id da worktree
 
 ## UI
 
-```
-┌──────────────┬─────────────────────────────────────────────┐
-│ ▾ eternno    │ [ API ] [ Front ]          feature-x        │
-│   ● main     │ $ pnpm dev                                  │
-│   ◉ feat-x   │ listening :3000                             │
-│   ○ fix-log* │                                             │
-│ ▸ pessoal    │                                             │
-└──────────────┴─────────────────────────────────────────────┘
- ◉ ativa  ● shell vivo/parada  ○ nunca aberta  * solo
-```
+Identidade visual: **painel de partidas** (split-flap). Tokens, tipografia e regras em `DESIGN.md`.
 
-- Sidebar agrupada por projeto › worktrees.
-- Abas **API | Front**. Worktrees solo mostram só a aba existente.
-- `Ctrl+Shift+K`: paleta fuzzy por nome de worktree; Enter troca.
-- `Ctrl+Shift+J`: alterna entre as abas API e Front.
-- Botão `☰` no cabeçalho ou `Ctrl+Shift+B`: recolhe e abre a barra lateral (o estado fica salvo).
-- Alça na borda direita da barra lateral: arrastar redimensiona (160–480 px), duplo clique volta a 220 px, setas (Shift = passo maior) pelo teclado. A largura fica salva.
-- Os atalhos são interceptados com `attachCustomKeyEventHandler` antes de chegarem ao xterm.
+- **Painel (barra lateral):** cada projeto é uma plataforma (nome numa placa de palheta + botão `+`); cada worktree é uma linha com uma palheta de estado de 7 caracteres e o nome da branch (prefixo em meia-tinta). A worktree em serviço fica no topo da plataforma. Pares com nomes diferentes mostram a branch do front numa segunda linha; worktrees solo têm a etiqueta SÓ API / SÓ FRONT.
+- **Estados da palheta** (estado real, consultado no backend a cada 1,2 s com `pty_status`): RODANDO (verde, há processo), SUBINDO (âmbar, start enviado), AGUARDA (âmbar, esperando a anterior parar), PARANDO (vermelho), PARADA (terminais abertos, nada rodando), em branco (não aberta). A palheta vira em 3 passos só quando o estado muda; sem animação com "reduzir movimento".
+- **Faixa de destino:** palheta de estado + PROJETO / branch, abas API | FRONT (tablist com setas), ajuda (?) com atalhos e legenda. Com o painel recolhido, mostra o que roda nos outros projetos.
+- **Aviso de troca:** cobre os terminais, bloqueia a digitação no terminal novo e oferece "Forçar agora" (SIGKILL na hora) e "Voltar para …" (cancela a troca e reinicia a anterior).
+- **Paleta** (`Ctrl+Shift+K`): busca aproximada, ordenada por uso recente e abrindo já na worktree anterior (Ctrl+Shift+K, Enter volta para ela). ARIA de combobox/listbox.
+- **Atalhos:** `Ctrl+Shift+K` paleta, `Ctrl+Shift+J` alterna abas, `Ctrl+Shift+N` nova worktree, `Ctrl+Shift+E` foca o painel (setas navegam, Esc volta ao terminal), `Ctrl+Shift+B` recolhe o painel. Interceptados na fase de captura, antes do xterm.
+- **Alça da barra lateral:** arrastar redimensiona (200–480 px, padrão 280), duplo clique restaura, setas pelo teclado. A largura fica salva.
+- **Temas:** escuro e claro, seguindo o sistema; o terminal usa o mesmo fundo do painel e troca as cores ANSI junto.
+- **Projeto com erro de git:** uma linha legível (ex.: "API: repositório não encontrado"), detalhe expansível com o erro cru, e o `+` desabilitado.
+- **Formulários:** Enter envia; erros aparecem no lado (API/Front) que falhou, com o foco no campo; depois de um erro parcial, o lado já criado fica travado com "Já criada em …". Diretório e origem ficam recolhidos em "Alterar diretório ou origem"; o comando de setup do projeto também.
 
 ## Abrir / fechar
 
