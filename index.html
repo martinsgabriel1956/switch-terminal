@@ -51,12 +51,14 @@
         <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>E</kbd></dt><dd>Ir para o painel (setas navegam, Esc volta)</dd>
         <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd></dt><dd>Recolher ou abrir o painel</dd>
         <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd></dt><dd>Abrir ou fechar esta ajuda</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Durante a troca: voltar e reiniciar a anterior</dd>
       </dl>
       <h2>Estados</h2>
       <dl class="legend">
-        <dt><span class="flap" data-state="run"><span>RODANDO</span></span></dt><dd>Há processo rodando nos terminais</dd>
+        <dt><span class="flap" data-state="run"><span>RODANDO</span></span></dt><dd>API e Front de pé</dd>
+        <dt><span class="flap" data-state="part"><span>PARCIAL</span></span></dt><dd>Um lado caiu; a aba dele fica marcada</dd>
         <dt><span class="flap" data-state="start"><span>SUBINDO</span></span></dt><dd>O comando de start acabou de ser enviado</dd>
-        <dt><span class="flap" data-state="wait"><span>AGUARDA</span></span></dt><dd>Esperando a anterior do projeto parar</dd>
+        <dt><span class="flap" data-state="wait"><span>AGUARDA</span></span></dt><dd>Esperando a anterior do projeto parar (ou a própria, ao voltar)</dd>
         <dt><span class="flap" data-state="stop"><span>PARANDO</span></span></dt><dd>Sendo encerrada para a troca: Ctrl+C e, depois do prazo, SIGKILL</dd>
         <dt><span class="flap" data-state="idle"><span>PARADA</span></span></dt><dd>Terminais abertos, nada rodando</dd>
         <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Encaixe vazio: ainda não aberta nesta sessão</dd>
@@ -94,7 +96,7 @@
               <select name="api-base"></select>
             </label>
           </details>
-          <p class="side-error" role="alert"></p>
+          <p class="side-error" id="add-api-error" role="alert"></p>
         </fieldset>
         <fieldset class="side" data-side="front">
           <legend><label><input type="checkbox" name="front" checked /> Front</label></legend>
@@ -113,11 +115,11 @@
               <select name="front-base"></select>
             </label>
           </details>
-          <p class="side-error" role="alert"></p>
+          <p class="side-error" id="add-front-error" role="alert"></p>
         </fieldset>
         <label class="check"><input type="checkbox" name="open" checked /> Abrir ao criar</label>
         <p class="hint open-hint" hidden></p>
-        <p class="error" role="alert"></p>
+        <p class="error" id="add-error" role="alert"></p>
         <menu>
           <button value="ok" class="primary">Criar worktree</button>
           <button value="cancel" formnovalidate>Cancelar</button>
@@ -154,7 +156,7 @@
             </label>
             <p class="hint">Roda antes do start só na primeira vez de uma worktree criada pelo app.</p>
           </details>
-          <p class="side-error" role="alert"></p>
+          <p class="side-error" id="project-api-error" role="alert"></p>
         </fieldset>
         <fieldset data-side="front">
           <legend>Front</legend>
@@ -178,9 +180,9 @@
             </label>
             <p class="hint">Roda antes do start só na primeira vez de uma worktree criada pelo app.</p>
           </details>
-          <p class="side-error" role="alert"></p>
+          <p class="side-error" id="project-front-error" role="alert"></p>
         </fieldset>
-        <p class="error" role="alert"></p>
+        <p class="error" id="project-error" role="alert"></p>
         <menu>
           <button value="ok" class="primary">Criar projeto</button>
           <button value="cancel" formnovalidate>Cancelar</button>
@@ -194,7 +196,10 @@
         <input role="combobox" aria-expanded="true" aria-controls="palette-list" aria-autocomplete="list" aria-label="Trocar de worktree" placeholder="Trocar de worktree…" spellcheck="false" />
       </div>
       <ul id="palette-list" role="listbox" aria-label="Worktrees"></ul>
-      <p class="note" aria-live="polite" hidden></p>
+      <div class="foot">
+        <p class="note" aria-live="polite" hidden></p>
+        <p class="keys" aria-hidden="true"><kbd>Enter</kbd> trocar <kbd>Esc</kbd> fechar</p>
+      </div>
     </div>
   </body>
 </html>

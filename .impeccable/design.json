@@ -143,7 +143,7 @@
       "ink-3": {
         "role": "neutral",
         "displayName": "Tinta Apagada (noite)",
-        "canonical": "#6c6d6a",
+        "canonical": "#747572",
         "cssVar": "--ink-3",
         "mode": "dark",
         "tonalRamp": [
@@ -378,7 +378,7 @@
       "ink-3-day": {
         "role": "neutral",
         "displayName": "Tinta Apagada (dia)",
-        "canonical": "#7c7e82",
+        "canonical": "#6e7074",
         "cssVar": "--ink-3",
         "mode": "light",
         "tonalRamp": [

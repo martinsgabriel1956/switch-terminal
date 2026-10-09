@@ -10,7 +10,7 @@ colors:
   rule: "#2e3036"
   ink: "#ecebe6"
   ink-2: "#a5a59f"
-  ink-3: "#6c6d6a"
+  ink-3: "#747572"
   run: "#4cc38a"
   start: "#f2b33d"
   wait: "#f2b33d"
@@ -25,7 +25,7 @@ colors:
   rule-day: "#cfd1cc"
   ink-day: "#15161a"
   ink-2-day: "#4f5156"
-  ink-3-day: "#7c7e82"
+  ink-3-day: "#6e7074"
   run-day: "#0d6a3f"
   start-day: "#855000"
   wait-day: "#855000"
@@ -195,10 +195,10 @@ Neutros quentes de grafite (noite) ou esmalte (dia), com três cores de sinal re
 - **Fundo do Painel** (`board`): chão da janela, do terminal (`--term-bg`) e dos campos de formulário.
 - **Trilho** (`rail`): barra lateral e todas as superfícies flutuantes (aviso de troca, paleta, ajuda, diálogos), e blocos de código no estado vazio.
 - **Palheta** (`flap`, `flap-hi`): as duas metades de toda palheta (`flap-hi` em cima, `flap` embaixo); `flap` sozinho é o fundo de hover e da linha atual.
-- **Corte** (`seam`): a linha de 1px no meio da palheta.
+- **Corte** (`seam`): os entalhes de 1px nas bordas, no meio da palheta.
 - **Fio** (`rule`): toda borda de 1px, divisórias e o polegar da barra de rolagem.
 - **Meia-tinta** (`ink-2`): texto em repouso, prefixo da branch, ícones, dicas, estado PARADA.
-- **Tinta Apagada** (`ink-3`): separador `/`, ícone desabilitado, fios da linha atual e do item selecionado, contorno dos campos. Passa 3:1 sobre `board` e `rail` nos dois temas, então serve de indicador não textual; não serve para texto que precise ser lido.
+- **Tinta Apagada** (`ink-3`): separador `/`, ícone desabilitado, fios da linha atual e do item selecionado, contorno dos campos. Passa 3:1 sobre `board`, `rail` e `flap` nos dois temas, então serve de indicador não textual; não serve para texto que precise ser lido.
 - **Véu** (`scrim`): atrás do aviso de troca e dos diálogos modais.
 
 A marca na barra lateral redesenha a geometria da logo com `--mark-bg` / `--mark-prompt` (palheta e tinta à noite; tinta e esmalte de dia) e o interruptor em `run`. O arquivo `app-icon.svg` é compromisso de marca e mantém as próprias cores.
@@ -250,7 +250,7 @@ O sistema é plano. A profundidade do painel vem de tons (`board` < `rail` < `fl
 
 ## Shapes
 
-Cantos quase retos em três degraus: 2px para palhetas, abas e etiquetas; 4px para botões, campos, fieldsets e teclas; 6px para superfícies flutuantes. A linha de corte de 1px no meio (gradiente `flap-hi 50% / flap 50%` + traço `seam`) é a forma recorrente: palheta de estado, placa com o nome da plataforma e aba selecionada. O corte fica atrás das letras para não virar tachado.
+Cantos quase retos em três degraus: 2px para palhetas, abas e etiquetas; 4px para botões, campos, fieldsets e teclas; 6px para superfícies flutuantes. A palheta de estado é a única forma com corte: gradiente `flap-hi 50% / flap 50%` e entalhes `seam` de 2px só nas bordas, como numa palheta real. Um fio inteiro atravessaria a altura-x e leria como tachado (era o que acontecia de dia). Placa da plataforma e aba selecionada são `flap` lisos: a assinatura fica reservada ao estado.
 
 Ícones são SVG desenhados em traço único: viewBox 16, 16px, `stroke-width: 1.5`, pontas e junções arredondadas, `stroke: currentColor`, sem preenchimento; a variante inline tem 12px. O marcador de `<details>` é um chevron desenhado em CSS com o mesmo traço de 1.5px.
 
@@ -258,19 +258,20 @@ Cantos quase retos em três degraus: 2px para palhetas, abas e etiquetas; 4px pa
 
 ### Palheta (assinatura)
 O estado de cada worktree em 7 caracteres.
-- **Forma:** bloco de `7ch + 14px` × 22px, raio 2px, metade de cima `flap-hi`, de baixo `flap`, corte `seam` de 1px no meio.
-- **Estados:** RODANDO (`run`), SUBINDO (`start`), AGUARDA (`wait`), PARANDO (`stop`), PARADA (meia-tinta, `ink-2`), encaixe vazio (nunca aberta: sem gradiente nem corte, só contorno `rule` de 1px, para não pesar no repouso).
+- **Forma:** bloco de `7ch + 14px` × 22px, raio 2px, metade de cima `flap-hi`, de baixo `flap`, entalhes `seam` de 1px × 2px nas bordas, no meio da altura.
+- **Estados:** RODANDO (`run`, API e Front de pé), PARCIAL (`stop`, um lado caiu; o estado é lido por terminal, nunca somado), SUBINDO (`start`), AGUARDA (`wait`, também a própria worktree ao voltar para ela), PARANDO (`stop`), PARADA (meia-tinta, `ink-2`), encaixe vazio (nunca aberta: sem gradiente nem corte, só contorno `rule` de 1px, para não pesar no repouso).
+- **Contagem:** no aviso de troca, uma palheta estreita (`4ch + 14px`) conta os segundos até o SIGKILL e vira a cada segundo.
 - **Movimento:** vira em 3 quadros discretos (`180ms steps(3, jump-none)`, `scaleY 1 → 0.12 → 1` no texto) e só quando o estado daquela palheta muda. Com `prefers-reduced-motion: reduce`, a troca é seca, sem animação.
 
 ### Linhas do painel
-- **Estrutura:** grade palheta | nome; branch com prefixo (`feat/`) em meia-tinta e nome em tinta cheia quando em serviço; par divergente numa segunda linha (13px, seta de par desenhada em SVG inline); etiqueta SÓ API / SÓ FRONT nas solo. Sem espaço, o prefixo encolhe antes do nome.
+- **Estrutura:** grade palheta | nome; branch com prefixo (`feat/`) em meia-tinta e nome em tinta cheia quando em serviço; par divergente numa segunda linha (13px, seta de par desenhada em SVG inline); etiqueta SÓ API / SÓ FRONT nas solo. Sem espaço, o prefixo sai inteiro e só o fim do nome trunca (nunca "f." com cara de abreviação).
 - **Ordem:** a do git, fixa. A linha não muda de lugar ao entrar em serviço; só a palheta vira.
 - **Estados:** repouso transparente com texto `ink-2`; hover `flap`; atual `flap` com fios internos `ink-3` em cima e embaixo; foco com o anel recolhido para dentro (`outline-offset: -2px`).
 - **Teclado:** o painel é uma parada de Tab só (roving tabindex); setas, Home/End navegam.
 
 ### Abas (API | FRONT)
 - **Forma:** 26px de altura, raio 2px, rótulo em caixa-alta 12px/700.
-- **Não selecionada:** contorno `rule`, texto `ink-2`. **Selecionada:** vira palheta (gradiente + corte), sem contorno, texto `ink`.
+- **Não selecionada:** contorno `rule`, texto `ink-2`. **Selecionada:** fundo `flap` liso, sem contorno, texto `ink`. **Lado caído (PARCIAL):** texto `stop` com um quadrado de 6px na frente.
 
 ### Buttons
 - **Shape:** cantos discretos (4px), 32px de altura, `0 14px`, 600.
@@ -278,7 +279,7 @@ O estado de cada worktree em 7 caracteres.
 - **Secondary:** contorno `rule`, fundo transparente, texto `ink`; hover `flap`.
 - **Ícone:** 28×28, raio 4px, ícone `ink-2`; hover fundo `flap` e ícone `ink`; desabilitado em `ink-3`.
 - **Quiet (rodapé do painel):** linha de 40px com fio superior, texto `ink-2`, hover `ink` sobre `flap`.
-- **Aviso de troca:** nenhum botão é primário nem recebe o foco; o foco vai para o card (esperar é a ação padrão). "Forçar agora" e "Voltar" são secundários.
+- **Aviso de troca:** nenhum botão é primário nem recebe o foco; o foco vai para o card (esperar é a ação padrão). "Forçar agora" e "Voltar e reiniciar" (`Esc`) são secundários; depois de voltar, o Voltar some e o card diz "Voltando para X".
 - **Disabled:** opacidade 0.5.
 
 ### Chips
@@ -298,13 +299,13 @@ O estado de cada worktree em 7 caracteres.
 - **Error / Disabled:** erro em texto `stop` 13px abaixo do campo, resumo legível com o erro cru do git em mono `ink-2` embaixo; foco no campo culpado; fieldset desabilitado a 0.45, menos o aviso do lado ("Já criada em…").
 
 ### Navigation
-- **Paleta de troca** (`Ctrl+Shift+K`): busca de 44px com ícone de lupa, lista com nome do projeto em rótulo caixa-alta; item selecionado igual à linha atual (`flap` + fios internos `ink-3`); rodapé com o que o Enter encerra ("Encerra feat/x em projeto") quando há algo rodando no projeto.
-- **Faixa de destino:** projeto em rótulo caixa-alta `ink-2`, separador `ink-3`, branch em 17px/600.
+- **Paleta de troca** (`Ctrl+Shift+K`): busca de 44px com ícone de lupa, lista com nome do projeto em rótulo caixa-alta; item selecionado igual à linha atual (`flap` + fios internos `ink-3`); ordem por qualidade do casamento (trecho no começo de palavra > trecho > subsequência), depois recência; a atual leva a etiqueta ATUAL; rodapé com uma mini palheta PARANDO e o que o Enter encerra ("Encerra feat/x em PROJETO"), e as teclas Enter/Esc.
+- **Faixa de destino:** projeto em rótulo caixa-alta `ink-2`, separador `ink-3`, branch em 17px/600; à direita, o endereço de cada lado de pé (`API localhost:3333`), lido da saída do terminal, em mono 12px. O nome de projeto é caixa-alta em todo lugar.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** mostrar estado só pela palheta e pelas três cores de estado (`run`, `start`/`wait`, `stop`).
+- **Do** mostrar estado só pela palheta e pelas três cores de estado (`run`, `start`/`wait`, `stop`/`part`).
 - **Do** usar tinta cheia (`ink`) apenas no que está em serviço; o resto em `ink-2`.
 - **Do** desenhar ícones como SVG de traço 1.5 em viewBox 16 (16px, inline 12px), em `currentColor`.
 - **Do** animar só em degraus (`steps`), só na mudança de estado, e desligar com `prefers-reduced-motion`.
