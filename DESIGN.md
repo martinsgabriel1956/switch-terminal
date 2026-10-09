@@ -196,7 +196,7 @@ Neutros quentes de grafite (noite) ou esmalte (dia), com três cores de sinal re
 ### Neutral
 - **Fundo do Painel** (`board`): chão da janela, do terminal (`--term-bg`) e dos campos de formulário.
 - **Trilho** (`rail`): barra lateral e todas as superfícies flutuantes (aviso de troca, paleta, ajuda, diálogos), e blocos de código no estado vazio.
-- **Palheta** (`flap`, `flap-hi`): as duas metades de toda palheta (`flap-hi` em cima, `flap` embaixo); `flap` sozinho é o fundo de hover e da linha atual.
+- **Palheta** (`flap`, `flap-hi`): as duas metades de toda palheta (`flap-hi` em cima, `flap` embaixo); `flap` sozinho é o fundo da linha atual; o hover fica a meio caminho entre `rail` e `flap` (`--hover`, `color-mix`), para não se confundir com ela.
 - **Corte** (`seam`): os entalhes de 1px nas bordas, no meio da palheta.
 - **Fio** (`rule`): toda borda de 1px, divisórias e o polegar da barra de rolagem.
 - **Meia-tinta** (`ink-2`): texto em repouso, prefixo da branch, ícones, dicas, estado INATIVA.
@@ -262,14 +262,14 @@ Cantos quase retos em três degraus: 2px para palhetas, abas e etiquetas; 4px pa
 O estado de cada worktree em 7 caracteres.
 - **Forma:** bloco de `7ch + 14px` × 22px, raio 2px, metade de cima `flap-hi`, de baixo `flap`, entalhes `seam` de 1px × 2px nas bordas, no meio da altura.
 - **Estados:** RODANDO (`run`, API e Front de pé), PARCIAL (`fail`, um lado caiu; o estado é lido por terminal, nunca somado), SUBINDO (`start`), AGUARDA (`wait`, também a própria worktree ao voltar para ela), PARANDO (`wait`), SIGKILL (`fail`, passou do prazo ou foi forçada), INATIVA (meia-tinta, `ink-2`; a palavra não começa com PAR para não se confundir com PARANDO/PARCIAL), sem palheta (nunca aberta: a coluna fica vazia, para os nomes alinharem, e nada nela parece controle).
-- **Prévia ENCERRA:** com o cursor ou o foco numa linha do mesmo projeto, a linha em serviço vira para ENCERRA em âmbar (só CSS, `:has`): o clique é destrutivo e o painel mostra o que ele mata antes de matar.
+- **Prévia ENCERRA:** com o cursor ou o foco numa linha do mesmo projeto, a linha em serviço mostra ENCERRA em âmbar (só CSS, `:has`): o clique é destrutivo e o painel mostra o que ele mata antes de matar. Não vira (o estado não mudou) e espera 120ms, para o cursor de passagem não fazer a palheta piscar. É o único nome da prévia: o rodapé da paleta e o "Abrir ao criar" usam a mesma palheta ENCERRA, nunca PARANDO (que afirmaria uma parada que ainda não começou).
 - **Contagem:** no aviso de troca, uma palheta estreita (`4ch + 14px`) conta os segundos até o SIGKILL em tinta cheia (`ink`) e vira a cada segundo.
 - **Movimento:** vira em 3 quadros discretos (`180ms steps(3, jump-none)`, `scaleY 1 → 0.12 → 1` no texto) e só quando o estado daquela palheta muda. Com `prefers-reduced-motion: reduce`, a troca é seca, sem animação.
 
 ### Linhas do painel
-- **Estrutura:** grade palheta | nome; branch com prefixo (`feat/`) em meia-tinta e nome em tinta cheia quando em serviço; par divergente numa segunda linha (13px, seta de par desenhada em SVG inline); etiqueta SÓ API / SÓ FRONT nas solo. Sem espaço, o prefixo sai inteiro e só o fim do nome trunca (nunca "f." com cara de abreviação).
+- **Estrutura:** grade palheta | nome; branch com prefixo (`feat/`) em meia-tinta e nome em tinta cheia quando em serviço; par divergente numa segunda linha (13px, seta de par desenhada em SVG inline); se os dois lados só diferem no prefixo, o nome aparece uma vez e a segunda linha mostra só os prefixos (`feature-api/ ⇄ feature-app/`); etiqueta SÓ API / SÓ FRONT nas solo, também na segunda linha, para a primeira ficar inteira para o nome. Sem espaço, o prefixo sai inteiro e só o fim do nome trunca (nunca "f." com cara de abreviação), e a decisão é por plataforma: todas as linhas perdem o prefixo ou nenhuma.
 - **Ordem:** a do git, fixa. A linha não muda de lugar ao entrar em serviço; só a palheta vira.
-- **Estados:** repouso transparente com texto `ink-2`; hover `flap`; atual `flap` com fios internos `ink-3` em cima e embaixo; foco com o anel recolhido para dentro (`outline-offset: -2px`).
+- **Estados:** repouso transparente com texto `ink-2`; hover `--hover`; atual `flap` com fios internos `ink-3` em cima e embaixo; foco com o anel recolhido para dentro (`outline-offset: -2px`).
 - **Teclado:** o painel é uma parada de Tab só (roving tabindex); setas, Home/End navegam.
 - **Recolher:** a placa do projeto é um botão (`aria-expanded`) com chevron de 12px; recolhido, o projeto mostra só a worktree ativa (o estado de pé nunca some) e `+N` em `ink-2` com as ocultas. Lembrado entre sessões.
 
@@ -283,7 +283,7 @@ O estado de cada worktree em 7 caracteres.
 - **Secondary:** contorno `rule`, fundo transparente, texto `ink`; hover `flap`.
 - **Ícone:** 28×28, raio 4px, ícone `ink-2`; hover fundo `flap` e ícone `ink`; desabilitado em `ink-3`.
 - **Quiet (rodapé do painel):** linha de 40px com fio superior, texto `ink-2`, hover `ink` sobre `flap`.
-- **Aviso de troca:** nenhum botão é primário nem recebe o foco; o foco vai para o card (esperar é a ação padrão). "Forçar agora" e "Voltar para X" são secundários (o nome trunca, o verbo fica); depois de voltar, ou já no SIGKILL, o Voltar some e o card diz "Voltando para X". Sem atalho de Esc: no reflexo do vim, ele desfazia a troca recém-pedida. O texto diz o que recebe o Ctrl+C (`npm run dev`), lido do processo em primeiro plano.
+- **Aviso de troca:** nenhum botão é primário nem recebe o foco; o foco vai para o card (esperar é a ação padrão). "Voltar para X" e "Forçar agora" são secundários, nessa ordem (Tab + Enter nunca vira SIGKILL), com Forçar empurrado para a direita (o nome trunca, o verbo fica); depois de voltar, ou já no SIGKILL, o Voltar some e o card diz "Voltando para X". Sem atalho de Esc: no reflexo do vim, ele desfazia a troca recém-pedida. O texto diz o que recebe o Ctrl+C (`npm run dev`), lido do processo em primeiro plano. Ao terminar, o cabeçalho diz por 8 s quanto a anterior levou ("feat/x parou em 1,8 s", ou "encerrada à força"), em 13px `ink-2`, numa região `status`; durante a troca o destino fica com `aria-live="off"` para não falar junto com o aviso.
 - **Disabled:** opacidade 0.5.
 
 ### Chips
@@ -300,11 +300,11 @@ O estado de cada worktree em 7 caracteres.
 ### Inputs / Fields
 - **Style:** 34px, fundo `board`, contorno `ink-3` 1px (≥3:1), raio 4px, 15px/500; placeholder `ink-2`; select com seta desenhada em gradiente; checkbox com `accent-color: ink`.
 - **Focus:** anel neutro de 2px em `--focus` (tinta), afastado 2px, em todos os controles.
-- **Error / Disabled:** erro em texto `fail` 13px abaixo do campo, resumo legível com o erro cru do git em mono `ink-2` embaixo; foco no campo culpado; fieldset desabilitado a 0.45, menos o aviso do lado ("Já criada em…").
+- **Error / Disabled:** erro em texto `fail` 13px abaixo do campo, resumo legível com o erro cru do git em mono `ink-2` embaixo; campos vazios recebem a mesma mensagem do app (os formulários têm `novalidate`, sem a bolha nativa do WebKit); foco no campo culpado; depois de um erro parcial, o botão nomeia o lado que falta ("Criar no Front"); fieldset desabilitado a 0.45, menos o aviso do lado ("Já criada em…").
 
 ### Navigation
-- **Paleta de troca** (`Ctrl+Shift+K`): busca de 44px com ícone de lupa, lista com nome do projeto em rótulo caixa-alta; item selecionado igual à linha atual (`flap` + fios internos `ink-3`); ordem por qualidade do casamento (trecho no começo de palavra > trecho > subsequência), depois recência; a atual leva a etiqueta ATUAL; rodapé com uma mini palheta PARANDO e o que o Enter ou o clique encerra, com o processo em mono ("Encerra feat/x (npm run dev) em PROJETO"); o mouse também move a seleção; e as teclas Enter/Esc.
-- **Faixa de destino:** projeto em rótulo caixa-alta `ink-2`, separador `ink-3`, branch em 17px/600; à direita, o endereço do dev server da aba aberta (`localhost:3333`), lido da saída do terminal, em mono 12px `ink-2`, link que abre no navegador padrão (sublinha no hover) e encolhe antes da branch; troca junto com a aba. O nome de projeto é caixa-alta em todo lugar.
+- **Paleta de troca** (`Ctrl+Shift+K`): busca de 44px com ícone de lupa, lista com nome do projeto em rótulo caixa-alta; item selecionado igual à linha atual (`flap` + fios internos `ink-3`); ordem por qualidade do casamento (trecho no começo de palavra > trecho > subsequência), depois recência; a atual leva a etiqueta ATUAL; rodapé com uma mini palheta ENCERRA e o que o Enter ou o clique encerra, com o processo em mono ("Encerra feat/x (npm run dev) em PROJETO"; sem espaço, só o nome da worktree trunca); o mouse também move a seleção; e as teclas Enter/Esc.
+- **Faixa de destino:** projeto em rótulo caixa-alta `ink-2`, separador `ink-3`, branch em 17px/600; as abas logo depois; no fim da faixa, à direita, o endereço do dev server da aba aberta (`localhost:3333`), que aparecer ou trocar de porta não desloca as abas,, lido da saída do terminal, em mono 12px `ink-2`, link que abre no navegador padrão (sublinha no hover) e encolhe antes da branch; troca junto com a aba. O nome de projeto é caixa-alta em todo lugar.
 
 ## Do's and Don'ts
 

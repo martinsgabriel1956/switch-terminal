@@ -25,6 +25,8 @@
   --mark-bg: #222428;
   --mark-prompt: #ecebe6;
   --term-bg: var(--board);
+  /* hover: meio caminho entre o trilho e a palheta, para não se confundir com a linha atual */
+  --hover: color-mix(in srgb, var(--flap) 50%, var(--rail));
   --ui: "Barlow Semi Condensed", system-ui, sans-serif;
   --mono: "JetBrainsMono Nerd Font", "Hack Nerd Font Mono", monospace;
   font: 500 15px/1.35 var(--ui);
@@ -175,6 +177,7 @@ kbd {
 .flap > span {
   position: relative;
   z-index: 1;
+  grid-area: 1 / 1;
 }
 
 .flap[data-state="run"] {
@@ -210,22 +213,40 @@ kbd {
   color: var(--ink);
 }
 
-/* Prévia da troca: com o cursor (ou o foco) em outra linha do projeto, a que está em serviço vira para ENCERRA. */
+/* Prévia da troca: com o cursor (ou o foco) em outra linha do projeto, a que está em serviço mostra ENCERRA.
+   Não vira (o estado não mudou) e espera 120ms: o cursor só de passagem pelo painel não faz a palheta piscar. */
 .flap .ends {
-  display: none;
+  visibility: hidden;
 }
 
 .platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap {
-  color: var(--wait);
+  animation: ends-ink 0s 120ms forwards;
 }
 
 .platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap > span:first-child {
-  display: none;
+  animation: ends-off 0s 120ms forwards;
 }
 
 .platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap .ends {
-  display: inline;
-  animation: flip 180ms steps(3, jump-none);
+  animation: ends-on 0s 120ms forwards;
+}
+
+@keyframes ends-ink {
+  to {
+    color: var(--wait);
+  }
+}
+
+@keyframes ends-off {
+  to {
+    visibility: hidden;
+  }
+}
+
+@keyframes ends-on {
+  to {
+    visibility: visible;
+  }
 }
 
 /* A palheta vira em passos discretos, só quando o estado muda. */
@@ -389,7 +410,7 @@ kbd {
   cursor: pointer;
 }
 
-.platform .problem code {
+.platform .problem > code {
   display: block;
   margin-top: 6px;
   color: var(--ink-2);
@@ -400,6 +421,18 @@ kbd {
 .platform .problem p {
   margin: 6px 0 0;
   color: var(--ink-2);
+}
+
+.platform .problem p code {
+  color: var(--ink);
+  font: 12px var(--mono);
+  word-break: break-all;
+}
+
+.btn.small {
+  height: 26px;
+  margin-top: 8px;
+  padding: 0 10px;
 }
 
 .lines {
@@ -423,7 +456,7 @@ kbd {
 }
 
 .line:hover {
-  background: var(--flap);
+  background: var(--hover);
 }
 
 .line[aria-current="true"] {
@@ -499,6 +532,20 @@ kbd {
 
 .line .pair .branch {
   color: inherit;
+}
+
+/* par que só difere no prefixo: "feature-api/ ⇄ feature-app/" */
+.line .pair .pre {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* SÓ API / SÓ FRONT na segunda linha, como o par: a primeira fica inteira para o nome */
+.line .name > .tag {
+  display: inline-block;
+  margin: 3px 0 1px;
 }
 
 .tag {
@@ -589,8 +636,9 @@ header {
   min-width: 0;
 }
 
-/* encolhe antes do nome da branch, mas também encolhe: numa janela estreita a branch não some por ele */
-#destination .url {
+/* À direita, depois das abas: aparecer ou trocar de porta não empurra as abas.
+   Encolhe antes do nome da branch, mas também encolhe: numa janela estreita a branch não some por ele. */
+#dev-url {
   flex-shrink: 4;
   min-width: 0;
   overflow: hidden;
@@ -602,7 +650,7 @@ header {
   text-underline-offset: 3px;
 }
 
-#destination .url:hover {
+#dev-url:hover {
   color: var(--ink);
   text-decoration: underline;
 }
@@ -670,6 +718,17 @@ header {
   border-radius: 2px;
   background: currentColor;
   vertical-align: 1px;
+}
+
+/* "feat/x parou em 1,8 s": o fechamento da troca, some sozinho */
+#last-stop {
+  flex-shrink: 2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-2);
+  font-size: 13px;
 }
 
 #running {
@@ -846,7 +905,13 @@ body:not(.sidebar-off) #running {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  width: 100%;
   margin-top: 6px;
+}
+
+/* Forçar mata sem o Ctrl+C: depois do Voltar na ordem do Tab, e afastado dele */
+.actions [data-act="force"] {
+  margin-left: auto;
 }
 
 .btn,
@@ -914,6 +979,16 @@ dialog.form menu button:disabled {
 
 #help h2:not(:first-child) {
   margin-top: 18px;
+}
+
+#help .chord {
+  margin: 0 0 10px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+#help .chord kbd {
+  margin: 0 0 0 3px;
 }
 
 #help dl {
@@ -1039,7 +1114,7 @@ dialog.form menu button:disabled {
   margin-left: 8px;
 }
 
-/* mini palheta PARANDO na frente do aviso "Encerra X" */
+/* mini palheta ENCERRA na frente do aviso "Encerra X": a mesma prévia do painel */
 #palette .note .flap,
 dialog.form .open-hint .flap {
   margin-right: 6px;
@@ -1286,9 +1361,6 @@ dialog.form menu {
     transition: none;
   }
 
-  .platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap .ends {
-    animation: none;
-  }
 }
 
 .icon.inline {
@@ -1340,7 +1412,21 @@ dialog.form .open-hint {
   align-items: center;
 }
 
+/* Sem espaço, só o nome da worktree trunca: o projeto e o processo continuam legíveis até o fim. */
 #palette .note .ends-text {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3em;
+  min-width: 0;
+  overflow: hidden;
+}
+
+#palette .note .ends-text > * {
+  flex-shrink: 0;
+}
+
+#palette .note .ends-text > strong {
+  flex-shrink: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

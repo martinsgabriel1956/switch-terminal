@@ -93,6 +93,15 @@ pub fn config_path() -> String {
     format!("{}/.config/switch-terminal/config.json", home())
 }
 
+/// "Abrir o config.json" no projeto com erro: abre no editor padrão do sistema.
+#[tauri::command]
+pub fn open_config() -> Result<(), String> {
+    let mut child = std::process::Command::new("xdg-open").arg(config_path()).spawn().map_err(|e| e.to_string())?;
+    // Recolhe o xdg-open quando ele sair, senão fica um zumbi por clique.
+    std::thread::spawn(move || child.wait());
+    Ok(())
+}
+
 /// Saída de `git worktree list --porcelain`: blocos separados por linha em branco.
 fn parse_porcelain(out: &str) -> Vec<Wt> {
     out.split("\n\n")

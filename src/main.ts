@@ -41,6 +41,7 @@ const SPOKEN: Record<LineState, string> = {
   idle: "inativa",
   none: "não aberta",
 };
+const CONFIG_PATH = "~/.config/switch-terminal/config.json";
 const CONFIG_EXAMPLE = `{
   "projects": [
     {
@@ -115,6 +116,21 @@ const palette = $("#palette");
 const paletteInput = $<HTMLInputElement>("#palette input");
 const paletteList = $("#palette ul");
 const paletteNote = $("#palette .note");
+const urlEl = $<HTMLAnchorElement>("#dev-url");
+const lastStopEl = $("#last-stop");
+
+urlEl.addEventListener("click", (e) => {
+  e.preventDefault();
+  invoke("open_url", { url: urlEl.href });
+});
+
+let lastStopTimer = 0;
+/** "feat/x parou em 1,8 s" no cabeçalho por alguns segundos, depois some. */
+function noteStopped(...nodes: (Node | string)[]) {
+  lastStopEl.replaceChildren(...nodes);
+  clearTimeout(lastStopTimer);
+  lastStopTimer = setTimeout(() => lastStopEl.replaceChildren(), 8000);
+}
 
 let config: Config = { stopTimeoutMs: 5000, projects: [] };
 let configError: string | null = null;
@@ -221,16 +237,24 @@ function say(project: string, wt: Worktree, state: LineState) {
 const PAIR_ICON = "M3 5.5h10M10.5 3 13 5.5 10.5 8M13 10.5H3M5.5 8 3 10.5 5.5 13";
 const FROM_ICON = "M13 8H3M6.5 4.5 3 8l3.5 3.5";
 
-/** Rótulo "api ↔ front" com a seta desenhada em SVG, não em caractere. */
+/** Rótulo "api ↔ front" com a seta desenhada em SVG, não em caractere; o leitor de tela ouve "pareada com". */
 function labelNodes(label: string): (Node | string)[] {
   const [a, f] = label.split(" ↔ ");
-  return f === undefined ? [label] : [a, icon(PAIR_ICON, "inline"), f];
+  return f === undefined ? [label] : [a, icon(PAIR_ICON, "inline"), el("span", { className: "sr", textContent: " pareada com " }), f];
+}
+/** O mesmo rótulo para atributos (aria-label), onde não cabe nó. */
+const spokenLabel = (label: string) => label.replace(" ↔ ", " pareada com ");
+
+/** "feat/scrap-movement" → ["feat/", "scrap-movement"]. */
+function splitBranch(branch: string) {
+  const cut = branch.lastIndexOf("/") + 1;
+  return [branch.slice(0, cut), branch.slice(cut)] as const;
 }
 
 /** "feat/scrap-movement": prefixo em meia-tinta, nome em tinta cheia. Sem espaço, o prefixo encolhe antes do nome. */
 function branchText(branch: string) {
-  const cut = branch.lastIndexOf("/") + 1;
-  return [el("span", { className: "prefix", textContent: branch.slice(0, cut) }), el("span", { className: "rest", textContent: branch.slice(cut) })];
+  const [prefix, rest] = splitBranch(branch);
+  return [el("span", { className: "prefix", textContent: prefix }), el("span", { className: "rest", textContent: rest })];
 }
 
 // ---------- terminais ----------
@@ -341,12 +365,18 @@ function activate(project: string, wt: Worktree, created: boolean) {
       }, config.stopTimeoutMs);
       // Contagem até o SIGKILL no aviso.
       const tick = setInterval(() => current?.project === project && renderWait(project, current.wt), 250);
+      const hadProcs = !!fromWt && procs(project, fromWt).length > 0;
       render(true);
       await Promise.all(state.panes.map(stopPane));
       clearTimeout(forceTimer);
       clearInterval(tick);
       stopping.delete(project);
       for (const p of state.panes) busy.delete(p.ptyId);
+      // O fim da troca também tem fechamento: quanto a anterior levou para sair, e se foi à força.
+      if (hadProcs) {
+        const secs = ((Date.now() - state.deadline + config.stopTimeoutMs) / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+        noteStopped(...labelNodes(state.from), state.forcing ? ` encerrada à força em ${secs} s` : ` parou em ${secs} s`);
+      }
     }
     const k = key(project, wt.id);
     const env = envs.get(k);
@@ -395,6 +425,7 @@ function render(focus = false) {
   if (!current) {
     destEl.replaceChildren();
     destEl.dataset.sig = "";
+    urlEl.hidden = true;
     waitEl.hidden = true;
     renderEmpty();
     return;
@@ -404,32 +435,26 @@ function render(focus = false) {
   if (!wt[tab]) tab = wt.api ? "api" : "front";
   const env = envs.get(ck!);
   const state = lineState(project, wt);
-  // Endereço do dev server da aba aberta, enquanto ele está de pé.
-  const shownPane = env?.panes[tab];
-  const url = shownPane?.url && busy.has(shownPane.ptyId) ? shownPane.url : null;
+  // Durante a troca quem fala é o aviso; o destino calado evita dois anúncios ao mesmo tempo.
+  destEl.setAttribute("aria-live", stopping.has(project) ? "off" : "polite");
   // Região viva: só reescreve quando muda, senão o leitor de tela repete o destino a cada render.
-  const sig = `${ck}\u0000${state}\u0000${say(project, wt, state)}\u0000${url}`;
+  const sig = `${ck}\u0000${state}\u0000${say(project, wt, state)}`;
   if (destEl.dataset.sig !== sig) {
     destEl.dataset.sig = sig;
     destEl.replaceChildren(
       flap(state, `head:${ck}`),
       el("span", { className: "where" }, el("span", { className: "project", textContent: project }), el("span", { className: "sep", textContent: "/" }), ...labelNodes(wt.label)),
       el("span", { className: "sr", textContent: `: ${say(project, wt, state)}` }),
-      ...(url
-        ? [
-            el("a", {
-              className: "url",
-              href: `http://${url}`,
-              title: `Abrir http://${url} no navegador`,
-              textContent: url,
-              onclick: (e: MouseEvent) => {
-                e.preventDefault();
-                invoke("open_url", { url: `http://${url}` });
-              },
-            }),
-          ]
-        : []),
     );
+  }
+  // Endereço do dev server da aba aberta, enquanto ele está de pé. Fica à direita: aparecer não empurra as abas.
+  const shownPane = env?.panes[tab];
+  const url = shownPane?.url && busy.has(shownPane.ptyId) ? `http://${shownPane.url}` : null;
+  urlEl.hidden = !url;
+  if (url && urlEl.href !== `${url}/`) {
+    urlEl.href = url;
+    urlEl.textContent = shownPane!.url;
+    urlEl.title = `Abrir ${url} no navegador`;
   }
   const down = state === "part" ? sides(ck!).down : [];
   for (const t of TABS) {
@@ -467,7 +492,7 @@ function renderEmpty() {
           el("h2", { textContent: missing ? "Nenhum projeto configurado" : "O config tem um problema" }),
           el("p", { textContent: missing ? "Crie o primeiro projeto apontando os repositórios da API e do front." : configError }),
           el("p", {}, el("button", { type: "button", className: "btn primary", textContent: "Criar projeto", onclick: () => openProjectDialog() })),
-          el("p", { textContent: "Ou edite ~/.config/switch-terminal/config.json à mão:" }),
+          el("p", { textContent: `Ou edite ${CONFIG_PATH} à mão:` }),
           el("pre", { textContent: CONFIG_EXAMPLE }),
         ]
       : config.projects.length
@@ -505,16 +530,16 @@ function renderWait(project: string, wt: Worktree) {
     return;
   }
   waitEl.dataset.sig = sig;
-  const title = goingBack ? `Voltando para ${st.from}` : st.forcing ? `Forçando o encerramento de ${st.from}` : `Encerrando ${st.from}`;
+  const verb = goingBack ? "Voltando para" : st.forcing ? "Forçando o encerramento de" : "Encerrando";
   const names = st.fromWt ? procs(project, st.fromWt) : [];
   const what = names.length ? names.join(", ") : "os processos";
   const detail = goingBack
-    ? `${st.from} recebeu Ctrl+C e reinicia assim que os processos saírem.`
+    ? [...labelNodes(st.from), " recebeu Ctrl+C e reinicia assim que os processos saírem."]
     : st.forcing === "user"
-      ? `Encerrando à força (SIGKILL), como pedido. ${wt.label} sobe em seguida.`
+      ? ["Encerrando à força (SIGKILL), como pedido. ", ...labelNodes(wt.label), " sobe em seguida."]
       : st.forcing
-        ? "Não parou com Ctrl+C a tempo; os processos estão sendo encerrados à força (SIGKILL)."
-        : `Ctrl+C enviado a ${what}. Esperando saírem e liberarem as portas para iniciar ${wt.label}.`;
+        ? ["Não parou com Ctrl+C a tempo; os processos estão sendo encerrados à força (SIGKILL)."]
+        : [`Ctrl+C enviado a ${what}. Esperando saírem e liberarem as portas para iniciar `, ...labelNodes(wt.label), "."];
   // Nenhum botão é o padrão: esperar é a ação certa, e forçar mata sem o Ctrl+C.
   const force = el("button", {
     type: "button",
@@ -551,12 +576,19 @@ function renderWait(project: string, wt: Worktree) {
   const card = el(
     "div",
     { className: "wait-card", tabIndex: -1 },
-    el("div", { className: "wait-head" }, flap(goingBack ? "wait" : st.forcing ? "kill" : "stop", `wait:${project}`), el("strong", { textContent: title, title }), st.forcing ? null : count()),
-    el("p", { textContent: detail }),
+    el(
+      "div",
+      { className: "wait-head" },
+      flap(goingBack ? "wait" : st.forcing ? "kill" : "stop", `wait:${project}`),
+      el("strong", { title: `${verb} ${st.from}` }, `${verb} `, ...labelNodes(st.from)),
+      st.forcing ? null : count(),
+    ),
+    el("p", {}, ...detail),
     st.forcing
       ? null
       : el("p", { className: "fine", textContent: goingBack ? "Se não saírem até a contagem zerar, recebem SIGKILL e reiniciam em seguida." : "Se não saírem até a contagem zerar, recebem SIGKILL." }),
-    el("div", { className: "actions" }, force, back),
+    // Voltar primeiro (Tab + Enter não pode virar SIGKILL); Forçar à direita, afastado.
+    el("div", { className: "actions" }, back, force),
   );
   waitEl.replaceChildren(card);
   if (had) (waitEl.querySelector<HTMLButtonElement>(`[data-act="${had}"]:not(:disabled)`) ?? card).focus();
@@ -578,9 +610,19 @@ function lineButton(project: string, wt: Worktree) {
   const k = key(project, wt.id);
   const state = lineState(project, wt);
   const [api, front] = wt.id.split("|");
-  const branch = api || front;
+  // Solo: a etiqueta vai para a segunda linha, como o par; na primeira ela roubava largura do nome.
   const tag = !api ? el("span", { className: "tag", textContent: "SÓ FRONT" }) : !front ? el("span", { className: "tag", textContent: "SÓ API" }) : null;
-  const pair = api && front && api !== front ? el("span", { className: "pair" }, icon(PAIR_ICON, "inline"), el("span", { className: "branch" }, ...branchText(front))) : null;
+  let top = branchText(api || front);
+  let pair: HTMLElement | null = null;
+  if (api && front && api !== front) {
+    const [ap, ar] = splitBranch(api);
+    const [fp, fr] = splitBranch(front);
+    // "feature-api/x ↔ feature-app/x": o nome uma vez em cima e embaixo só o que difere. Cortar o prefixo dos dois lados repetiria o mesmo nome.
+    if (ar === fr && ap && fp) {
+      top = branchText(ar);
+      pair = el("span", { className: "pair" }, el("span", { className: "pre", textContent: ap }), icon(PAIR_ICON, "inline"), el("span", { className: "pre", textContent: fp }));
+    } else pair = el("span", { className: "pair" }, icon(PAIR_ICON, "inline"), el("span", { className: "branch" }, ...branchText(front)));
+  }
   const live = LIVE.includes(state);
   const ends = wouldStop(project, wt.id);
   const endsText = ends ? `Encerra ${ends.label}${procs(project, ends).length ? ` (${procs(project, ends).join(", ")})` : ""}` : "";
@@ -594,7 +636,7 @@ function lineButton(project: string, wt: Worktree) {
       className: `line${live ? " live" : ""}`,
       tabIndex: -1,
       title: ends ? `${wt.label}\n${endsText}` : wt.label,
-      ariaLabel: `${wt.label}${tag ? (api ? ", só API" : ", só front") : ""}: ${say(project, wt, state)}`,
+      ariaLabel: `${spokenLabel(wt.label)}${tag ? (api ? ", só API" : ", só front") : ""}: ${say(project, wt, state)}`,
       // Busca a worktree na hora do clique: o botão pode ter sobrevivido a um refresh do config.
       onclick: () => {
         const fresh = findWt(project, wt.id);
@@ -602,7 +644,7 @@ function lineButton(project: string, wt: Worktree) {
       },
     },
     f,
-    el("span", { className: "name" }, el("span", { className: "top" }, el("span", { className: "branch" }, ...branchText(branch)), tag), pair),
+    el("span", { className: "name" }, el("span", { className: "top" }, el("span", { className: "branch" }, ...top)), pair, tag),
   );
   if (ends) b.setAttribute("aria-description", endsText);
   b.dataset.key = k;
@@ -645,7 +687,8 @@ function renderBoard() {
           },
           el("summary", { textContent: projectErrorSummary(p.error) }),
           el("code", { textContent: p.error }),
-          el("p", { textContent: "Ajuste o caminho no config.json e volte para a janela." }),
+          el("p", {}, "Ajuste o caminho em ", el("code", { textContent: CONFIG_PATH }), " e volte para a janela: o painel relê sozinho."),
+          el("button", { type: "button", className: "btn small", textContent: "Abrir o config.json", onclick: () => invoke("open_config") }),
         )
       : null;
     // Recolhido, o projeto ainda mostra a worktree ativa: o que está de pé não some da tela.
@@ -691,12 +734,17 @@ function renderBoard() {
   fitBranches();
 }
 
-/** Nome que não cabe perde o prefixo inteiro ("feat/"), em vez de virar "f." com cara de abreviação. */
+/** Nome que não cabe perde o prefixo inteiro ("feat/"), em vez de virar "f." com cara de abreviação.
+ *  Decide por plataforma, todas ou nenhuma: na mesma coluna, um nome sem prefixo não pode parecer não ter prefixo. */
 function fitBranches() {
-  for (const b of board.querySelectorAll<HTMLElement>(".line .branch")) {
-    b.classList.remove("tight");
-    const [prefix, rest] = b.children as unknown as HTMLElement[];
-    b.classList.toggle("tight", prefix.scrollWidth + rest.scrollWidth > b.clientWidth + 0.5);
+  for (const platform of board.querySelectorAll(".platform")) {
+    const branches = [...platform.querySelectorAll<HTMLElement>(".line .branch")];
+    for (const b of branches) b.classList.remove("tight");
+    const tight = branches.some((b) => {
+      const [prefix, rest] = b.children as unknown as HTMLElement[];
+      return prefix.scrollWidth + rest.scrollWidth > b.clientWidth + 0.5;
+    });
+    for (const b of branches) b.classList.toggle("tight", tight);
   }
 }
 new ResizeObserver(fitBranches).observe(board);
@@ -718,7 +766,7 @@ function renderRunning() {
             flap(state, `run:${p.name}`),
             el("span", { className: "project", textContent: p.name }),
             el("span", { className: "sep", textContent: "/" }),
-            wt.label,
+            ...labelNodes(wt.label),
             el("span", { className: "sr", textContent: `: ${spoken}` }),
           ),
         ];
@@ -882,12 +930,13 @@ function renderPalette() {
   paletteList.children[sel]?.scrollIntoView({ block: "nearest" });
 }
 
-/** "[PARANDO] Encerra feat/x (npm run dev) em INTERNO": o aviso destrutivo fala a língua das palhetas e diz o que mata. */
+/** "[ENCERRA] Encerra feat/x (npm run dev) em INTERNO": a mesma prévia do painel, e diz o que mata.
+ *  Ainda não está parando, então a palheta não diz PARANDO. */
 function endsNote(wt: Worktree, project: string, inPalette = true): (Node | string)[] {
   const names = procs(project, wt);
   // O texto num span só: solto no flex, cada pedaço viraria um item e os espaços sumiriam.
   return [
-    flap("stop", "ends"),
+    flap("stop", "ends", "ENCERRA"),
     el(
       "span",
       { className: "ends-text" },
@@ -983,6 +1032,19 @@ function clearInvalid(form: HTMLFormElement) {
   }
 }
 
+const REQUIRED: Record<string, string> = { branch: "Informe a branch.", name: "Dê um nome ao projeto." };
+/** Campo obrigatório vazio: mensagem do app ao lado do campo, no lugar da bolha nativa do WebKit (os forms têm novalidate). */
+function missingField(form: HTMLFormElement, fallback: HTMLElement) {
+  const bad = form.querySelector<HTMLInputElement>("input:invalid");
+  if (!bad) return false;
+  const msg = bad.closest("fieldset")?.querySelector<HTMLElement>(".side-error") ?? fallback;
+  msg.textContent = REQUIRED[bad.name] ?? (bad.name.endsWith("-dir") ? "Informe o diretório das worktrees." : "Informe o repositório.");
+  const more = bad.closest("details");
+  if (more) more.open = true;
+  markInvalid(bad, msg);
+  return true;
+}
+
 type SideDefaults = { dir: string; local: string[]; remote: string[]; defaultBase: string };
 type Defaults = Record<Tab, { Ok: SideDefaults } | { Err: string }>;
 
@@ -999,7 +1061,15 @@ const sideBase = (t: Tab) => field<HTMLSelectElement>(`${t}-base`);
 const sideMsg = (t: Tab) => sideBox(t).querySelector<HTMLElement>(".side-error")!;
 const openNow = field<HTMLInputElement>("open");
 const openHint = addForm.querySelector<HTMLElement>(".open-hint")!;
+const addSubmit = addForm.querySelector<HTMLButtonElement>("button.primary")!;
 let defaultsReq = 0;
+
+/** Depois de um erro parcial, o botão diz o lado que ainda falta criar. */
+function addSubmitLabel() {
+  const created = TABS.some((t) => sideMsg(t).classList.contains("ok"));
+  const left = TABS.filter((t) => sideCheck(t).checked);
+  return created && left.length === 1 ? (left[0] === "api" ? "Criar na API" : "Criar no Front") : "Criar worktree";
+}
 
 function openAddDialog(project?: string) {
   const usable = config.projects.filter((p) => !p.error);
@@ -1028,6 +1098,7 @@ async function loadDefaults() {
     sideMsg(t).classList.remove("ok");
     sideBox(t).querySelector<HTMLDetailsElement>("details")!.open = false;
   }
+  addSubmit.textContent = addSubmitLabel();
   syncSides();
   let defaults: Defaults;
   try {
@@ -1091,16 +1162,17 @@ addForm.addEventListener("submit", async (e) => {
   const side = (t: Tab) => (sideCheck(t).checked ? { dir: sideDir(t).value, base: sideBase(t).value } : null);
   const api = side("api");
   const front = side("front");
+  addError.textContent = "";
+  clearInvalid(addForm);
+  for (const t of TABS) if (!sideMsg(t).classList.contains("ok")) sideMsg(t).textContent = "";
   if (!api && !front) {
     addError.textContent = "Marque API, Front ou os dois.";
     return;
   }
+  if (missingField(addForm, addError)) return;
   const submit = e.submitter as HTMLButtonElement;
   submit.disabled = true;
   submit.textContent = "Criando…";
-  addError.textContent = "";
-  clearInvalid(addForm);
-  for (const t of TABS) if (!sideMsg(t).classList.contains("ok")) sideMsg(t).textContent = "";
   try {
     await invoke("add_worktree", { project, branch, api, front });
     addDialog.close();
@@ -1125,7 +1197,7 @@ addForm.addEventListener("submit", async (e) => {
     }
   } finally {
     submit.disabled = false;
-    submit.textContent = "Criar worktree";
+    submit.textContent = addSubmitLabel();
   }
   // Mesmo com erro parcial (ex.: API criada, front falhou) o que foi criado aparece na lista.
   await refresh();
@@ -1166,12 +1238,13 @@ projectForm.addEventListener("submit", async (e) => {
   if ((e.submitter as HTMLButtonElement | null)?.value !== "ok") return;
   e.preventDefault();
   const side = (t: Tab) => ({ repo: pfield(`${t}-repo`).value, startCommand: pfield(`${t}-start`).value, setupCommand: pfield(`${t}-setup`).value });
-  const submit = e.submitter as HTMLButtonElement;
-  submit.disabled = true;
-  submit.textContent = "Criando…";
   projectError.textContent = "";
   clearInvalid(projectForm);
   for (const t of TABS) pSideMsg(t).textContent = "";
+  if (missingField(projectForm, projectError)) return;
+  const submit = e.submitter as HTMLButtonElement;
+  submit.disabled = true;
+  submit.textContent = "Criando…";
   try {
     await invoke("add_project", { project: { name: pfield("name").value, api: side("api"), front: side("front") } });
     projectDialog.close();

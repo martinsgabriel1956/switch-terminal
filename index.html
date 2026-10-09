@@ -17,7 +17,7 @@
         </svg>
         <span>switch-terminal</span>
       </div>
-      <nav id="board" aria-label="Projetos"></nav>
+      <nav id="board" aria-label="Projetos" aria-description="Setas andam entre as worktrees; Enter troca"></nav>
       <button id="new-project" type="button" class="quiet">
         <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>
         Novo projeto
@@ -31,6 +31,8 @@
         </button>
         <div id="destination" aria-live="polite"></div>
         <div id="tabs" role="tablist" aria-label="Terminal"></div>
+        <span id="last-stop" role="status"></span>
+        <a id="dev-url" hidden></a>
         <div id="running" role="group" aria-label="Rodando em outros projetos"></div>
         <button id="help-btn" type="button" class="icon-btn" popovertarget="help" aria-label="Atalhos e legenda" title="Atalhos e legenda (Ctrl+Shift+H)">
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" /><path d="M6.3 6.2a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.4" /><path d="M8 11.6v.1" /></svg>
@@ -44,13 +46,14 @@
 
     <div id="help" popover tabindex="-1" role="dialog" aria-label="Atalhos e legenda">
       <h2>Atalhos</h2>
+      <p class="chord">Todos com <kbd>Ctrl</kbd><kbd>Shift</kbd> e mais a tecla:</p>
       <dl class="keys">
-        <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>K</kbd></dt><dd>Trocar de worktree (abre na anterior)</dd>
-        <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>J</kbd></dt><dd>Alternar API e Front</dd>
-        <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></dt><dd>Nova worktree</dd>
-        <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>E</kbd></dt><dd>Ir para o painel (setas navegam, Esc volta)</dd>
-        <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd></dt><dd>Recolher ou abrir o painel</dd>
-        <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd></dt><dd>Abrir ou fechar esta ajuda (Esc fecha)</dd>
+        <dt><kbd>K</kbd></dt><dd>Trocar de worktree (abre na anterior)</dd>
+        <dt><kbd>J</kbd></dt><dd>Alternar API e Front</dd>
+        <dt><kbd>N</kbd></dt><dd>Nova worktree</dd>
+        <dt><kbd>E</kbd></dt><dd>Ir para o painel (setas navegam, Esc volta)</dd>
+        <dt><kbd>B</kbd></dt><dd>Recolher ou abrir o painel</dd>
+        <dt><kbd>H</kbd></dt><dd>Abrir ou fechar esta ajuda (Esc fecha)</dd>
       </dl>
       <h2>Estados</h2>
       <dl class="legend">
@@ -60,14 +63,14 @@
         <dt><span class="flap" data-state="wait"><span>AGUARDA</span></span></dt><dd>Esperando a anterior do projeto parar (ou a própria, ao voltar)</dd>
         <dt><span class="flap" data-state="stop"><span>PARANDO</span></span></dt><dd>Recebeu Ctrl+C para a troca; esperando os processos saírem</dd>
         <dt><span class="flap" data-state="kill"><span>SIGKILL</span></span></dt><dd>Não parou a tempo (ou você forçou): encerrada à força</dd>
-        <dt><span class="flap" data-state="stop"><span>ENCERRA</span></span></dt><dd>Prévia: clicar na linha sob o cursor encerra esta</dd>
+        <dt><span class="flap" data-state="stop"><span>ENCERRA</span></span></dt><dd>Prévia: trocar para a linha sob o cursor (ou a escolhida na paleta) encerra esta</dd>
         <dt><span class="flap" data-state="idle"><span>INATIVA</span></span></dt><dd>Terminais abertos, nada rodando</dd>
         <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Sem palheta: ainda não aberta nesta sessão</dd>
       </dl>
     </div>
 
     <dialog id="add-dialog" class="form" aria-labelledby="add-title">
-      <form method="dialog">
+      <form method="dialog" novalidate>
         <h2 id="add-title">Nova worktree</h2>
         <div class="row-2">
           <label>
@@ -129,7 +132,7 @@
     </dialog>
 
     <dialog id="project-dialog" class="form" aria-labelledby="project-title">
-      <form method="dialog">
+      <form method="dialog" novalidate>
         <h2 id="project-title">Novo projeto</h2>
         <label>
           Nome
