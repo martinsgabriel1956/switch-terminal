@@ -17,18 +17,28 @@ type Tab = "api" | "front";
 type Pane = { term: Terminal; fit: FitAddon; el: HTMLElement; ptyId: number; side: Side; url: string | null };
 type Env = { project: string; root: HTMLElement; panes: Partial<Record<Tab, Pane>>; ready: Promise<void> };
 /** Estado de uma linha do painel: o que a palheta mostra. */
-type LineState = "run" | "part" | "start" | "wait" | "stop" | "idle" | "none";
+type LineState = "run" | "part" | "start" | "wait" | "stop" | "kill" | "idle" | "none";
 
 const TABS: Tab[] = ["api", "front"];
 const TAB_LABEL: Record<Tab, string> = { api: "API", front: "Front" };
-const FLAP: Record<LineState, string> = { run: "RODANDO", part: "PARCIAL", start: "SUBINDO", wait: "AGUARDA", stop: "PARANDO", idle: "PARADA", none: "" };
+const FLAP: Record<LineState, string> = {
+  run: "RODANDO",
+  part: "PARCIAL",
+  start: "SUBINDO",
+  wait: "AGUARDA",
+  stop: "PARANDO",
+  kill: "SIGKILL",
+  idle: "INATIVA",
+  none: "",
+};
 const SPOKEN: Record<LineState, string> = {
   run: "rodando",
   part: "parcial",
   start: "subindo",
   wait: "aguardando a anterior parar",
   stop: "parando",
-  idle: "parada",
+  kill: "encerrando à força",
+  idle: "inativa",
   none: "não aberta",
 };
 const CONFIG_EXAMPLE = `{
@@ -115,8 +125,8 @@ const stopping = new Map<string, Stopping>();
 const queues = new Map<string, Promise<void>>();
 // Worktrees recém-criadas pelo app: na primeira subida rodam o setupCommand antes do startCommand.
 const fresh = new Set<string>();
-// Estado real, vindo do backend: terminais (id do PTY) com processo rodando, e envs cujo start acabou de ser enviado.
-let busy = new Set<number>();
+// Estado real, vindo do backend: terminais (id do PTY) com processo rodando e o nome dele, e envs cujo start acabou de ser enviado.
+let busy = new Map<number, string>();
 const starting = new Map<string, number>();
 let current: { project: string; wt: Worktree } | null = null;
 let tab: Tab = "api";
@@ -162,12 +172,20 @@ function flap(state: LineState, id: string, text = FLAP[state]) {
   return f;
 }
 
+const findWt = (project: string, id: string) => config.projects.find((p) => p.name === project)?.worktrees.find((w) => w.id === id);
+
 /** O que trocar para `id` encerraria: a worktree ativa do projeto, se tem algo de pé. */
 function wouldStop(project: string, id: string | null): Worktree | undefined {
   const prev = active[project];
   if (!prev || prev === id) return;
-  const wt = config.projects.find((p) => p.name === project)?.worktrees.find((w) => w.id === prev);
+  const wt = findWt(project, prev);
   return wt && LIVE.includes(lineState(project, wt)) ? wt : undefined;
+}
+
+/** Nomes dos processos em primeiro plano da worktree ("npm run dev"): a troca diz o que mata, não só onde. */
+function procs(project: string, wt: Worktree) {
+  const panes = Object.values(envs.get(key(project, wt.id))?.panes ?? {});
+  return [...new Set(panes.map((p) => busy.get(p.ptyId)).filter((n): n is string => !!n))];
 }
 
 const LIVE: LineState[] = ["run", "part", "start", "wait"];
@@ -185,7 +203,7 @@ function lineState(project: string, wt: Worktree): LineState {
   const st = stopping.get(project);
   // Voltou para a que estava parando: ela espera a si mesma parar para reiniciar.
   if (st && active[project] === wt.id) return "wait";
-  if (st?.fromId === wt.id) return "stop";
+  if (st?.fromId === wt.id) return st.forcing ? "kill" : "stop";
   if (starting.has(k)) return "start";
   const { up, down } = sides(k);
   if (up.length) return down.length ? "part" : "run";
@@ -305,7 +323,7 @@ function activate(project: string, wt: Worktree, created: boolean) {
   const run = async () => {
     const prevEnv = prev && prev !== wt.id ? envs.get(key(project, prev)) : undefined;
     if (prevEnv) {
-      const fromWt = config.projects.find((p) => p.name === project)?.worktrees.find((w) => w.id === prev);
+      const fromWt = findWt(project, prev);
       await prevEnv.ready;
       const state: Stopping = {
         fromId: prev,
@@ -397,7 +415,20 @@ function render(focus = false) {
       flap(state, `head:${ck}`),
       el("span", { className: "where" }, el("span", { className: "project", textContent: project }), el("span", { className: "sep", textContent: "/" }), ...labelNodes(wt.label)),
       el("span", { className: "sr", textContent: `: ${say(project, wt, state)}` }),
-      ...(url ? [el("span", { className: "url", title: `http://${url}`, textContent: url })] : []),
+      ...(url
+        ? [
+            el("a", {
+              className: "url",
+              href: `http://${url}`,
+              title: `Abrir http://${url} no navegador`,
+              textContent: url,
+              onclick: (e: MouseEvent) => {
+                e.preventDefault();
+                invoke("open_url", { url: `http://${url}` });
+              },
+            }),
+          ]
+        : []),
     );
   }
   const down = state === "part" ? sides(ck!).down : [];
@@ -461,8 +492,9 @@ function renderWait(project: string, wt: Worktree) {
   }
   const goingBack = active[project] === st.fromId;
   const left = Math.max(0, Math.ceil((st.deadline - Date.now()) / 1000));
+  // Contagem em tinta neutra: esperar é o caminho normal. Vermelho só se chegar ao SIGKILL.
   const count = () => {
-    const c = flap(goingBack ? "wait" : "stop", `count:${project}`, `${left} s`);
+    const c = flap("idle", `count:${project}`, `${left} s`);
     c.classList.add("count");
     return c;
   };
@@ -474,13 +506,15 @@ function renderWait(project: string, wt: Worktree) {
   }
   waitEl.dataset.sig = sig;
   const title = goingBack ? `Voltando para ${st.from}` : st.forcing ? `Forçando o encerramento de ${st.from}` : `Encerrando ${st.from}`;
+  const names = st.fromWt ? procs(project, st.fromWt) : [];
+  const what = names.length ? names.join(", ") : "os processos";
   const detail = goingBack
     ? `${st.from} recebeu Ctrl+C e reinicia assim que os processos saírem.`
     : st.forcing === "user"
       ? `Encerrando à força (SIGKILL), como pedido. ${wt.label} sobe em seguida.`
       : st.forcing
         ? "Não parou com Ctrl+C a tempo; os processos estão sendo encerrados à força (SIGKILL)."
-        : `Ctrl+C enviado. Esperando os processos saírem e liberarem as portas para iniciar ${wt.label}.`;
+        : `Ctrl+C enviado a ${what}. Esperando saírem e liberarem as portas para iniciar ${wt.label}.`;
   // Nenhum botão é o padrão: esperar é a ação certa, e forçar mata sem o Ctrl+C.
   const force = el("button", {
     type: "button",
@@ -495,37 +529,38 @@ function renderWait(project: string, wt: Worktree) {
     },
   });
   force.dataset.act = "force";
-  // Voltar reinicia a anterior (o Ctrl+C já foi); depois de voltar, não há mais para onde voltar.
+  // Voltar reinicia a anterior (o Ctrl+C já foi); depois de voltar, ou já no SIGKILL, não há mais para onde voltar.
+  // Sem atalho de Esc: no reflexo do vim, ele desfazia a troca recém-pedida.
   const back =
-    goingBack || !st.fromWt
+    goingBack || st.forcing || !st.fromWt
       ? null
-      : el("button", {
-          type: "button",
-          className: "btn",
-          title: `Cancela a troca e reinicia ${st.from} (Esc)`,
-          onclick: () => st.fromWt && select(project, st.fromWt),
-        }, "Voltar e reiniciar", el("kbd", { textContent: "Esc" }));
+      : el(
+          "button",
+          {
+            type: "button",
+            className: "btn back",
+            title: `Cancela a troca e reinicia ${st.from}`,
+            onclick: () => st.fromWt && select(project, st.fromWt),
+          },
+          "Voltar para ",
+          el("span", { className: "to" }, ...labelNodes(st.from)),
+        );
   if (back) back.dataset.act = "back";
   // Redesenho mantém o foco onde estava (mesmo botão, ou o card se o botão sumiu ou ficou desabilitado).
   const had = waitEl.contains(document.activeElement) ? ((document.activeElement as HTMLElement).dataset.act ?? "card") : null;
   const card = el(
     "div",
     { className: "wait-card", tabIndex: -1 },
-    el("div", { className: "wait-head" }, flap(goingBack ? "wait" : "stop", `wait:${project}`), el("strong", { textContent: title, title }), st.forcing ? null : count()),
+    el("div", { className: "wait-head" }, flap(goingBack ? "wait" : st.forcing ? "kill" : "stop", `wait:${project}`), el("strong", { textContent: title, title }), st.forcing ? null : count()),
     el("p", { textContent: detail }),
-    st.forcing ? null : el("p", { className: "fine", textContent: "Se não saírem até a contagem zerar, recebem SIGKILL." }),
+    st.forcing
+      ? null
+      : el("p", { className: "fine", textContent: goingBack ? "Se não saírem até a contagem zerar, recebem SIGKILL e reiniciam em seguida." : "Se não saírem até a contagem zerar, recebem SIGKILL." }),
     el("div", { className: "actions" }, force, back),
   );
   waitEl.replaceChildren(card);
   if (had) (waitEl.querySelector<HTMLButtonElement>(`[data-act="${had}"]:not(:disabled)`) ?? card).focus();
 }
-
-// Esc no aviso de troca: volta para a anterior.
-waitEl.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape") return;
-  e.preventDefault();
-  waitEl.querySelector<HTMLButtonElement>('[data-act="back"]')?.click();
-});
 
 /** Erro de git do projeto em uma linha legível; o texto cru fica no detalhe. */
 function projectErrorSummary(error: string) {
@@ -545,21 +580,31 @@ function lineButton(project: string, wt: Worktree) {
   const [api, front] = wt.id.split("|");
   const branch = api || front;
   const tag = !api ? el("span", { className: "tag", textContent: "SÓ FRONT" }) : !front ? el("span", { className: "tag", textContent: "SÓ API" }) : null;
-  const pair = api && front && api !== front ? el("span", { className: "pair" }, icon(PAIR_ICON, "inline"), front) : null;
+  const pair = api && front && api !== front ? el("span", { className: "pair" }, icon(PAIR_ICON, "inline"), el("span", { className: "branch" }, ...branchText(front))) : null;
   const live = LIVE.includes(state);
+  const ends = wouldStop(project, wt.id);
+  const endsText = ends ? `Encerra ${ends.label}${procs(project, ends).length ? ` (${procs(project, ends).join(", ")})` : ""}` : "";
+  const f = flap(state, `line:${k}`);
+  // A linha em serviço mostra ENCERRA enquanto o cursor (ou o foco) está em outra do mesmo projeto: o clique é destrutivo.
+  if (live) f.append(el("span", { className: "ends", textContent: "ENCERRA" }));
   const b = el(
     "button",
     {
       type: "button",
       className: `line${live ? " live" : ""}`,
       tabIndex: -1,
-      title: wt.label,
+      title: ends ? `${wt.label}\n${endsText}` : wt.label,
       ariaLabel: `${wt.label}${tag ? (api ? ", só API" : ", só front") : ""}: ${say(project, wt, state)}`,
-      onclick: () => select(project, wt),
+      // Busca a worktree na hora do clique: o botão pode ter sobrevivido a um refresh do config.
+      onclick: () => {
+        const fresh = findWt(project, wt.id);
+        if (fresh) select(project, fresh);
+      },
     },
-    flap(state, `line:${k}`),
+    f,
     el("span", { className: "name" }, el("span", { className: "top" }, el("span", { className: "branch" }, ...branchText(branch)), tag), pair),
   );
+  if (ends) b.setAttribute("aria-description", endsText);
   b.dataset.key = k;
   if (currentKey() === k) b.setAttribute("aria-current", "true");
   return b;
@@ -569,72 +614,76 @@ function lineButton(project: string, wt: Worktree) {
 const collapsed = new Set<string>(load<string[]>("collapsed", []));
 const CHEVRON = "M6 4l4 4-4 4";
 
-// Detalhes de erro abertos: o painel é recriado a cada render e eles não podem fechar sob a leitura.
+// Detalhes de erro abertos: o painel é recriado quando muda e eles não podem fechar sob a leitura.
 const openProblems = new Set<string>();
+// Último painel montado: igual, não troca os nós (um clique entre mousedown e mouseup cairia num nó descartado).
+let boardHtml = "";
 
 function renderBoard() {
-  // O painel é recriado a cada render; o foco do teclado volta para a mesma linha.
+  // O painel é recriado quando muda; o foco do teclado volta para a mesma linha.
   const focusedKey = board.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.key : undefined;
-  board.replaceChildren(
-    ...config.projects.map((p) => {
-      const add = el(
-        "button",
-        {
-          type: "button",
-          className: "icon-btn",
-          title: p.error ? "Corrija o erro do projeto para criar worktrees" : `Nova worktree em ${p.name} (Ctrl+Shift+N)`,
-          ariaLabel: `Nova worktree em ${p.name}`,
-          disabled: !!p.error,
-          onclick: () => openAddDialog(p.name),
-        },
-        icon("M8 3v10M3 8h10"),
-      );
-      const problem = p.error
-        ? el(
-            "details",
-            {
-              className: "problem",
-              open: openProblems.has(p.name),
-              ontoggle: (e: Event) => ((e.target as HTMLDetailsElement).open ? openProblems.add(p.name) : openProblems.delete(p.name)),
-            },
-            el("summary", { textContent: projectErrorSummary(p.error) }),
-            el("code", { textContent: p.error }),
-            el("p", { textContent: "Ajuste o caminho no config.json e volte para a janela." }),
-          )
-        : null;
-      // Recolhido, o projeto ainda mostra a worktree ativa: o que está de pé não some da tela.
-      const open = !collapsed.has(p.name);
-      const shownWts = open ? p.worktrees : p.worktrees.filter((wt) => wt.id === active[p.name] || key(p.name, wt.id) === currentKey());
-      const hidden = p.worktrees.length - shownWts.length;
-      const fold = el(
-        "button",
-        {
-          type: "button",
-          className: "fold",
-          title: open ? `Recolher ${p.name}` : `Expandir ${p.name}`,
-          onclick: () => {
-            open ? collapsed.add(p.name) : collapsed.delete(p.name);
-            save("collapsed", [...collapsed]);
-            render();
+  const sections = config.projects.map((p) => {
+    const add = el(
+      "button",
+      {
+        type: "button",
+        className: "icon-btn",
+        title: p.error ? "Corrija o erro do projeto para criar worktrees" : `Nova worktree em ${p.name} (Ctrl+Shift+N)`,
+        ariaLabel: `Nova worktree em ${p.name}`,
+        disabled: !!p.error,
+        onclick: () => openAddDialog(p.name),
+      },
+      icon("M8 3v10M3 8h10"),
+    );
+    const problem = p.error
+      ? el(
+          "details",
+          {
+            className: "problem",
+            open: openProblems.has(p.name),
+            ontoggle: (e: Event) => ((e.target as HTMLDetailsElement).open ? openProblems.add(p.name) : openProblems.delete(p.name)),
           },
+          el("summary", { textContent: projectErrorSummary(p.error) }),
+          el("code", { textContent: p.error }),
+          el("p", { textContent: "Ajuste o caminho no config.json e volte para a janela." }),
+        )
+      : null;
+    // Recolhido, o projeto ainda mostra a worktree ativa: o que está de pé não some da tela.
+    const open = !collapsed.has(p.name);
+    const shownWts = open ? p.worktrees : p.worktrees.filter((wt) => wt.id === active[p.name] || key(p.name, wt.id) === currentKey());
+    const hidden = p.worktrees.length - shownWts.length;
+    const fold = el(
+      "button",
+      {
+        type: "button",
+        className: "fold",
+        title: open ? `Recolher ${p.name}` : `Expandir ${p.name}`,
+        onclick: () => {
+          open ? collapsed.add(p.name) : collapsed.delete(p.name);
+          save("collapsed", [...collapsed]);
+          render();
         },
-        el("span", { className: "tile", textContent: p.name }),
-        icon(CHEVRON, "chev"),
-        hidden ? el("span", { className: "count", textContent: `+${hidden}` }) : null,
-        hidden ? el("span", { className: "sr", textContent: `, ${hidden} ocultas` }) : null,
-      );
-      fold.setAttribute("aria-expanded", String(open));
-      fold.dataset.key = `fold:${p.name}`;
-      // Ordem do git, fixa: como num painel de partidas, só a palheta vira; a linha não sai do lugar sob o cursor.
-      return el(
-        "section",
-        { className: `platform${open ? "" : " folded"}`, ariaLabel: p.name },
-        el("div", { className: "platform-head" }, el("h3", {}, fold), add),
-        problem,
-        el("ul", { className: "lines" }, ...shownWts.map((wt) => el("li", {}, lineButton(p.name, wt)))),
-      );
-    }),
-  );
+      },
+      el("span", { className: "tile", textContent: p.name }),
+      icon(CHEVRON, "chev"),
+      hidden ? el("span", { className: "count", textContent: `+${hidden}` }) : null,
+      hidden ? el("span", { className: "sr", textContent: `, ${hidden} ocultas` }) : null,
+    );
+    fold.setAttribute("aria-expanded", String(open));
+    fold.dataset.key = `fold:${p.name}`;
+    // Ordem do git, fixa: como num painel de partidas, só a palheta vira; a linha não sai do lugar sob o cursor.
+    return el(
+      "section",
+      { className: `platform${open ? "" : " folded"}`, ariaLabel: p.name },
+      el("div", { className: "platform-head" }, el("h3", {}, fold), add),
+      problem,
+      el("ul", { className: "lines" }, ...shownWts.map((wt) => el("li", {}, lineButton(p.name, wt)))),
+    );
+  });
+  const html = sections.map((s) => s.outerHTML).join("");
+  if (html === boardHtml) return;
+  boardHtml = html;
+  board.replaceChildren(...sections);
   const focused = focusedKey ? board.querySelector<HTMLElement>(`[data-key="${CSS.escape(focusedKey)}"]`) : null;
   const stop = (focused?.classList.contains("line") ? focused : null) ?? board.querySelector<HTMLElement>('.line[aria-current="true"]') ?? board.querySelector<HTMLElement>(".line");
   if (stop) stop.tabIndex = 0;
@@ -763,9 +812,9 @@ async function refresh() {
 async function pollStatus() {
   const ids = [...envs.values()].flatMap((e) => Object.values(e.panes).map((p) => p.ptyId));
   if (!ids.length) return;
-  const res = await invoke<boolean[]>("pty_status", { ids });
-  const next = new Set(ids.filter((_, i) => res[i]));
-  let changed = next.size !== busy.size || [...next].some((id) => !busy.has(id));
+  const res = await invoke<(string | null)[]>("pty_status", { ids });
+  const next = new Map(ids.flatMap((id, i) => (res[i] === null ? [] : [[id, res[i]] as const])));
+  let changed = next.size !== busy.size || [...next].some(([id, name]) => busy.get(id) !== name);
   busy = next;
   for (const [k, t] of starting) {
     // Start enviado: vira RODANDO quando todos os lados sobem, ou desiste depois de 15 s (e mostra o que subiu).
@@ -833,13 +882,20 @@ function renderPalette() {
   paletteList.children[sel]?.scrollIntoView({ block: "nearest" });
 }
 
-/** "[PARANDO] Encerra feat/x em INTERNO": o aviso destrutivo fala a língua das palhetas. */
-function endsNote(wt: Worktree, project?: string): (Node | string)[] {
+/** "[PARANDO] Encerra feat/x (npm run dev) em INTERNO": o aviso destrutivo fala a língua das palhetas e diz o que mata. */
+function endsNote(wt: Worktree, project: string, inPalette = true): (Node | string)[] {
+  const names = procs(project, wt);
+  // O texto num span só: solto no flex, cada pedaço viraria um item e os espaços sumiriam.
   return [
     flap("stop", "ends"),
-    "Encerra ",
-    el("strong", {}, ...labelNodes(wt.label)),
-    ...(project ? [" em ", el("span", { className: "project", textContent: project })] : [", que está rodando."]),
+    el(
+      "span",
+      { className: "ends-text" },
+      "Encerra ",
+      el("strong", {}, ...labelNodes(wt.label)),
+      ...(names.length ? [" ", el("span", { className: "procs", textContent: `(${names.join(", ")})` })] : []),
+      ...(inPalette ? [" em ", el("span", { className: "project", textContent: project })] : [", que está rodando."]),
+    ),
   ];
 }
 
@@ -884,6 +940,15 @@ paletteInput.addEventListener("keydown", (e) => {
 });
 // mousedown na lista não tira o foco do input, então o blur só vem de clique fora.
 paletteList.addEventListener("mousedown", (e) => e.preventDefault());
+// O mouse também seleciona: o rodapé diz o que o clique vai encerrar, não só o Enter.
+// mousemove (não mouseover): a lista rolando pelo teclado sob um cursor parado não rouba a seleção.
+paletteList.addEventListener("mousemove", (e) => {
+  const li = (e.target as Element).closest<HTMLElement>("li[id^='opt-']");
+  const i = li ? Number(li.id.slice(4)) : sel;
+  if (i === sel) return;
+  sel = i;
+  renderPalette();
+});
 paletteInput.addEventListener("blur", () => !palette.hidden && closePalette());
 
 // ---------- nova worktree ----------
@@ -994,7 +1059,7 @@ function syncSides() {
   const branch = branchInput.value.trim() || "<branch>";
   const ends = openNow.checked ? wouldStop(projectSel.value, null) : undefined;
   openHint.hidden = !ends;
-  openHint.replaceChildren(...(ends ? endsNote(ends) : []));
+  openHint.replaceChildren(...(ends ? endsNote(ends, projectSel.value, false) : []));
   for (const t of TABS) {
     sideBox(t).disabled = !sideCheck(t).checked;
     const dir = sideDir(t).value.trim().replace(/\/+$/, "");
@@ -1202,16 +1267,16 @@ setSidebarWidth(Number(load("sidebarWidth", SIDEBAR_W.default)) || SIDEBAR_W.def
 window.addEventListener(
   "keydown",
   (e) => {
-    if (!e.ctrlKey || !e.shiftKey) return;
+    // Com um diálogo aberto, nada atrás dele responde: a paleta abriria presa sob o véu.
+    if (!e.ctrlKey || !e.shiftKey || document.querySelector("dialog[open]")) return;
     if (e.code === "KeyK") palette.hidden ? openPalette() : closePalette();
     else if (e.code === "KeyB") {
       toggleSidebar();
       render(true);
     } else if (e.code === "KeyE") focusBoard();
     else if (e.code === "KeyH") helpEl.togglePopover();
-    else if (e.code === "KeyN") {
-      if (!document.querySelector("dialog[open]")) openAddDialog(current?.project);
-    } else if (e.code === "KeyJ") {
+    else if (e.code === "KeyN") openAddDialog(current?.project);
+    else if (e.code === "KeyJ") {
       if (current?.wt.api && current.wt.front) setTab(tab === "api" ? "front" : "api", true);
     } else return;
     e.preventDefault();
@@ -1221,7 +1286,8 @@ window.addEventListener(
 );
 
 const helpEl = $("#help");
-helpEl.addEventListener("toggle", (e) => (e as ToggleEvent).newState === "closed" && render(true));
+// Aberta, a ajuda recebe o foco: o leitor de tela a anuncia e o Esc chega nela (no xterm, o Esc iria para o shell).
+helpEl.addEventListener("toggle", (e) => ((e as ToggleEvent).newState === "open" ? helpEl.focus() : render(true)));
 
 window.addEventListener("focus", () => refresh());
 

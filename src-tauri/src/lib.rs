@@ -83,6 +83,7 @@ pub fn run() {
             pty::pty_kill_all,
             pty::pty_force,
             pty::pty_status,
+            pty::open_url,
             worktrees::load_config,
             worktrees::add_worktree,
             worktrees::worktree_defaults,

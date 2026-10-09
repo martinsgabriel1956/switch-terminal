@@ -14,7 +14,7 @@ colors:
   run: "#4cc38a"
   start: "#f2b33d"
   wait: "#f2b33d"
-  stop: "#f26d6d"
+  fail: "#f26d6d"
   scrim: "rgb(10 11 13 / 72%)"
   selection: "rgb(236 235 230 / 22%)"
   board-day: "#f4f5f3"
@@ -29,7 +29,7 @@ colors:
   run-day: "#0d6a3f"
   start-day: "#855000"
   wait-day: "#855000"
-  stop-day: "#b3261e"
+  fail-day: "#b3261e"
   scrim-day: "rgb(244 245 243 / 78%)"
   selection-day: "rgb(21 22 26 / 16%)"
 typography:
@@ -101,7 +101,9 @@ components:
   flap-wait:
     textColor: "{colors.wait}"
   flap-stop:
-    textColor: "{colors.stop}"
+    textColor: "{colors.wait}"
+  flap-fail:
+    textColor: "{colors.fail}"
   line:
     textColor: "{colors.ink-2}"
     typography: "{typography.body}"
@@ -188,8 +190,8 @@ Neutros quentes de grafite (noite) ou esmalte (dia), com três cores de sinal re
 
 ### Secondary
 - **Verde Rodando** (`run`): só o estado RODANDO, o interruptor da marca na barra lateral e a confirmação positiva de formulário (`.side-error.ok`).
-- **Âmbar Subindo/Aguarda** (`start`, `wait`): estados SUBINDO e AGUARDA; os dois tokens têm o mesmo valor e continuam separados por papel.
-- **Vermelho Parando** (`stop`): estado PARANDO, erros de projeto e de formulário.
+- **Âmbar em Movimento** (`start`, `wait`): estados SUBINDO, AGUARDA e PARANDO, e a prévia ENCERRA; os dois tokens têm o mesmo valor e continuam separados por papel. Parar é a consequência esperada de uma troca, não um alarme.
+- **Vermelho Falha** (`fail`): só o que falhou ou foi morto: PARCIAL (um lado caiu), SIGKILL (não parou a tempo, ou foi forçado), erros de projeto e de formulário. Uma troca de rotina nunca fica vermelha.
 
 ### Neutral
 - **Fundo do Painel** (`board`): chão da janela, do terminal (`--term-bg`) e dos campos de formulário.
@@ -197,14 +199,14 @@ Neutros quentes de grafite (noite) ou esmalte (dia), com três cores de sinal re
 - **Palheta** (`flap`, `flap-hi`): as duas metades de toda palheta (`flap-hi` em cima, `flap` embaixo); `flap` sozinho é o fundo de hover e da linha atual.
 - **Corte** (`seam`): os entalhes de 1px nas bordas, no meio da palheta.
 - **Fio** (`rule`): toda borda de 1px, divisórias e o polegar da barra de rolagem.
-- **Meia-tinta** (`ink-2`): texto em repouso, prefixo da branch, ícones, dicas, estado PARADA.
+- **Meia-tinta** (`ink-2`): texto em repouso, prefixo da branch, ícones, dicas, estado INATIVA.
 - **Tinta Apagada** (`ink-3`): separador `/`, ícone desabilitado, fios da linha atual e do item selecionado, contorno dos campos. Passa 3:1 sobre `board`, `rail` e `flap` nos dois temas, então serve de indicador não textual; não serve para texto que precise ser lido.
 - **Véu** (`scrim`): atrás do aviso de troca e dos diálogos modais.
 
 A marca na barra lateral redesenha a geometria da logo com `--mark-bg` / `--mark-prompt` (palheta e tinta à noite; tinta e esmalte de dia) e o interruptor em `run`. O arquivo `app-icon.svg` é compromisso de marca e mantém as próprias cores.
 
 ### Named Rules
-**A Regra de Uma Cor por Estado.** Verde é rodando, âmbar é subindo ou aguardando, vermelho é parando ou erro. Nenhuma outra cor entra na interface: foco, caret, seleção, botão primário e checkbox (`accent-color`) são tinta neutra.
+**A Regra de Uma Cor por Estado.** Verde é de pé, âmbar é em movimento (subindo, aguardando, parando), vermelho é falha (parcial, SIGKILL, erro). A contagem até o SIGKILL fica em tinta neutra: esperar é o caminho normal. Nenhuma outra cor entra na interface: foco, caret, seleção, botão primário e checkbox (`accent-color`) são tinta neutra.
 
 **A Regra da Tinta em Serviço.** Só o que está em serviço (worktree atual ou rodando/subindo/aguardando) recebe tinta cheia; todo o resto fica em meia-tinta. Ênfase nunca vem de cor.
 
@@ -259,8 +261,9 @@ Cantos quase retos em três degraus: 2px para palhetas, abas e etiquetas; 4px pa
 ### Palheta (assinatura)
 O estado de cada worktree em 7 caracteres.
 - **Forma:** bloco de `7ch + 14px` × 22px, raio 2px, metade de cima `flap-hi`, de baixo `flap`, entalhes `seam` de 1px × 2px nas bordas, no meio da altura.
-- **Estados:** RODANDO (`run`, API e Front de pé), PARCIAL (`stop`, um lado caiu; o estado é lido por terminal, nunca somado), SUBINDO (`start`), AGUARDA (`wait`, também a própria worktree ao voltar para ela), PARANDO (`stop`), PARADA (meia-tinta, `ink-2`), encaixe vazio (nunca aberta: sem gradiente nem corte, só contorno `rule` de 1px, para não pesar no repouso).
-- **Contagem:** no aviso de troca, uma palheta estreita (`4ch + 14px`) conta os segundos até o SIGKILL e vira a cada segundo.
+- **Estados:** RODANDO (`run`, API e Front de pé), PARCIAL (`fail`, um lado caiu; o estado é lido por terminal, nunca somado), SUBINDO (`start`), AGUARDA (`wait`, também a própria worktree ao voltar para ela), PARANDO (`wait`), SIGKILL (`fail`, passou do prazo ou foi forçada), INATIVA (meia-tinta, `ink-2`; a palavra não começa com PAR para não se confundir com PARANDO/PARCIAL), sem palheta (nunca aberta: a coluna fica vazia, para os nomes alinharem, e nada nela parece controle).
+- **Prévia ENCERRA:** com o cursor ou o foco numa linha do mesmo projeto, a linha em serviço vira para ENCERRA em âmbar (só CSS, `:has`): o clique é destrutivo e o painel mostra o que ele mata antes de matar.
+- **Contagem:** no aviso de troca, uma palheta estreita (`4ch + 14px`) conta os segundos até o SIGKILL em tinta cheia (`ink`) e vira a cada segundo.
 - **Movimento:** vira em 3 quadros discretos (`180ms steps(3, jump-none)`, `scaleY 1 → 0.12 → 1` no texto) e só quando o estado daquela palheta muda. Com `prefers-reduced-motion: reduce`, a troca é seca, sem animação.
 
 ### Linhas do painel
@@ -272,7 +275,7 @@ O estado de cada worktree em 7 caracteres.
 
 ### Abas (API | FRONT)
 - **Forma:** 26px de altura, raio 2px, rótulo em caixa-alta 12px/700.
-- **Não selecionada:** contorno `rule`, texto `ink-2`. **Selecionada:** fundo `flap` liso, sem contorno, texto `ink`. **Lado caído (PARCIAL):** texto `stop` com um quadrado de 6px na frente.
+- **Não selecionada:** contorno `rule`, texto `ink-2`. **Selecionada:** fundo `flap` liso, sem contorno, texto `ink`. **Lado caído (PARCIAL):** texto `fail` com um quadrado de 6px (raio 2px) na frente.
 
 ### Buttons
 - **Shape:** cantos discretos (4px), 32px de altura, `0 14px`, 600.
@@ -280,7 +283,7 @@ O estado de cada worktree em 7 caracteres.
 - **Secondary:** contorno `rule`, fundo transparente, texto `ink`; hover `flap`.
 - **Ícone:** 28×28, raio 4px, ícone `ink-2`; hover fundo `flap` e ícone `ink`; desabilitado em `ink-3`.
 - **Quiet (rodapé do painel):** linha de 40px com fio superior, texto `ink-2`, hover `ink` sobre `flap`.
-- **Aviso de troca:** nenhum botão é primário nem recebe o foco; o foco vai para o card (esperar é a ação padrão). "Forçar agora" e "Voltar e reiniciar" (`Esc`) são secundários; depois de voltar, o Voltar some e o card diz "Voltando para X".
+- **Aviso de troca:** nenhum botão é primário nem recebe o foco; o foco vai para o card (esperar é a ação padrão). "Forçar agora" e "Voltar para X" são secundários (o nome trunca, o verbo fica); depois de voltar, ou já no SIGKILL, o Voltar some e o card diz "Voltando para X". Sem atalho de Esc: no reflexo do vim, ele desfazia a troca recém-pedida. O texto diz o que recebe o Ctrl+C (`npm run dev`), lido do processo em primeiro plano.
 - **Disabled:** opacidade 0.5.
 
 ### Chips
@@ -297,16 +300,16 @@ O estado de cada worktree em 7 caracteres.
 ### Inputs / Fields
 - **Style:** 34px, fundo `board`, contorno `ink-3` 1px (≥3:1), raio 4px, 15px/500; placeholder `ink-2`; select com seta desenhada em gradiente; checkbox com `accent-color: ink`.
 - **Focus:** anel neutro de 2px em `--focus` (tinta), afastado 2px, em todos os controles.
-- **Error / Disabled:** erro em texto `stop` 13px abaixo do campo, resumo legível com o erro cru do git em mono `ink-2` embaixo; foco no campo culpado; fieldset desabilitado a 0.45, menos o aviso do lado ("Já criada em…").
+- **Error / Disabled:** erro em texto `fail` 13px abaixo do campo, resumo legível com o erro cru do git em mono `ink-2` embaixo; foco no campo culpado; fieldset desabilitado a 0.45, menos o aviso do lado ("Já criada em…").
 
 ### Navigation
-- **Paleta de troca** (`Ctrl+Shift+K`): busca de 44px com ícone de lupa, lista com nome do projeto em rótulo caixa-alta; item selecionado igual à linha atual (`flap` + fios internos `ink-3`); ordem por qualidade do casamento (trecho no começo de palavra > trecho > subsequência), depois recência; a atual leva a etiqueta ATUAL; rodapé com uma mini palheta PARANDO e o que o Enter encerra ("Encerra feat/x em PROJETO"), e as teclas Enter/Esc.
-- **Faixa de destino:** projeto em rótulo caixa-alta `ink-2`, separador `ink-3`, branch em 17px/600; à direita, o endereço do dev server da aba aberta (`localhost:3333`), lido da saída do terminal, em mono 12px `ink-2`; troca junto com a aba. O nome de projeto é caixa-alta em todo lugar.
+- **Paleta de troca** (`Ctrl+Shift+K`): busca de 44px com ícone de lupa, lista com nome do projeto em rótulo caixa-alta; item selecionado igual à linha atual (`flap` + fios internos `ink-3`); ordem por qualidade do casamento (trecho no começo de palavra > trecho > subsequência), depois recência; a atual leva a etiqueta ATUAL; rodapé com uma mini palheta PARANDO e o que o Enter ou o clique encerra, com o processo em mono ("Encerra feat/x (npm run dev) em PROJETO"); o mouse também move a seleção; e as teclas Enter/Esc.
+- **Faixa de destino:** projeto em rótulo caixa-alta `ink-2`, separador `ink-3`, branch em 17px/600; à direita, o endereço do dev server da aba aberta (`localhost:3333`), lido da saída do terminal, em mono 12px `ink-2`, link que abre no navegador padrão (sublinha no hover) e encolhe antes da branch; troca junto com a aba. O nome de projeto é caixa-alta em todo lugar.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** mostrar estado só pela palheta e pelas três cores de estado (`run`, `start`/`wait`, `stop`/`part`).
+- **Do** mostrar estado só pela palheta e pelas três cores de estado (`run` de pé, `start`/`wait` em movimento, `fail` falha).
 - **Do** usar tinta cheia (`ink`) apenas no que está em serviço; o resto em `ink-2`.
 - **Do** desenhar ícones como SVG de traço 1.5 em viewBox 16 (16px, inline 12px), em `currentColor`.
 - **Do** animar só em degraus (`steps`), só na mudança de estado, e desligar com `prefers-reduced-motion`.

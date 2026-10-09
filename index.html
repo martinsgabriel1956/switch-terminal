@@ -42,7 +42,7 @@
       </div>
     </main>
 
-    <div id="help" popover>
+    <div id="help" popover tabindex="-1" role="dialog" aria-label="Atalhos e legenda">
       <h2>Atalhos</h2>
       <dl class="keys">
         <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>K</kbd></dt><dd>Trocar de worktree (abre na anterior)</dd>
@@ -50,8 +50,7 @@
         <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></dt><dd>Nova worktree</dd>
         <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>E</kbd></dt><dd>Ir para o painel (setas navegam, Esc volta)</dd>
         <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd></dt><dd>Recolher ou abrir o painel</dd>
-        <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd></dt><dd>Abrir ou fechar esta ajuda</dd>
-        <dt><kbd>Esc</kbd></dt><dd>Durante a troca: voltar e reiniciar a anterior</dd>
+        <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd></dt><dd>Abrir ou fechar esta ajuda (Esc fecha)</dd>
       </dl>
       <h2>Estados</h2>
       <dl class="legend">
@@ -59,9 +58,11 @@
         <dt><span class="flap" data-state="part"><span>PARCIAL</span></span></dt><dd>Um lado caiu; a aba dele fica marcada</dd>
         <dt><span class="flap" data-state="start"><span>SUBINDO</span></span></dt><dd>O comando de start acabou de ser enviado</dd>
         <dt><span class="flap" data-state="wait"><span>AGUARDA</span></span></dt><dd>Esperando a anterior do projeto parar (ou a própria, ao voltar)</dd>
-        <dt><span class="flap" data-state="stop"><span>PARANDO</span></span></dt><dd>Sendo encerrada para a troca: Ctrl+C e, depois do prazo, SIGKILL</dd>
-        <dt><span class="flap" data-state="idle"><span>PARADA</span></span></dt><dd>Terminais abertos, nada rodando</dd>
-        <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Encaixe vazio: ainda não aberta nesta sessão</dd>
+        <dt><span class="flap" data-state="stop"><span>PARANDO</span></span></dt><dd>Recebeu Ctrl+C para a troca; esperando os processos saírem</dd>
+        <dt><span class="flap" data-state="kill"><span>SIGKILL</span></span></dt><dd>Não parou a tempo (ou você forçou): encerrada à força</dd>
+        <dt><span class="flap" data-state="stop"><span>ENCERRA</span></span></dt><dd>Prévia: clicar na linha sob o cursor encerra esta</dd>
+        <dt><span class="flap" data-state="idle"><span>INATIVA</span></span></dt><dd>Terminais abertos, nada rodando</dd>
+        <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Sem palheta: ainda não aberta nesta sessão</dd>
       </dl>
     </div>
 
@@ -190,7 +191,7 @@
       </form>
     </dialog>
 
-    <div id="palette" hidden>
+    <div id="palette" role="dialog" aria-label="Trocar de worktree" hidden>
       <div class="search">
         <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3 3" /></svg>
         <input role="combobox" aria-expanded="true" aria-controls="palette-list" aria-autocomplete="list" aria-label="Trocar de worktree" placeholder="Trocar de worktree…" spellcheck="false" />

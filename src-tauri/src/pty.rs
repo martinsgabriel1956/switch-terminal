@@ -123,11 +123,29 @@ pub fn pty_kill(ptys: State<Ptys>, id: u32) {
 }
 
 
-/// Quais terminais têm processo em primeiro plano (o estado RODANDO do painel). Id desconhecido = false.
+/// O que roda em primeiro plano em cada terminal (o estado RODANDO do painel): o nome do processo,
+/// para a troca dizer o que vai encerrar ("npm run dev", "psql"). Só o shell, ou id desconhecido = None.
 #[tauri::command]
-pub fn pty_status(ptys: State<Ptys>, ids: Vec<u32>) -> Vec<bool> {
+pub fn pty_status(ptys: State<Ptys>, ids: Vec<u32>) -> Vec<Option<String>> {
     let map = ptys.map.lock().unwrap();
-    ids.iter().map(|id| map.get(id).is_some_and(|p| p.busy().is_some())).collect()
+    ids.iter()
+        .map(|id| {
+            let pg = map.get(id).and_then(Pty::busy)?;
+            Some(std::fs::read_to_string(format!("/proc/{pg}/comm")).map(|s| s.trim_end().to_owned()).unwrap_or_default())
+        })
+        .collect()
+}
+
+/// Abre o endereço do dev server no navegador padrão. Só http(s): o resto não sai do app.
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err("endereço inválido".into());
+    }
+    let mut child = std::process::Command::new("xdg-open").arg(url).spawn().map_err(|e| e.to_string())?;
+    // Recolhe o xdg-open quando ele sair, senão fica um zumbi por clique.
+    std::thread::spawn(move || child.wait());
+    Ok(())
 }
 
 /// "Forçar agora" no aviso de troca: SIGKILL no que estiver rodando, sem esperar o prazo.
