@@ -237,10 +237,21 @@ function say(project: string, wt: Worktree, state: LineState) {
 const PAIR_ICON = "M3 5.5h10M10.5 3 13 5.5 10.5 8M13 10.5H3M5.5 8 3 10.5 5.5 13";
 const FROM_ICON = "M13 8H3M6.5 4.5 3 8l3.5 3.5";
 
-/** Rótulo "api ↔ front" com a seta desenhada em SVG, não em caractere; o leitor de tela ouve "pareada com". */
+/** Par cujos lados só diferem no prefixo ("feature-api/x ↔ feature-app/x"): [prefixo da API, prefixo do front, nome]. */
+function samePairName(api: string, front: string) {
+  const [ap, ar] = splitBranch(api);
+  const [fp, fr] = splitBranch(front);
+  return ar === fr && ap && fp ? ([ap, fp, ar] as const) : null;
+}
+
+/** Rótulo "api ↔ front" com a seta desenhada em SVG, não em caractere; o leitor de tela ouve "pareada com".
+ *  Mesmo nome dos dois lados: o nome uma vez e os prefixos depois, em meia-tinta, como no painel. */
 function labelNodes(label: string): (Node | string)[] {
   const [a, f] = label.split(" ↔ ");
-  return f === undefined ? [label] : [a, icon(PAIR_ICON, "inline"), el("span", { className: "sr", textContent: " pareada com " }), f];
+  if (f === undefined) return [label];
+  const arrow = [icon(PAIR_ICON, "inline"), el("span", { className: "sr", textContent: " pareada com " })];
+  const same = samePairName(a, f);
+  return same ? [same[2], el("span", { className: "pair-pre" }, ` ${same[0]}`, ...arrow, same[1])] : [a, ...arrow, f];
 }
 /** O mesmo rótulo para atributos (aria-label), onde não cabe nó. */
 const spokenLabel = (label: string) => label.replace(" ↔ ", " pareada com ");
@@ -453,7 +464,7 @@ function render(focus = false) {
   urlEl.hidden = !url;
   if (url && urlEl.href !== `${url}/`) {
     urlEl.href = url;
-    urlEl.textContent = shownPane!.url;
+    urlEl.textContent = shownPane!.url!.replace("localhost", "");
     urlEl.title = `Abrir ${url} no navegador`;
   }
   const down = state === "part" ? sides(ck!).down : [];
@@ -532,14 +543,14 @@ function renderWait(project: string, wt: Worktree) {
   waitEl.dataset.sig = sig;
   const verb = goingBack ? "Voltando para" : st.forcing ? "Forçando o encerramento de" : "Encerrando";
   const names = st.fromWt ? procs(project, st.fromWt) : [];
-  const what = names.length ? names.join(", ") : "os processos";
+  const what = names.length ? el("span", { className: "procs", textContent: names.join(", ") }) : "os processos";
   const detail = goingBack
     ? [...labelNodes(st.from), " recebeu Ctrl+C e reinicia assim que os processos saírem."]
     : st.forcing === "user"
       ? ["Encerrando à força (SIGKILL), como pedido. ", ...labelNodes(wt.label), " sobe em seguida."]
       : st.forcing
         ? ["Não parou com Ctrl+C a tempo; os processos estão sendo encerrados à força (SIGKILL)."]
-        : [`Ctrl+C enviado a ${what}. Esperando saírem e liberarem as portas para iniciar `, ...labelNodes(wt.label), "."];
+        : ["Ctrl+C enviado a ", what, ". Esperando saírem e liberarem as portas para iniciar ", ...labelNodes(wt.label), "."];
   // Nenhum botão é o padrão: esperar é a ação certa, e forçar mata sem o Ctrl+C.
   const force = el("button", {
     type: "button",
@@ -575,7 +586,7 @@ function renderWait(project: string, wt: Worktree) {
   const had = waitEl.contains(document.activeElement) ? ((document.activeElement as HTMLElement).dataset.act ?? "card") : null;
   const card = el(
     "div",
-    { className: "wait-card", tabIndex: -1 },
+    { className: "wait-card", tabIndex: -1, role: "group", ariaLabel: "Troca em andamento" },
     el(
       "div",
       { className: "wait-head" },
@@ -615,11 +626,11 @@ function lineButton(project: string, wt: Worktree) {
   let top = branchText(api || front);
   let pair: HTMLElement | null = null;
   if (api && front && api !== front) {
-    const [ap, ar] = splitBranch(api);
-    const [fp, fr] = splitBranch(front);
     // "feature-api/x ↔ feature-app/x": o nome uma vez em cima e embaixo só o que difere. Cortar o prefixo dos dois lados repetiria o mesmo nome.
-    if (ar === fr && ap && fp) {
-      top = branchText(ar);
+    const same = samePairName(api, front);
+    if (same) {
+      const [ap, fp, name] = same;
+      top = branchText(name);
       pair = el("span", { className: "pair" }, el("span", { className: "pre", textContent: ap }), icon(PAIR_ICON, "inline"), el("span", { className: "pre", textContent: fp }));
     } else pair = el("span", { className: "pair" }, icon(PAIR_ICON, "inline"), el("span", { className: "branch" }, ...branchText(front)));
   }
@@ -643,8 +654,9 @@ function lineButton(project: string, wt: Worktree) {
         if (fresh) select(project, fresh);
       },
     },
-    f,
     el("span", { className: "name" }, el("span", { className: "top" }, el("span", { className: "branch" }, ...top)), pair, tag),
+    // A palheta fica à direita, como a coluna de situação de um painel de partidas; nunca aberta, não ocupa espaço e o nome usa a linha toda.
+    state === "none" ? null : f,
   );
   if (ends) b.setAttribute("aria-description", endsText);
   b.dataset.key = k;
@@ -700,7 +712,7 @@ function renderBoard() {
       {
         type: "button",
         className: "fold",
-        title: open ? `Recolher ${p.name}` : `Expandir ${p.name}`,
+        title: `${open ? "Recolher" : "Expandir"} ${p.name}${p.error && !open ? `\n${projectErrorSummary(p.error)}` : ""}`,
         onclick: () => {
           open ? collapsed.add(p.name) : collapsed.delete(p.name);
           save("collapsed", [...collapsed]);
@@ -719,7 +731,8 @@ function renderBoard() {
       "section",
       { className: `platform${open ? "" : " folded"}`, ariaLabel: p.name },
       el("div", { className: "platform-head" }, el("h3", {}, fold), add),
-      problem,
+      // Recolhido, o erro some junto com as linhas: quem recolheu já viu e não quer o vermelho o dia todo.
+      open ? problem : null,
       el("ul", { className: "lines" }, ...shownWts.map((wt) => el("li", {}, lineButton(p.name, wt)))),
     );
   });
@@ -741,8 +754,9 @@ function fitBranches() {
     const branches = [...platform.querySelectorAll<HTMLElement>(".line .branch")];
     for (const b of branches) b.classList.remove("tight");
     const tight = branches.some((b) => {
-      const [prefix, rest] = b.children as unknown as HTMLElement[];
-      return prefix.scrollWidth + rest.scrollWidth > b.clientWidth + 0.5;
+      // O nome em si foi cortado (mesmo elemento, sem somar larguras arredondadas de partes diferentes).
+      const rest = b.lastElementChild as HTMLElement;
+      return rest.scrollWidth > rest.clientWidth;
     });
     for (const b of branches) b.classList.toggle("tight", tight);
   }
@@ -1030,6 +1044,7 @@ function clearInvalid(form: HTMLFormElement) {
     f.removeAttribute("aria-invalid");
     f.removeAttribute("aria-describedby");
   }
+  for (const f of form.querySelectorAll("[aria-errormessage]")) document.getElementById(f.getAttribute("aria-errormessage")!)!.textContent = "";
 }
 
 const REQUIRED: Record<string, string> = { branch: "Informe a branch.", name: "Dê um nome ao projeto." };
@@ -1037,7 +1052,7 @@ const REQUIRED: Record<string, string> = { branch: "Informe a branch.", name: "D
 function missingField(form: HTMLFormElement, fallback: HTMLElement) {
   const bad = form.querySelector<HTMLInputElement>("input:invalid");
   if (!bad) return false;
-  const msg = bad.closest("fieldset")?.querySelector<HTMLElement>(".side-error") ?? fallback;
+  const msg = document.getElementById(bad.getAttribute("aria-errormessage") ?? "") ?? bad.closest("fieldset")?.querySelector<HTMLElement>(".side-error") ?? fallback;
   msg.textContent = REQUIRED[bad.name] ?? (bad.name.endsWith("-dir") ? "Informe o diretório das worktrees." : "Informe o repositório.");
   const more = bad.closest("details");
   if (more) more.open = true;
@@ -1089,6 +1104,7 @@ function openAddDialog(project?: string) {
 /** Pasta padrão e branches de cada repo do projeto escolhido. */
 async function loadDefaults() {
   const req = ++defaultsReq;
+  branchInput.readOnly = false;
   for (const t of TABS) {
     sideCheck(t).checked = true;
     sideCheck(t).disabled = false;
@@ -1179,6 +1195,8 @@ addForm.addEventListener("submit", async (e) => {
   } catch (err) {
     const fe = asFormError(err);
     // O que já foi criado sai do próximo envio: desmarcado e travado, com aviso.
+    // Um lado já existe com esta branch: trocar o nome agora criaria o outro lado com outra, e o primeiro ficaria solo.
+    if (fe.created.length) branchInput.readOnly = true;
     for (const t of fe.created) {
       sideCheck(t).checked = false;
       sideCheck(t).disabled = true;

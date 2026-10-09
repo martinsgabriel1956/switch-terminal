@@ -199,7 +199,7 @@ kbd {
   color: var(--fail);
 }
 
-/* Nunca aberta: sem palheta. A coluna fica, para os nomes alinharem; nada nela parece controle. */
+/* Palheta vazia (só na legenda da ajuda): nunca aberta. No painel, a linha nem leva palheta. */
 .flap[data-state="none"] {
   background: none;
 }
@@ -441,11 +441,11 @@ kbd {
   list-style: none;
 }
 
+/* nome à esquerda, palheta à direita (coluna de situação): os nomes alinham na margem e só as linhas abertas cedem largura */
 .line {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  column-gap: 10px;
   width: 100%;
   padding: 5px 10px 5px 14px;
   border: 0;
@@ -470,7 +470,7 @@ kbd {
 }
 
 .line .flap {
-  margin-top: 1px;
+  margin: 1px 0 0 10px;
 }
 
 .line .name {
@@ -637,12 +637,9 @@ header {
 }
 
 /* À direita, depois das abas: aparecer ou trocar de porta não empurra as abas.
-   Encolhe antes do nome da branch, mas também encolhe: numa janela estreita a branch não some por ele. */
+   Só a porta (":3333"): curta o bastante para nunca truncar; o title tem o endereço inteiro. */
 #dev-url {
-  flex-shrink: 4;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-shrink: 0;
   white-space: nowrap;
   color: var(--ink-2);
   font: 12px/1 var(--mono);
@@ -681,7 +678,6 @@ header {
 #tabs {
   display: flex;
   gap: 4px;
-  margin-right: auto;
 }
 
 #tabs button {
@@ -720,9 +716,10 @@ header {
   vertical-align: 1px;
 }
 
-/* "feat/x parou em 1,8 s": o fechamento da troca, some sozinho */
+/* "feat/x parou em 1,8 s": o fechamento da troca, logo depois das abas (perto do destino, para onde o olho volta); some sozinho */
 #last-stop {
-  flex-shrink: 2;
+  margin-right: auto;
+  flex-shrink: 20;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -731,12 +728,21 @@ header {
   font-size: 13px;
 }
 
+/* um fio separa o que roda nos outros projetos do endereço desta aba */
 #running {
   display: flex;
   align-items: center;
   gap: 14px;
   min-width: 0;
+  flex-shrink: 0;
+  max-width: 40%;
   overflow: hidden;
+  padding-left: 12px;
+  border-left: 1px solid var(--rule);
+}
+
+#running:empty {
+  display: none;
 }
 
 #running .other {
@@ -1103,6 +1109,11 @@ dialog.form menu button:disabled {
   overflow: hidden;
 }
 
+/* com o aviso do que a troca encerra, a legenda Enter/Esc sai: o rodapé inteiro é dele */
+#palette .note:not([hidden]) + .keys {
+  display: none;
+}
+
 #palette .keys {
   margin-left: auto !important;
   flex-shrink: 0;
@@ -1134,7 +1145,8 @@ dialog.form .open-hint strong {
 
 /* o que vai morrer, como o comando aparece no terminal */
 #palette .note .procs,
-dialog.form .open-hint .procs {
+dialog.form .open-hint .procs,
+.wait-card .procs {
   font: 12px var(--mono);
 }
 
@@ -1207,6 +1219,27 @@ dialog.form select {
 
 dialog.form input::placeholder {
   color: var(--ink-2);
+}
+
+/* campo culpado: contorno da cor de falha, a mensagem logo abaixo */
+dialog.form [aria-invalid="true"] {
+  border-color: var(--fail);
+}
+
+dialog.form label + .side-error {
+  margin-top: -4px;
+}
+
+/* erro da branch embaixo da coluna dela, não da do projeto */
+dialog.form .row-2 > .side-error {
+  grid-column: 2;
+  margin: -8px 0 4px;
+}
+
+/* branch travada depois de um erro parcial: o outro lado precisa do mesmo nome */
+dialog.form input:not([type="checkbox"]):read-only {
+  color: var(--ink-2);
+  cursor: default;
 }
 
 dialog.form select {
@@ -1361,6 +1394,15 @@ dialog.form menu {
     transition: none;
   }
 
+}
+
+/* "nome feature-api/ ⇄ feature-app/": par com o mesmo nome dos dois lados, numa linha só */
+.pair-pre {
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .icon.inline {
