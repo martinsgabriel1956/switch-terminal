@@ -26,7 +26,7 @@ body {
 }
 
 #sidebar {
-  width: 220px;
+  width: var(--sidebar-w, 220px);
   flex-shrink: 0;
   overflow-y: auto;
   background: var(--panel);
@@ -113,8 +113,36 @@ header {
   background: #2a2d2e;
 }
 
-body.sidebar-off #sidebar {
+body.sidebar-off #sidebar,
+body.sidebar-off #sidebar-handle {
   display: none;
+}
+
+/* Alça fina na borda; a área de clique é mais larga que a linha visível. */
+#sidebar-handle {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  width: 5px;
+  margin-left: -3px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+#sidebar-handle:hover,
+#sidebar-handle:focus-visible,
+body.resizing #sidebar-handle {
+  background: var(--accent);
+  outline: none;
+}
+
+body.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.resizing #panes {
+  pointer-events: none;
 }
 
 #tabs button {

@@ -553,6 +553,50 @@ try {
 } catch {}
 setSidebar(sidebarPref !== "off");
 
+// Largura arrastável da barra lateral, lembrada entre sessões.
+const SIDEBAR_W = { min: 160, max: 480, default: 220 };
+const handle = $("#sidebar-handle");
+
+function setSidebarWidth(w: number) {
+  const px = Math.round(Math.min(SIDEBAR_W.max, Math.max(SIDEBAR_W.min, w)));
+  document.body.style.setProperty("--sidebar-w", `${px}px`);
+  handle.setAttribute("aria-valuenow", String(px));
+  try {
+    localStorage.setItem("sidebarWidth", String(px));
+  } catch {}
+}
+
+handle.setAttribute("aria-valuemin", String(SIDEBAR_W.min));
+handle.setAttribute("aria-valuemax", String(SIDEBAR_W.max));
+handle.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  handle.setPointerCapture(e.pointerId);
+  document.body.classList.add("resizing");
+});
+handle.addEventListener("pointermove", (e) => {
+  if (handle.hasPointerCapture(e.pointerId)) setSidebarWidth(e.clientX - sidebar.getBoundingClientRect().left);
+});
+handle.addEventListener("lostpointercapture", () => {
+  document.body.classList.remove("resizing");
+  render();
+});
+handle.addEventListener("dblclick", () => setSidebarWidth(SIDEBAR_W.default));
+handle.addEventListener("keydown", (e) => {
+  const step = e.shiftKey ? 40 : 10;
+  const w = sidebar.getBoundingClientRect().width;
+  if (e.key === "ArrowLeft") setSidebarWidth(w - step);
+  else if (e.key === "ArrowRight") setSidebarWidth(w + step);
+  else if (e.key === "Home") setSidebarWidth(SIDEBAR_W.min);
+  else if (e.key === "End") setSidebarWidth(SIDEBAR_W.max);
+  else return;
+  e.preventDefault();
+});
+let savedWidth = NaN;
+try {
+  savedWidth = Number(localStorage.getItem("sidebarWidth"));
+} catch {}
+setSidebarWidth(savedWidth || SIDEBAR_W.default);
+
 // ---------- atalhos e janela ----------
 
 // Fase de captura: o atalho é tratado antes do xterm receber a tecla.

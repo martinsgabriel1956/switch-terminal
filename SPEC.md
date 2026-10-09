@@ -93,6 +93,7 @@ Estado persistido no `localStorage` do webview: `{ "<projeto>": "<id da worktree
 - `Ctrl+Shift+K`: paleta fuzzy por nome de worktree; Enter troca.
 - `Ctrl+Shift+J`: alterna entre as abas API e Front.
 - Botão `☰` no cabeçalho ou `Ctrl+Shift+B`: recolhe e abre a barra lateral (o estado fica salvo).
+- Alça na borda direita da barra lateral: arrastar redimensiona (160–480 px), duplo clique volta a 220 px, setas (Shift = passo maior) pelo teclado. A largura fica salva.
 - Os atalhos são interceptados com `attachCustomKeyEventHandler` antes de chegarem ao xterm.
 
 ## Abrir / fechar
@@ -112,5 +113,4 @@ Estado persistido no `localStorage` do webview: `{ "<projeto>": "<id da worktree
 - Remover worktrees pelo app.
 - Editar ou remover projetos pela tela.
 - Injeção de porta por variável de ambiente.
-- Redimensionar painéis.
 - Detecção ou notificação de crash do dev server.
