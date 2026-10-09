@@ -25,7 +25,7 @@ colors:
   rule-day: "#cfd1cc"
   ink-day: "#15161a"
   ink-2-day: "#4f5156"
-  ink-3-day: "#8b8d90"
+  ink-3-day: "#7c7e82"
   run-day: "#0d6a3f"
   start-day: "#855000"
   wait-day: "#855000"
@@ -198,7 +198,7 @@ Neutros quentes de grafite (noite) ou esmalte (dia), com três cores de sinal re
 - **Corte** (`seam`): a linha de 1px no meio da palheta.
 - **Fio** (`rule`): toda borda de 1px, divisórias e o polegar da barra de rolagem.
 - **Meia-tinta** (`ink-2`): texto em repouso, prefixo da branch, ícones, dicas, estado PARADA.
-- **Tinta Apagada** (`ink-3`): palheta em branco (nunca aberta), separador `/`, ícone desabilitado. Não serve para texto que precise ser lido.
+- **Tinta Apagada** (`ink-3`): separador `/`, ícone desabilitado, fios da linha atual e do item selecionado, contorno dos campos. Passa 3:1 sobre `board` e `rail` nos dois temas, então serve de indicador não textual; não serve para texto que precise ser lido.
 - **Véu** (`scrim`): atrás do aviso de troca e dos diálogos modais.
 
 A marca na barra lateral redesenha a geometria da logo com `--mark-bg` / `--mark-prompt` (palheta e tinta à noite; tinta e esmalte de dia) e o interruptor em `run`. O arquivo `app-icon.svg` é compromisso de marca e mantém as próprias cores.
@@ -220,7 +220,7 @@ A marca na barra lateral redesenha a geometria da logo com `--mark-bg` / `--mark
 
 ### Hierarchy
 - **Display** (600, 22px): título do estado vazio.
-- **Headline** (600, 19px): título dos diálogos; o aviso de troca usa 18px.
+- **Headline** (600, 19px): título dos diálogos e do aviso de troca; busca da paleta em 17px.
 - **Title** (600, 17px): a faixa de destino (plataforma / branch).
 - **Body** (500, 15px, 1.35): texto padrão, linhas do painel, campos.
 - **Small** (500–600, 13px): par divergente, dicas, rótulos de campo (600, 0.02em), erros.
@@ -240,7 +240,7 @@ O ritmo é denso e regular em passos de 2px: 4, 6, 8, 10, 14 e 22px. A margem la
 
 ## Elevation & Depth
 
-O sistema é plano. A profundidade do painel vem de tons (`board` < `rail` < `flap`) e de fios de 1px, não de sombras. A linha atual é marcada por fundo `flap` e fios internos em cima e embaixo (`inset 0 ±1px 0 rule`), não por elevação. Só as superfícies que flutuam acima do terminal (paleta, ajuda, diálogos) recebem uma sombra curta, e sempre junto de uma borda de 1px em `rule`. O aviso de troca fica sobre o véu, sem sombra.
+O sistema é plano. A profundidade do painel vem de tons (`board` < `rail` < `flap`) e de fios de 1px, não de sombras. A linha atual é marcada por fundo `flap` e fios internos em cima e embaixo (`inset 0 ±1px 0 ink-3`, ≥3:1), não por elevação. Só as superfícies que flutuam acima do terminal (paleta, ajuda, diálogos) recebem uma sombra curta, e sempre junto de uma borda de 1px em `rule`. O aviso de troca fica sobre o véu, sem sombra.
 
 ### Shadow Vocabulary
 - **Flutuante** (`box-shadow: 0 4px 8px rgb(0 0 0 / 28%)`): paleta, popover de ajuda, diálogos de formulário.
@@ -259,12 +259,14 @@ Cantos quase retos em três degraus: 2px para palhetas, abas e etiquetas; 4px pa
 ### Palheta (assinatura)
 O estado de cada worktree em 7 caracteres.
 - **Forma:** bloco de `7ch + 14px` × 22px, raio 2px, metade de cima `flap-hi`, de baixo `flap`, corte `seam` de 1px no meio.
-- **Estados:** RODANDO (`run`), SUBINDO (`start`), AGUARDA (`wait`), PARANDO (`stop`), PARADA (meia-tinta, `ink-2`), em branco (nunca aberta, palheta vazia).
+- **Estados:** RODANDO (`run`), SUBINDO (`start`), AGUARDA (`wait`), PARANDO (`stop`), PARADA (meia-tinta, `ink-2`), encaixe vazio (nunca aberta: sem gradiente nem corte, só contorno `rule` de 1px, para não pesar no repouso).
 - **Movimento:** vira em 3 quadros discretos (`180ms steps(3, jump-none)`, `scaleY 1 → 0.12 → 1` no texto) e só quando o estado daquela palheta muda. Com `prefers-reduced-motion: reduce`, a troca é seca, sem animação.
 
 ### Linhas do painel
-- **Estrutura:** grade palheta | nome; branch com prefixo (`feat/`) em meia-tinta e nome em tinta cheia quando em serviço; par divergente numa segunda linha (13px, seta de par desenhada em SVG inline); etiqueta SÓ API / SÓ FRONT nas solo.
-- **Estados:** repouso transparente com texto `ink-2`; hover `flap`; atual `flap` com fios internos `rule` em cima e embaixo.
+- **Estrutura:** grade palheta | nome; branch com prefixo (`feat/`) em meia-tinta e nome em tinta cheia quando em serviço; par divergente numa segunda linha (13px, seta de par desenhada em SVG inline); etiqueta SÓ API / SÓ FRONT nas solo. Sem espaço, o prefixo encolhe antes do nome.
+- **Ordem:** a do git, fixa. A linha não muda de lugar ao entrar em serviço; só a palheta vira.
+- **Estados:** repouso transparente com texto `ink-2`; hover `flap`; atual `flap` com fios internos `ink-3` em cima e embaixo; foco com o anel recolhido para dentro (`outline-offset: -2px`).
+- **Teclado:** o painel é uma parada de Tab só (roving tabindex); setas, Home/End navegam.
 
 ### Abas (API | FRONT)
 - **Forma:** 26px de altura, raio 2px, rótulo em caixa-alta 12px/700.
@@ -276,11 +278,12 @@ O estado de cada worktree em 7 caracteres.
 - **Secondary:** contorno `rule`, fundo transparente, texto `ink`; hover `flap`.
 - **Ícone:** 28×28, raio 4px, ícone `ink-2`; hover fundo `flap` e ícone `ink`; desabilitado em `ink-3`.
 - **Quiet (rodapé do painel):** linha de 40px com fio superior, texto `ink-2`, hover `ink` sobre `flap`.
+- **Aviso de troca:** nenhum botão é primário nem recebe o foco; o foco vai para o card (esperar é a ação padrão). "Forçar agora" e "Voltar" são secundários.
 - **Disabled:** opacidade 0.5.
 
 ### Chips
 - **Etiqueta:** contorno `rule` de 1px, raio 2px, `0 4px`, 12px/700 com 0.06em, texto `ink-2`.
-- **Tecla (`kbd`):** fundo `flap`, contorno `rule` com base de 2px, raio 3px, 12px/600.
+- **Tecla (`kbd`):** fundo `flap`, contorno `rule` com base de 2px, raio 2px, 12px/600.
 
 ### Cards / Containers
 - **Corner Style:** 6px.
@@ -290,12 +293,12 @@ O estado de cada worktree em 7 caracteres.
 - **Internal Padding:** 22px 24px (aviso), 20px 22px (diálogos), 16px 18px (ajuda).
 
 ### Inputs / Fields
-- **Style:** 34px, fundo `board`, contorno `rule` 1px, raio 4px, 15px/500; placeholder `ink-2`; select com seta desenhada em gradiente; checkbox com `accent-color: ink`.
+- **Style:** 34px, fundo `board`, contorno `ink-3` 1px (≥3:1), raio 4px, 15px/500; placeholder `ink-2`; select com seta desenhada em gradiente; checkbox com `accent-color: ink`.
 - **Focus:** anel neutro de 2px em `--focus` (tinta), afastado 2px, em todos os controles.
-- **Error / Disabled:** erro em texto `stop` 13px abaixo do campo; fieldset desabilitado a 0.45.
+- **Error / Disabled:** erro em texto `stop` 13px abaixo do campo, resumo legível com o erro cru do git em mono `ink-2` embaixo; foco no campo culpado; fieldset desabilitado a 0.45, menos o aviso do lado ("Já criada em…").
 
 ### Navigation
-- **Paleta de troca** (`Ctrl+Shift+K`): busca de 44px com ícone de lupa, lista com nome do projeto em rótulo caixa-alta; item selecionado igual à linha atual (`flap` + fios internos).
+- **Paleta de troca** (`Ctrl+Shift+K`): busca de 44px com ícone de lupa, lista com nome do projeto em rótulo caixa-alta; item selecionado igual à linha atual (`flap` + fios internos `ink-3`); rodapé com o que o Enter encerra ("Encerra feat/x em projeto") quando há algo rodando no projeto.
 - **Faixa de destino:** projeto em rótulo caixa-alta `ink-2`, separador `ink-3`, branch em 17px/600.
 
 ## Do's and Don'ts

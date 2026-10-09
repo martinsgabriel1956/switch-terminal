@@ -378,7 +378,7 @@
       "ink-3-day": {
         "role": "neutral",
         "displayName": "Tinta Apagada (dia)",
-        "canonical": "#8b8d90",
+        "canonical": "#7c7e82",
         "cssVar": "--ink-3",
         "mode": "light",
         "tonalRamp": [

@@ -31,8 +31,8 @@
         </button>
         <div id="destination" aria-live="polite"></div>
         <div id="tabs" role="tablist" aria-label="Terminal"></div>
-        <div id="running" aria-label="Rodando em outros projetos"></div>
-        <button id="help-btn" type="button" class="icon-btn" popovertarget="help" aria-label="Atalhos e legenda" title="Atalhos e legenda">
+        <div id="running" role="group" aria-label="Rodando em outros projetos"></div>
+        <button id="help-btn" type="button" class="icon-btn" popovertarget="help" aria-label="Atalhos e legenda" title="Atalhos e legenda (Ctrl+Shift+H)">
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" /><path d="M6.3 6.2a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.4" /><path d="M8 11.6v.1" /></svg>
         </button>
       </header>
@@ -50,15 +50,16 @@
         <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></dt><dd>Nova worktree</dd>
         <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>E</kbd></dt><dd>Ir para o painel (setas navegam, Esc volta)</dd>
         <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd></dt><dd>Recolher ou abrir o painel</dd>
+        <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd></dt><dd>Abrir ou fechar esta ajuda</dd>
       </dl>
       <h2>Estados</h2>
       <dl class="legend">
         <dt><span class="flap" data-state="run"><span>RODANDO</span></span></dt><dd>Há processo rodando nos terminais</dd>
         <dt><span class="flap" data-state="start"><span>SUBINDO</span></span></dt><dd>O comando de start acabou de ser enviado</dd>
         <dt><span class="flap" data-state="wait"><span>AGUARDA</span></span></dt><dd>Esperando a anterior do projeto parar</dd>
-        <dt><span class="flap" data-state="stop"><span>PARANDO</span></span></dt><dd>Sendo encerrada para a troca</dd>
+        <dt><span class="flap" data-state="stop"><span>PARANDO</span></span></dt><dd>Sendo encerrada para a troca: Ctrl+C e, depois do prazo, SIGKILL</dd>
         <dt><span class="flap" data-state="idle"><span>PARADA</span></span></dt><dd>Terminais abertos, nada rodando</dd>
-        <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Em branco: ainda não aberta nesta sessão</dd>
+        <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Encaixe vazio: ainda não aberta nesta sessão</dd>
       </dl>
     </div>
 
@@ -114,6 +115,8 @@
           </details>
           <p class="side-error" role="alert"></p>
         </fieldset>
+        <label class="check"><input type="checkbox" name="open" checked /> Abrir ao criar</label>
+        <p class="hint open-hint" hidden></p>
         <p class="error" role="alert"></p>
         <menu>
           <button value="ok" class="primary">Criar worktree</button>
@@ -191,6 +194,7 @@
         <input role="combobox" aria-expanded="true" aria-controls="palette-list" aria-autocomplete="list" aria-label="Trocar de worktree" placeholder="Trocar de worktree…" spellcheck="false" />
       </div>
       <ul id="palette-list" role="listbox" aria-label="Worktrees"></ul>
+      <p class="note" aria-live="polite" hidden></p>
     </div>
   </body>
 </html>

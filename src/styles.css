@@ -42,7 +42,7 @@
     --rule: #cfd1cc;
     --ink: #15161a;
     --ink-2: #4f5156;
-    --ink-3: #8b8d90;
+    --ink-3: #7c7e82;
     --run: #0d6a3f;
     --start: #855000;
     --wait: #855000;
@@ -64,6 +64,16 @@
 
 [hidden] {
   display: none !important;
+}
+
+/* só para leitor de tela */
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 ::selection {
@@ -128,7 +138,7 @@ kbd {
   margin-right: 3px;
   border: 1px solid var(--rule);
   border-bottom-width: 2px;
-  border-radius: 3px;
+  border-radius: 2px;
   background: var(--flap);
   font: 600 12px/1.4 var(--ui);
   text-align: center;
@@ -185,8 +195,14 @@ kbd {
   color: var(--stop);
 }
 
+/* Nunca aberta: encaixe vazio, só o contorno. A palheta cheia fica para quem tem estado. */
 .flap[data-state="none"] {
-  color: var(--ink-3);
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+
+.flap[data-state="none"]::after {
+  display: none;
 }
 
 /* A palheta vira em passos discretos, só quando o estado muda. */
@@ -275,12 +291,6 @@ kbd {
   vertical-align: middle;
 }
 
-.platform-head .count {
-  color: var(--ink-2);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-}
-
 .icon-btn {
   display: inline-grid;
   place-items: center;
@@ -355,7 +365,12 @@ kbd {
 
 .line[aria-current="true"] {
   background: var(--flap);
-  box-shadow: inset 0 -1px 0 var(--rule), inset 0 1px 0 var(--rule);
+  box-shadow: inset 0 -1px 0 var(--ink-3), inset 0 1px 0 var(--ink-3);
+}
+
+/* a linha ocupa a largura toda e o painel corta o overflow: o anel fica por dentro */
+.line:focus-visible {
+  outline-offset: -2px;
 }
 
 .line .flap {
@@ -374,10 +389,25 @@ kbd {
 }
 
 .line .branch {
+  display: flex;
   min-width: 0;
   white-space: nowrap;
+}
+
+/* ponytail: truncagem em duas etapas (prefixo, depois o fim do nome); o title tem o nome inteiro */
+.line .branch > span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.line .branch .prefix {
+  flex-shrink: 999;
+  min-width: 1.2ch;
+}
+
+.line .branch .prefix:empty {
+  display: none;
 }
 
 /* Só a worktree em serviço em tinta cheia. */
@@ -525,9 +555,6 @@ header {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
-}
-
-#tabs button {
   position: relative;
 }
 
@@ -643,8 +670,12 @@ body:not(.sidebar-off) #running {
 }
 
 .wait-card strong {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 600;
+}
+
+.wait-card:focus {
+  outline: none;
 }
 
 .wait-card p {
@@ -764,7 +795,7 @@ dialog.form menu button:disabled {
   height: 44px;
   border: 0;
   background: none;
-  font-size: 16px;
+  font-size: 17px;
   outline: none;
 }
 
@@ -806,7 +837,21 @@ dialog.form menu button:disabled {
 
 #palette li[aria-selected="true"] {
   background: var(--flap);
-  box-shadow: inset 0 -1px 0 var(--rule), inset 0 1px 0 var(--rule);
+  box-shadow: inset 0 -1px 0 var(--ink-3), inset 0 1px 0 var(--ink-3);
+}
+
+#palette .note {
+  margin: 0;
+  padding: 8px 14px;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+#palette .note strong,
+dialog.form .open-hint strong {
+  color: var(--ink);
+  font-weight: 600;
 }
 
 #palette li.none {
@@ -868,7 +913,7 @@ dialog.form select {
   height: 34px;
   margin-top: 4px;
   padding: 0 10px;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--ink-3);
   border-radius: 4px;
   background: var(--board);
   color: var(--ink);
@@ -897,6 +942,12 @@ dialog.form input[type="checkbox"] {
   accent-color: var(--ink);
 }
 
+dialog.form label.check {
+  margin-bottom: 6px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
 dialog.form .hint,
 dialog.form .preview {
   margin: 0 0 12px;
@@ -920,7 +971,8 @@ dialog.form fieldset {
   border-radius: 4px;
 }
 
-dialog.form fieldset:disabled > :not(legend) {
+/* o aviso "Já criada em…" fica legível no lado travado */
+dialog.form fieldset:disabled > :not(legend, .side-error) {
   opacity: 0.45;
 }
 
@@ -997,6 +1049,13 @@ dialog.form .error:empty {
 
 dialog.form .side-error.ok {
   color: var(--run);
+}
+
+dialog.form .side-error .raw {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-2);
+  font: 12px/1.45 var(--mono);
 }
 
 /* O botão principal vem primeiro no DOM (Enter envia por ele); visualmente fica à direita. */
