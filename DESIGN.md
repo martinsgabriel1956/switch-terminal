@@ -268,6 +268,7 @@ O estado de cada worktree em 7 caracteres.
 - **Ordem:** a do git, fixa. A linha não muda de lugar ao entrar em serviço; só a palheta vira.
 - **Estados:** repouso transparente com texto `ink-2`; hover `flap`; atual `flap` com fios internos `ink-3` em cima e embaixo; foco com o anel recolhido para dentro (`outline-offset: -2px`).
 - **Teclado:** o painel é uma parada de Tab só (roving tabindex); setas, Home/End navegam.
+- **Recolher:** a placa do projeto é um botão (`aria-expanded`) com chevron de 12px; recolhido, o projeto mostra só a worktree ativa (o estado de pé nunca some) e `+N` em `ink-2` com as ocultas. Lembrado entre sessões.
 
 ### Abas (API | FRONT)
 - **Forma:** 26px de altura, raio 2px, rótulo em caixa-alta 12px/700.
@@ -300,7 +301,7 @@ O estado de cada worktree em 7 caracteres.
 
 ### Navigation
 - **Paleta de troca** (`Ctrl+Shift+K`): busca de 44px com ícone de lupa, lista com nome do projeto em rótulo caixa-alta; item selecionado igual à linha atual (`flap` + fios internos `ink-3`); ordem por qualidade do casamento (trecho no começo de palavra > trecho > subsequência), depois recência; a atual leva a etiqueta ATUAL; rodapé com uma mini palheta PARANDO e o que o Enter encerra ("Encerra feat/x em PROJETO"), e as teclas Enter/Esc.
-- **Faixa de destino:** projeto em rótulo caixa-alta `ink-2`, separador `ink-3`, branch em 17px/600; à direita, o endereço de cada lado de pé (`API localhost:3333`), lido da saída do terminal, em mono 12px. O nome de projeto é caixa-alta em todo lugar.
+- **Faixa de destino:** projeto em rótulo caixa-alta `ink-2`, separador `ink-3`, branch em 17px/600; à direita, o endereço do dev server da aba aberta (`localhost:3333`), lido da saída do terminal, em mono 12px `ink-2`; troca junto com a aba. O nome de projeto é caixa-alta em todo lugar.
 
 ## Do's and Don'ts
 

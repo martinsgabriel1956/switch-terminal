@@ -386,20 +386,18 @@ function render(focus = false) {
   if (!wt[tab]) tab = wt.api ? "api" : "front";
   const env = envs.get(ck!);
   const state = lineState(project, wt);
-  // Endereço de cada lado que está de pé.
-  const urls = TABS.flatMap((t) => {
-    const p = env?.panes[t];
-    return p?.url && busy.has(p.ptyId) ? [[t, p.url] as const] : [];
-  });
+  // Endereço do dev server da aba aberta, enquanto ele está de pé.
+  const shownPane = env?.panes[tab];
+  const url = shownPane?.url && busy.has(shownPane.ptyId) ? shownPane.url : null;
   // Região viva: só reescreve quando muda, senão o leitor de tela repete o destino a cada render.
-  const sig = `${ck}\u0000${state}\u0000${say(project, wt, state)}\u0000${urls.join()}`;
+  const sig = `${ck}\u0000${state}\u0000${say(project, wt, state)}\u0000${url}`;
   if (destEl.dataset.sig !== sig) {
     destEl.dataset.sig = sig;
     destEl.replaceChildren(
       flap(state, `head:${ck}`),
       el("span", { className: "where" }, el("span", { className: "project", textContent: project }), el("span", { className: "sep", textContent: "/" }), ...labelNodes(wt.label)),
       el("span", { className: "sr", textContent: `: ${say(project, wt, state)}` }),
-      ...urls.map(([t, url]) => el("span", { className: "url", title: `http://${url}` }, el("span", { className: "side", textContent: TAB_LABEL[t] }), url)),
+      ...(url ? [el("span", { className: "url", title: `http://${url}`, textContent: url })] : []),
     );
   }
   const down = state === "part" ? sides(ck!).down : [];
@@ -567,6 +565,10 @@ function lineButton(project: string, wt: Worktree) {
   return b;
 }
 
+// Projetos recolhidos no painel; lembrados entre sessões.
+const collapsed = new Set<string>(load<string[]>("collapsed", []));
+const CHEVRON = "M6 4l4 4-4 4";
+
 // Detalhes de erro abertos: o painel é recriado a cada render e eles não podem fechar sob a leitura.
 const openProblems = new Set<string>();
 
@@ -600,18 +602,41 @@ function renderBoard() {
             el("p", { textContent: "Ajuste o caminho no config.json e volte para a janela." }),
           )
         : null;
+      // Recolhido, o projeto ainda mostra a worktree ativa: o que está de pé não some da tela.
+      const open = !collapsed.has(p.name);
+      const shownWts = open ? p.worktrees : p.worktrees.filter((wt) => wt.id === active[p.name] || key(p.name, wt.id) === currentKey());
+      const hidden = p.worktrees.length - shownWts.length;
+      const fold = el(
+        "button",
+        {
+          type: "button",
+          className: "fold",
+          title: open ? `Recolher ${p.name}` : `Expandir ${p.name}`,
+          onclick: () => {
+            open ? collapsed.add(p.name) : collapsed.delete(p.name);
+            save("collapsed", [...collapsed]);
+            render();
+          },
+        },
+        el("span", { className: "tile", textContent: p.name }),
+        icon(CHEVRON, "chev"),
+        hidden ? el("span", { className: "count", textContent: `+${hidden}` }) : null,
+        hidden ? el("span", { className: "sr", textContent: `, ${hidden} ocultas` }) : null,
+      );
+      fold.setAttribute("aria-expanded", String(open));
+      fold.dataset.key = `fold:${p.name}`;
       // Ordem do git, fixa: como num painel de partidas, só a palheta vira; a linha não sai do lugar sob o cursor.
       return el(
         "section",
-        { className: "platform", ariaLabel: p.name },
-        el("div", { className: "platform-head" }, el("h3", {}, el("span", { className: "tile" }, el("span", { textContent: p.name }))), add),
+        { className: `platform${open ? "" : " folded"}`, ariaLabel: p.name },
+        el("div", { className: "platform-head" }, el("h3", {}, fold), add),
         problem,
-        el("ul", { className: "lines" }, ...p.worktrees.map((wt) => el("li", {}, lineButton(p.name, wt)))),
+        el("ul", { className: "lines" }, ...shownWts.map((wt) => el("li", {}, lineButton(p.name, wt)))),
       );
     }),
   );
-  const focused = focusedKey ? board.querySelector<HTMLElement>(`.line[data-key="${CSS.escape(focusedKey)}"]`) : null;
-  const stop = focused ?? board.querySelector<HTMLElement>('.line[aria-current="true"]') ?? board.querySelector<HTMLElement>(".line");
+  const focused = focusedKey ? board.querySelector<HTMLElement>(`[data-key="${CSS.escape(focusedKey)}"]`) : null;
+  const stop = (focused?.classList.contains("line") ? focused : null) ?? board.querySelector<HTMLElement>('.line[aria-current="true"]') ?? board.querySelector<HTMLElement>(".line");
   if (stop) stop.tabIndex = 0;
   focused?.focus();
   fitBranches();
