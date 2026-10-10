@@ -72,8 +72,11 @@
         <dt><span class="flap" data-state="kill"><span>SIGKILL</span></span></dt><dd>Não parou a tempo (ou você forçou): encerrada à força</dd>
         <dt><span class="flap" data-state="stop"><span>ENCERRA</span></span></dt><dd>Prévia: trocar para a linha sob o cursor (ou a escolhida na paleta) encerra esta</dd>
         <dt><span class="flap" data-state="idle"><span>INATIVA</span></span></dt><dd>Terminais abertos, nada rodando</dd>
-        <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Palheta vazia: ainda não aberta nesta sessão</dd>
+        <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Encaixe vazio: ainda não aberta nesta sessão</dd>
       </dl>
+      <h2>Leitor de tela</h2>
+      <label class="check"><input type="checkbox" id="sr-toggle" /> Saída dos terminais acessível ao leitor de tela</label>
+      <p class="fine" id="sr-note">Custa desempenho nos terminais. Fica gravado no config.</p>
     </div>
 
     <dialog id="add-dialog" class="form" aria-labelledby="add-title">

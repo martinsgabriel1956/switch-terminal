@@ -12,7 +12,7 @@
   --rule: #2e3036;
   --ink: #ecebe6;
   --ink-2: #a5a59f;
-  --ink-3: #747572;
+  --ink-3: #777875;
   --run: #4cc38a;
   --start: #f2b33d;
   --wait: #f2b33d;
@@ -40,8 +40,8 @@
     color-scheme: light;
     --board: #f4f5f3;
     --rail: #ebece9;
-    --flap: #dcddd9;
-    --flap-hi: #e4e5e1;
+    --flap: #d6d7d3;
+    --flap-hi: #e1e2de;
     --seam: #b9bbb6;
     --rule: #cfd1cc;
     --ink: #15161a;
@@ -212,6 +212,17 @@ kbd {
   position: relative;
   z-index: 1;
   grid-area: 1 / 1;
+}
+
+/* Nunca aberta: só o encaixe, um fio sem palheta. O bloco cheio fica para os estados que dizem alguma coisa,
+   e a coluna de situação continua alinhada. */
+.flap[data-state="none"] {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+
+.flap[data-state="none"]::after {
+  content: none;
 }
 
 .flap[data-state="run"] {
@@ -734,7 +745,8 @@ header {
   background: var(--board);
 }
 
-/* o destino só cede largura depois que o recado ao lado já cedeu tudo; até 40% da faixa (ao menos 220px) */
+/* O destino é a verdade do que está em serviço: ocupa o que sobrar e só cede largura depois que o recado
+   e os outros projetos já cederam tudo. Um teto (40% da faixa) cortava a branch com a faixa meio vazia. */
 #destination {
   display: grid;
   /* O piso do destino é a palheta inteira (coluna auto): ela nunca passa por cima das abas, como fazia com zoom de 200%.
@@ -743,7 +755,6 @@ header {
   grid-template-columns: minmax(0, max-content) auto;
   align-items: center;
   gap: 10px;
-  max-width: max(40%, 220px);
   flex-shrink: 1;
 }
 
@@ -853,8 +864,8 @@ header {
   vertical-align: 1px;
 }
 
-/* "Parou em 1,8 s · feat/x": o fechamento da troca, logo depois das abas; some sozinho.
-   É o primeiro a ceder largura, e dentro dele o nome cede antes do tempo. */
+/* "Parou em 1,8 s · feat/x": o fechamento da troca, logo depois das abas; some sozinho (falha fica até a próxima troca).
+   É o primeiro a ceder largura, até o verbo e o tempo; dentro dele só o nome trunca. */
 #last-stop {
   display: flex;
   gap: 0.3em;
@@ -875,6 +886,16 @@ header {
 
 #last-stop > .who {
   flex-shrink: 1000;
+}
+
+/* Vazio, continua na faixa (região viva precisa existir antes de falar), mas devolve o vão: são 12px a mais para a branch. */
+#last-stop:empty {
+  margin-left: -12px;
+}
+
+/* o verbo e o tempo ("Encerrada à força em 5,0 s") nunca cortam; o piso do recado é medido em headerNote */
+#last-stop > span:first-child {
+  flex-shrink: 0;
 }
 
 /* um fio separa o que roda nos outros projetos do endereço desta aba.
@@ -940,6 +961,7 @@ header {
 
 /* nome de projeto: sempre em caixa-alta espaçada, como nas placas */
 #running .project,
+#last-stop .project,
 #palette .note .project {
   font-size: 12px;
   font-weight: 700;
@@ -1059,20 +1081,25 @@ body:not(.sidebar-off) #running {
   background: var(--rail);
 }
 
+/* palheta e contagem alinham pela primeira linha do título, que pode quebrar em duas */
 .wait-head {
   display: flex;
-  align-items: center;
+  align-items: first baseline;
   gap: 10px;
   width: 100%;
 }
 
+/* o nome inteiro em até duas linhas (branch não tem espaço: quebra em qualquer ponto); passou disso, trunca */
 .wait-card strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   font-size: 19px;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
 }
 
 .wait-card:focus {
@@ -1228,6 +1255,29 @@ dialog.form .pick[aria-disabled="true"] {
 #help dd {
   margin: 0;
   color: var(--ink-2);
+}
+
+#help label.check {
+  display: block;
+  cursor: pointer;
+}
+
+#help input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  margin: 0 6px 0 0;
+  vertical-align: -2px;
+  accent-color: var(--ink);
+}
+
+#help .fine {
+  margin: 6px 0 0 21px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+#help .fine.error {
+  color: var(--fail);
 }
 
 /* ---------- paleta ---------- */
@@ -1501,6 +1551,13 @@ dialog.form select {
   background-position: calc(100% - 15px) 15px, calc(100% - 10px) 15px;
   background-size: 5px 5px;
   background-repeat: no-repeat;
+}
+
+/* nome de projeto em caixa-alta espaçada, como em todo o resto do app; o valor continua o nome real */
+dialog.form select[name="project"] {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 dialog.form input[type="checkbox"] {

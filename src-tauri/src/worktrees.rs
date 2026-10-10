@@ -403,12 +403,7 @@ fn add_project_to(path: &str, project: &NewProject) -> Result<(), FormError> {
     if name.is_empty() {
         return Err(general("Dê um nome ao projeto."));
     }
-    let mut cfg: serde_json::Value = match std::fs::read_to_string(path) {
-        // JSON quebrado: recusa em vez de sobrescrever o que o usuário escreveu.
-        Ok(raw) => serde_json::from_str(&raw).map_err(|e| general(format!("{path} tem JSON inválido; corrija o arquivo antes: {e}")))?,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => serde_json::json!({ "projects": [] }),
-        Err(e) => return Err(general(format!("Não consegui ler {path}: {e}"))),
-    };
+    let mut cfg = read_config_json(path).map_err(general)?;
     let entry = serde_json::json!({
         "name": name,
         "api": side_json("api", &project.api)?,
@@ -425,17 +420,39 @@ fn add_project_to(path: &str, project: &NewProject) -> Result<(), FormError> {
         return Err(general(format!("Já existe um projeto chamado \"{name}\".")));
     }
     projects.push(entry);
+    write_config_json(path, &cfg).map_err(general)
+}
 
-    // Escrita atômica: grava ao lado e renomeia, para nunca deixar o config pela metade.
-    let io = |e: std::io::Error| general(format!("Não consegui gravar o config: {e}"));
+/// O config como JSON solto, para mudar um campo sem mexer no resto (ordem e campos que o usuário editou à mão).
+fn read_config_json(path: &str) -> Result<serde_json::Value, String> {
+    match std::fs::read_to_string(path) {
+        // JSON quebrado: recusa em vez de sobrescrever o que o usuário escreveu.
+        Ok(raw) => serde_json::from_str(&raw).map_err(|e| format!("{path} tem JSON inválido; corrija o arquivo antes: {e}")),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(serde_json::json!({ "projects": [] })),
+        Err(e) => Err(format!("Não consegui ler {path}: {e}")),
+    }
+}
+
+/// Escrita atômica: grava ao lado e renomeia, para nunca deixar o config pela metade.
+fn write_config_json(path: &str, cfg: &serde_json::Value) -> Result<(), String> {
+    let io = |e: std::io::Error| format!("Não consegui gravar o config: {e}");
     let path = Path::new(path);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(io)?;
     }
     let tmp = path.with_extension("json.tmp");
-    let body = serde_json::to_string_pretty(&cfg).map_err(|e| general(e.to_string()))? + "\n";
+    let body = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())? + "\n";
     std::fs::write(&tmp, body).map_err(io)?;
     std::fs::rename(&tmp, path).map_err(io)
+}
+
+/// Interruptor da ajuda: grava "screenReader" no config (o app relê em seguida e aplica nos terminais abertos).
+#[tauri::command]
+pub fn set_screen_reader(on: bool) -> Result<(), String> {
+    let path = config_path();
+    let mut cfg = read_config_json(&path)?;
+    cfg.as_object_mut().ok_or(format!("{path}: a raiz precisa ser um objeto."))?.insert("screenReader".into(), on.into());
+    write_config_json(&path, &cfg)
 }
 
 #[tauri::command]

@@ -128,11 +128,23 @@ urlEl.addEventListener("click", (e) => {
 });
 
 let lastStopTimer = 0;
-/** Recado curto no cabeçalho ("Parou em 1,8 s · feat/x", "Worktrees relidas: nada mudou."), por alguns segundos. */
-function headerNote(...nodes: (Node | string)[]) {
+function clearNote() {
+  lastStopEl.replaceChildren();
+  lastStopEl.style.minWidth = "";
+  delete lastStopEl.dataset.stay;
+}
+/** Recado curto no cabeçalho ("Parou em 1,8 s · feat/x", "Worktrees relidas: nada mudou."), por alguns segundos.
+ *  `stay`: falha ("não subiu", "à força", "caiu") fica até a próxima troca, em vez de sumir antes de ser lida. */
+function headerNote(stay: boolean, ...nodes: (Node | string)[]) {
   lastStopEl.replaceChildren(...nodes.map((n) => (typeof n === "string" ? el("span", { textContent: n }) : n)));
+  // O piso do recado é o verbo e o tempo inteiros: sem espaço, o destino cede antes de virar "Encerr…".
+  lastStopEl.style.minWidth = `${(lastStopEl.firstElementChild as HTMLElement).scrollWidth}px`;
   clearTimeout(lastStopTimer);
-  lastStopTimer = setTimeout(() => lastStopEl.replaceChildren(), 8000);
+  if (stay) lastStopEl.dataset.stay = "";
+  else {
+    delete lastStopEl.dataset.stay;
+    lastStopTimer = setTimeout(clearNote, 8000);
+  }
 }
 
 let config: Config = { stopTimeoutMs: 5000, screenReader: false, projects: [] };
@@ -390,11 +402,12 @@ function activate(project: string, wt: Worktree, created: boolean) {
       clearInterval(tick);
       stopping.delete(project);
       for (const p of state.panes) busy.delete(p.ptyId);
+      wasUp.delete(key(project, prev));
       // O fim da troca também tem fechamento: quanto a anterior levou para sair, e se foi à força.
       if (hadProcs) {
         const secs = ((Date.now() - state.deadline + config.stopTimeoutMs) / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
         // O tempo primeiro: sem espaço, quem trunca é o nome, nunca o "parou em".
-        headerNote(state.forcing ? `Encerrada à força em ${secs} s` : `Parou em ${secs} s`, el("span", { className: "who" }, "· ", ...labelNodes(state.from)));
+        headerNote(!!state.forcing, state.forcing ? `Encerrada à força em ${secs} s` : `Parou em ${secs} s`, el("span", { className: "who" }, "· ", ...labelNodes(state.from)));
       }
     }
     const k = key(project, wt.id);
@@ -416,6 +429,8 @@ function activate(project: string, wt: Worktree, created: boolean) {
 
 async function select(project: string, wt: Worktree) {
   closeOverlay();
+  // A falha que ficou no cabeçalho já foi vista: a próxima troca a tira.
+  if (lastStopEl.dataset.stay !== undefined) clearNote();
   current = { project, wt };
   const k = key(project, wt.id);
   recent = [k, ...recent.filter((r) => r !== k)].slice(0, 30);
@@ -569,19 +584,21 @@ function renderWait(project: string, wt: Worktree) {
         ? ["Não parou com Ctrl+C a tempo; os processos estão sendo encerrados à força (SIGKILL)."]
         : ["Ctrl+C enviado a ", what, ". Esperando saírem e liberarem as portas para iniciar ", ...labelNodes(wt.label), "."];
   // Nenhum botão é o padrão: esperar é a ação certa, e forçar mata sem o Ctrl+C.
-  const force = el("button", {
-    type: "button",
-    className: "btn",
-    textContent: st.forcing ? "Forçando…" : "Forçar agora",
-    title: "Envia SIGKILL aos processos sem esperar o prazo",
-    disabled: !!st.forcing,
-    onclick: () => {
-      st.forcing = "user";
-      for (const p of st.panes) invoke("pty_force", { id: p.ptyId });
-      render();
-    },
-  });
-  force.dataset.act = "force";
+  // No SIGKILL não há botão: o backend espera no máximo 1 s depois dele e a troca segue sozinha.
+  const force = st.forcing
+    ? null
+    : el("button", {
+        type: "button",
+        className: "btn",
+        textContent: "Forçar agora",
+        title: "Envia SIGKILL aos processos sem esperar o prazo",
+        onclick: () => {
+          st.forcing = "user";
+          for (const p of st.panes) invoke("pty_force", { id: p.ptyId });
+          render();
+        },
+      });
+  if (force) force.dataset.act = "force";
   // Voltar reinicia a anterior (o Ctrl+C já foi); depois de voltar, ou já no SIGKILL, não há mais para onde voltar.
   // Sem atalho de Esc: no reflexo do vim, ele desfazia a troca recém-pedida.
   const back =
@@ -616,7 +633,7 @@ function renderWait(project: string, wt: Worktree) {
       ? null
       : el("p", { className: "fine", textContent: goingBack ? "Se não saírem até a contagem zerar, recebem SIGKILL e reiniciam em seguida." : "Se não saírem até a contagem zerar, recebem SIGKILL." }),
     // Voltar primeiro (Tab + Enter não pode virar SIGKILL); Forçar à direita, afastado.
-    el("div", { className: "actions" }, back, force),
+    back || force ? el("div", { className: "actions" }, back, force) : null,
   );
   waitEl.replaceChildren(card);
   waitSay.textContent = `${card.querySelector("strong")!.textContent}. ${[...card.querySelectorAll("p")].map((p) => p.textContent).join(" ")}`;
@@ -958,6 +975,28 @@ async function refresh() {
   render();
 }
 
+// Lados que estavam de pé em cada worktree na última consulta: um que some sem troca é queda.
+const wasUp = new Map<string, Tab[]>();
+
+/** Queda fora da worktree atual (outro projeto, ou uma que ficou rodando) vira recado no cabeçalho, que é região viva:
+ *  só a palheta mudar não chega ao leitor de tela, e com o painel fechado nem aos olhos. A atual já é falada pelo destino. */
+function announceDrops() {
+  for (const [k, env] of envs) {
+    const [project, id] = k.split("\u0000");
+    // Parando por uma troca, ou subindo: lado que some ou ainda não veio não é queda.
+    if (stopping.get(project)?.fromId === id || starting.has(k)) {
+      wasUp.delete(k);
+      continue;
+    }
+    const { up } = sides(k);
+    const lost = (wasUp.get(k) ?? []).filter((t) => !up.includes(t));
+    wasUp.set(k, up);
+    const wt = findWt(project, id);
+    if (!lost.length || k === currentKey() || !wt) continue;
+    headerNote(true, `${lost.map((t) => TAB_LABEL[t]).join(" e ")} ${lost.length > 1 ? "pararam" : "parou"}`, el("span", { className: "who" }, "· ", el("span", { className: "project", textContent: env.project }), " / ", ...labelNodes(wt.label)));
+  }
+}
+
 /** Consulta quais terminais têm processo rodando; só redesenha quando algo muda. */
 async function pollStatus() {
   const ids = [...envs.values()].flatMap((e) => Object.values(e.panes).map((p) => p.ptyId));
@@ -966,6 +1005,7 @@ async function pollStatus() {
   const next = new Map(ids.flatMap((id, i) => (res[i] === null ? [] : [[id, res[i]] as const])));
   let changed = next.size !== busy.size || [...next].some(([id, name]) => busy.get(id) !== name);
   busy = next;
+  announceDrops();
   // Processo saiu: o endereço dele não vale mais, e o próximo start lê o novo.
   for (const e of envs.values()) for (const p of Object.values(e.panes)) if (!busy.has(p.ptyId)) p.url = null;
   for (const [k, t] of starting) {
@@ -976,7 +1016,7 @@ async function pollStatus() {
       changed = true;
       const [project, id] = k.split("\u0000");
       const wt = down.length && findWt(project, id);
-      if (wt) headerNote(`${down.map((t) => TAB_LABEL[t]).join(" e ")} não subiu em 15 s`, el("span", { className: "who" }, "· ", ...labelNodes(wt.label)));
+      if (wt) headerNote(true, `${down.map((t) => TAB_LABEL[t]).join(" e ")} ${down.length > 1 ? "não subiram" : "não subiu"} em 15 s`, el("span", { className: "who" }, "· ", ...labelNodes(wt.label)));
     }
   }
   if (changed) render();
@@ -1557,16 +1597,16 @@ async function reload() {
     reloadBtn.removeAttribute("aria-disabled");
     reloadBtn.removeAttribute("aria-busy");
   }
-  if (configError) return headerNote("Não consegui reler: o config tem um problema.");
+  if (configError) return headerNote(false, "Não consegui reler: o config tem um problema.");
   const after = worktreeNames();
   const added = [...after].filter(([k]) => !before.has(k)).map(([, name]) => name);
   const removed = [...before].filter(([k]) => !after.has(k)).map(([, name]) => name);
-  if (!added.length && !removed.length) return headerNote("Worktrees relidas: nada mudou.");
+  if (!added.length && !removed.length) return headerNote(false, "Worktrees relidas: nada mudou.");
   const parts = [
     added.length === 1 ? `nova: ${added[0]}` : added.length ? `${added.length} novas` : "",
     removed.length === 1 ? `saiu: ${removed[0]}` : removed.length ? `${removed.length} saíram` : "",
   ].filter(Boolean);
-  headerNote(`Worktrees relidas: ${parts.join(" · ")}.`);
+  headerNote(false, `Worktrees relidas: ${parts.join(" · ")}.`);
 }
 
 reloadBtn.addEventListener("click", () => reload());
@@ -1700,7 +1740,7 @@ window.addEventListener(
     else if (e.code === "KeyH") helpEl.togglePopover();
     else if (e.code === "KeyN" || e.code === "KeyL") {
       if (!config.projects.length) {
-        headerNote("Sem projeto ainda: crie um primeiro.");
+        headerNote(false, "Sem projeto ainda: crie um primeiro.");
         emptyEl.querySelector<HTMLButtonElement>(".btn.primary")?.focus();
       } else if (e.code === "KeyN") openAddDialog(current?.project);
       else reload();
@@ -1715,7 +1755,28 @@ window.addEventListener(
 
 const helpEl = $("#help");
 // Aberta, a ajuda recebe o foco: o leitor de tela a anuncia e o Esc chega nela (no xterm, o Esc iria para o shell).
-helpEl.addEventListener("toggle", (e) => ((e as ToggleEvent).newState === "open" ? helpEl.focus() : render(true)));
+helpEl.addEventListener("toggle", (e) => {
+  if ((e as ToggleEvent).newState !== "open") return render(true);
+  srToggle.checked = config.screenReader;
+  helpEl.focus();
+});
+
+// Modo leitor de tela do xterm: grava no config e relê, que aplica nos terminais abertos.
+const srToggle = $<HTMLInputElement>("#sr-toggle");
+const srNote = $("#sr-note");
+const SR_NOTE = srNote.textContent;
+srToggle.addEventListener("change", async () => {
+  try {
+    await invoke("set_screen_reader", { on: srToggle.checked });
+    srNote.textContent = SR_NOTE;
+    srNote.classList.remove("error");
+    await refresh();
+  } catch (e) {
+    srToggle.checked = config.screenReader;
+    srNote.textContent = String(e);
+    srNote.classList.add("error");
+  }
+});
 
 window.addEventListener("focus", () => refresh());
 
