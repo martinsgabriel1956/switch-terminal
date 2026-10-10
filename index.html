@@ -173,8 +173,19 @@
               </label>
             </details>
             <label>
-              Comando de start
-              <input name="api-cmd" spellcheck="false" autocomplete="off" />
+              <span id="edit-api-cmd-label">Comando de start</span>
+              <span class="dir-row">
+                <span class="cmd-box">
+                  <span class="prefix" id="edit-api-cmd-prefix">npm run</span>
+                  <input name="api-cmd" aria-labelledby="edit-api-cmd-label edit-api-cmd-prefix" spellcheck="false" autocomplete="off" />
+                </span>
+                <select name="api-pm" aria-label="Package manager">
+                  <option value="npm">npm</option>
+                  <option value="yarn">yarn</option>
+                  <option value="pnpm">pnpm</option>
+                  <option value="">Outro</option>
+                </select>
+              </span>
             </label>
           </div>
           <label class="pair-row">
@@ -219,8 +230,19 @@
               </label>
             </details>
             <label>
-              Comando de start
-              <input name="front-cmd" spellcheck="false" autocomplete="off" />
+              <span id="edit-front-cmd-label">Comando de start</span>
+              <span class="dir-row">
+                <span class="cmd-box">
+                  <span class="prefix" id="edit-front-cmd-prefix">npm run</span>
+                  <input name="front-cmd" aria-labelledby="edit-front-cmd-label edit-front-cmd-prefix" spellcheck="false" autocomplete="off" />
+                </span>
+                <select name="front-pm" aria-label="Package manager">
+                  <option value="npm">npm</option>
+                  <option value="yarn">yarn</option>
+                  <option value="pnpm">pnpm</option>
+                  <option value="">Outro</option>
+                </select>
+              </span>
             </label>
           </div>
           <label class="pair-row">
@@ -282,8 +304,19 @@
           <p class="side-error" id="project-api-error" role="alert"></p>
           <div class="found" role="status" hidden></div>
           <label>
-            Comando de start
-            <input name="api-start" value="npm run dev" spellcheck="false" autocomplete="off" />
+            <span id="api-start-label">Comando de start</span>
+            <span class="dir-row">
+              <span class="cmd-box">
+                <span class="prefix" id="api-start-prefix">npm run</span>
+                <input name="api-start" aria-labelledby="api-start-label api-start-prefix" value="dev" placeholder="Sem comando: abre só o shell" spellcheck="false" autocomplete="off" />
+              </span>
+              <select name="api-pm" aria-label="Package manager">
+                <option value="npm">npm</option>
+                <option value="yarn">yarn</option>
+                <option value="pnpm">pnpm</option>
+                <option value="">Outro</option>
+              </select>
+            </span>
           </label>
           <details class="more">
             <summary>Comando de setup (opcional)</summary>
@@ -314,8 +347,19 @@
           <p class="side-error" id="project-front-error" role="alert"></p>
           <div class="found" role="status" hidden></div>
           <label>
-            Comando de start
-            <input name="front-start" value="npm run dev" spellcheck="false" autocomplete="off" />
+            <span id="front-start-label">Comando de start</span>
+            <span class="dir-row">
+              <span class="cmd-box">
+                <span class="prefix" id="front-start-prefix">npm run</span>
+                <input name="front-start" aria-labelledby="front-start-label front-start-prefix" value="dev" placeholder="Sem comando: abre só o shell" spellcheck="false" autocomplete="off" />
+              </span>
+              <select name="front-pm" aria-label="Package manager">
+                <option value="npm">npm</option>
+                <option value="yarn">yarn</option>
+                <option value="pnpm">pnpm</option>
+                <option value="">Outro</option>
+              </select>
+            </span>
           </label>
           <details class="more">
             <summary>Comando de setup (opcional)</summary>

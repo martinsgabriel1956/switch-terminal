@@ -716,17 +716,30 @@ fn write_config_json(path: &str, cfg: &serde_json::Value) -> Result<(), String> 
     std::fs::rename(&tmp, path).map_err(io)
 }
 
-/// Lado Node sem dependências instaladas (tem package.json, falta node_modules): o comando de instalação, escolhido
-/// pelo lockfile (sem lockfile, npm), para rodar antes do startCommand. Worktree criada fora do app nasce assim,
-/// e o `npm run dev` falharia por falta do binário do dev server.
+/// O package manager que o lockfile da pasta indica; sem lockfile, nenhum.
+fn lock_pm(dir: &Path) -> Option<&'static str> {
+    let by_lock = [("pnpm-lock.yaml", "pnpm"), ("yarn.lock", "yarn"), ("bun.lock", "bun"), ("bun.lockb", "bun"), ("package-lock.json", "npm")];
+    by_lock.iter().find(|(lock, _)| dir.join(lock).is_file()).map(|(_, pm)| *pm)
+}
+
+/// Lado Node sem dependências instaladas (tem package.json, falta node_modules): o comando de instalação, para rodar
+/// antes do startCommand. Segue o package manager do start ("pnpm dev" → pnpm install); start de outro tipo usa o
+/// lockfile (sem lockfile, npm). Worktree criada fora do app nasce assim, e o `npm run dev` falharia por falta do
+/// binário do dev server.
 #[tauri::command]
-pub fn missing_deps_install(path: String) -> Option<&'static str> {
+pub fn missing_deps_install(path: String, start: String) -> Option<String> {
     let dir = Path::new(&path);
     if !dir.join("package.json").is_file() || dir.join("node_modules").exists() {
         return None;
     }
-    let by_lock = [("pnpm-lock.yaml", "pnpm install"), ("yarn.lock", "yarn install"), ("bun.lock", "bun install"), ("bun.lockb", "bun install")];
-    Some(by_lock.iter().find(|(lock, _)| dir.join(lock).is_file()).map_or("npm install", |(_, cmd)| *cmd))
+    let by_start = ["npm", "yarn", "pnpm"].into_iter().find(|pm| start.split_whitespace().next() == Some(pm));
+    Some(format!("{} install", by_start.or_else(|| lock_pm(dir)).unwrap_or("npm")))
+}
+
+/// "Novo projeto": o package manager do lockfile da primeira worktree que tiver um, para o seletor do start.
+#[tauri::command]
+pub fn lockfile_pm(paths: Vec<String>) -> Option<&'static str> {
+    paths.iter().find_map(|p| lock_pm(Path::new(p)))
 }
 
 /// Interruptor da ajuda: grava "screenReader" no config (o app relê em seguida e aplica nos terminais abertos).
@@ -835,13 +848,17 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.to_string_lossy().to_string();
 
-        assert_eq!(missing_deps_install(path.clone()), None, "sem package.json não é Node");
+        let install = |start: &str| missing_deps_install(path.clone(), start.into());
+        assert_eq!(install("npm run dev"), None, "sem package.json não é Node");
         std::fs::write(dir.join("package.json"), "{}").unwrap();
-        assert_eq!(missing_deps_install(path.clone()), Some("npm install"));
+        assert_eq!(install("make dev").as_deref(), Some("npm install"));
+        assert_eq!(lockfile_pm(vec![path.clone()]), None);
         std::fs::write(dir.join("pnpm-lock.yaml"), "").unwrap();
-        assert_eq!(missing_deps_install(path.clone()), Some("pnpm install"));
+        assert_eq!(install("make dev").as_deref(), Some("pnpm install"), "start sem package manager: vale o lockfile");
+        assert_eq!(install("yarn dev").as_deref(), Some("yarn install"), "o start escolhido vence o lockfile");
+        assert_eq!(lockfile_pm(vec!["/nao/existe".into(), path.clone()]), Some("pnpm"));
         std::fs::create_dir(dir.join("node_modules")).unwrap();
-        assert_eq!(missing_deps_install(path), None);
+        assert_eq!(install("pnpm dev"), None);
 
         std::fs::remove_dir_all(&dir).unwrap();
     }

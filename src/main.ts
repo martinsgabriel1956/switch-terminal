@@ -7,6 +7,7 @@ import "@fontsource/barlow-semi-condensed/latin-500.css";
 import "@fontsource/barlow-semi-condensed/latin-600.css";
 import "@fontsource/barlow-semi-condensed/latin-700.css";
 import "./styles.css";
+import { asPm, isPm, joinStart, PREFIX, rewrite, splitStart, switchPm, type Pm } from "./pm";
 
 /** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto. */
 type Side = { path: string; startCommand: string | null; setupCommand: string | null; projectStart: string | null };
@@ -366,7 +367,7 @@ async function writeStart(k: string, pane: Pane, isFresh: boolean) {
   starting.set(k, Date.now());
   // Sem node_modules o start falharia: instala antes, na mesma linha, à vista no terminal.
   // O setupCommand de uma worktree recém-criada já cuida disso; checar antes (e não a cada erro) não reinstala num crash.
-  const install = setup || !pane.side.startCommand ? null : await invoke<string | null>("missing_deps_install", { path: pane.side.path });
+  const install = setup || !pane.side.startCommand ? null : await invoke<string | null>("missing_deps_install", { path: pane.side.path, start: pane.side.startCommand });
   const cmd = [setup, install, pane.side.startCommand].filter(Boolean).join(" && ");
   invoke("pty_write", { id: pane.ptyId, data: cmd + "\r" });
 }
@@ -1467,9 +1468,13 @@ function openEditDialog(project: string, wt: Worktree) {
     ePart<HTMLElement>(t, ".main-hint").hidden = true;
     ePart<HTMLDetailsElement>(t, ".move-dir").open = false;
     if (side) {
+      // Campo vazio herda o start do projeto: o seletor e o prefixo mostram o dele, o placeholder o script.
+      const project = splitStart(side.projectStart ?? "");
+      const own = splitStart(side.startCommand !== side.projectStart ? (side.startCommand ?? "") : "");
       const cmd = editField<HTMLInputElement>(`${t}-cmd`);
-      cmd.placeholder = side.projectStart ? `${side.projectStart} (padrão do projeto)` : "Sem comando: abre só o shell";
-      cmd.value = side.startCommand !== side.projectStart ? (side.startCommand ?? "") : "";
+      cmd.placeholder = side.projectStart ? `${project.script} (padrão do projeto)` : "Sem comando: abre só o shell";
+      cmd.value = own.script;
+      setPm(ePm(t), own.script ? own.pm : project.pm);
       // Até o git responder, a pasta fica onde está.
       editField<HTMLInputElement>(`${t}-move`).checked = false;
       editField<HTMLInputElement>(`${t}-move`).disabled = true;
@@ -1578,6 +1583,40 @@ function syncEdit() {
   }
 }
 
+/** Seletor e prefixo fixo do comando de start (o prefixo fica fora do input: não dá para apagá-lo).
+ *  `data-pm` guarda o package manager atual, para a próxima troca saber de onde vem. */
+function setPm(select: HTMLSelectElement, pm: Pm | null) {
+  select.value = pm ?? "";
+  select.dataset.pm = pm ?? "";
+  const prefix = select.parentElement!.querySelector<HTMLElement>(".prefix")!;
+  prefix.hidden = !pm;
+  prefix.textContent = pm ? PREFIX[pm] : "";
+}
+
+const ePm = (t: Tab) => editField<HTMLSelectElement>(`${t}-pm`);
+
+for (const t of TABS) {
+  const cmd = editField<HTMLInputElement>(`${t}-cmd`);
+  // Campo esvaziado herda o start do projeto: ao sair dele, o seletor volta a mostrar o do projeto, que é o que roda.
+  cmd.addEventListener("change", () => {
+    const side = editing?.wt[t];
+    if (side && !cmd.value.trim()) setPm(ePm(t), splitStart(side.projectStart ?? "").pm);
+  });
+  // Escolher com o campo vazio parte do start do projeto: "npm run dev:api" → pnpm + "dev:api", só desta branch.
+  ePm(t).addEventListener("change", () => {
+    const side = editing?.wt[t];
+    if (!side) return;
+    if (!cmd.value.trim()) {
+      const project = splitStart(side.projectStart ?? "");
+      cmd.value = project.script;
+      ePm(t).dataset.pm = project.pm ?? "";
+    }
+    const to = asPm(ePm(t).value);
+    cmd.value = switchPm(asPm(ePm(t).dataset.pm), to, cmd.value);
+    setPm(ePm(t), to);
+  });
+}
+
 editForm.addEventListener("input", syncEdit);
 editForm.addEventListener("change", (e) => {
   const sel = e.target as HTMLSelectElement;
@@ -1625,7 +1664,7 @@ editForm.addEventListener("submit", async (e) => {
       branch: ed.branches[t],
       newBranch: newBranch(t),
       moveTo: move.checked && !move.disabled ? editField<HTMLInputElement>(`${t}-dir`).value : null,
-      command: editField<HTMLInputElement>(`${t}-cmd`).value,
+      command: joinStart(asPm(ePm(t).value), editField<HTMLInputElement>(`${t}-cmd`).value),
     };
   };
   const pairT = TABS.find((t) => !ed.wt[t]) ?? "front";
@@ -1716,6 +1755,13 @@ const pfield = (name: string) => projectForm.elements.namedItem(name) as HTMLInp
 const pSideMsg = (t: Tab) => projectForm.querySelector<HTMLElement>(`fieldset[data-side="${t}"] .side-error`)!;
 
 const pFound = (t: Tab) => projectForm.querySelector<HTMLElement>(`fieldset[data-side="${t}"] .found`)!;
+const pPm = (t: Tab) => projectForm.elements.namedItem(`${t}-pm`) as HTMLSelectElement;
+
+/** Package manager do lado: prefixo do start e o exemplo do setup. */
+function setProjectPm(t: Tab, pm: Pm | null) {
+  setPm(pPm(t), pm);
+  pfield(`${t}-setup`).placeholder = `ex.: ${pm ?? "npm"} install`;
+}
 
 function openProjectDialog() {
   projectForm.reset();
@@ -1725,6 +1771,7 @@ function openProjectDialog() {
     readReq[t]++; // leitura de uma abertura anterior não pinta este formulário
     pSideMsg(t).textContent = "";
     pFound(t).hidden = true;
+    setProjectPm(t, "npm");
   }
   projectDialog.showModal();
   pfield("name").focus();
@@ -1846,6 +1893,11 @@ async function readWorktrees(t: Tab) {
       ...(wts.length ? [el("ul", {}, ...wts.map((w) => el("li", { title: w.path }, el("span", { className: "branch", textContent: w.branch }), w.path.endsWith(`/${w.branch}`) ? null : el("code", { textContent: w.path }))))] : []),
     );
     found.hidden = false;
+    const pm = await invoke<string | null>("lockfile_pm", { paths: wts.map(w => w.path) });
+    // Start ainda no padrão ("dev" num package manager) e sem setup: segue o lockfile do repositório. Texto digitado fica.
+    const untouched = isPm(pPm(t).value) && pfield(`${t}-start`).value === "dev" && !pfield(`${t}-setup`).value;
+    if (req !== readReq[t] || !isPm(pm) || !untouched) return;
+    setProjectPm(t, pm);
   } catch (err) {
     if (req === readReq[t]) showRepoError(t, String(err), false);
   }
@@ -1861,6 +1913,15 @@ for (const t of TABS) {
   });
   // change: depois de colar ou digitar e sair do campo.
   pfield(`${t}-repo`).addEventListener("change", () => readWorktrees(t));
+  // Um package manager por lado: troca o prefixo do start e reescreve o setup junto.
+  pPm(t).addEventListener("change", () => {
+    const to = asPm(pPm(t).value);
+    const start = pfield(`${t}-start`);
+    const setup = pfield(`${t}-setup`);
+    start.value = switchPm(asPm(pPm(t).dataset.pm), to, start.value);
+    if (to) setup.value = rewrite(setup.value, to);
+    setProjectPm(t, to);
+  });
   const clone = box.querySelector<HTMLButtonElement>(".clone")!;
   clone.addEventListener("click", () => !isBusy(clone) && cloneFromGithub(t, clone));
   // Enter no campo do GitHub clona; não envia o formulário, que ainda não tem a pasta do repositório.
@@ -1875,7 +1936,7 @@ projectForm.addEventListener("submit", async (e) => {
   if ((e.submitter as HTMLButtonElement | null)?.value !== "ok") return;
   e.preventDefault();
   if (isBusy(e.submitter as HTMLButtonElement)) return;
-  const side = (t: Tab) => ({ repo: pfield(`${t}-repo`).value, startCommand: pfield(`${t}-start`).value, setupCommand: pfield(`${t}-setup`).value });
+  const side = (t: Tab) => ({ repo: pfield(`${t}-repo`).value, startCommand: joinStart(asPm(pPm(t).value), pfield(`${t}-start`).value), setupCommand: pfield(`${t}-setup`).value });
   projectError.textContent = "";
   clearInvalid(projectForm);
   for (const t of TABS) pSideMsg(t).textContent = "";

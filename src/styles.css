@@ -1681,6 +1681,49 @@ dialog.form .dir-row input {
   margin-top: 0;
 }
 
+/* package manager ao lado do comando de start */
+dialog.form .dir-row select {
+  flex-shrink: 0;
+  width: auto;
+  margin-top: 0;
+}
+
+/* comando de start: o prefixo do package manager fica fora do input, então não dá para apagá-lo */
+dialog.form .cmd-box {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid var(--ink-3);
+  border-radius: 4px;
+  background: var(--board);
+}
+
+dialog.form .cmd-box:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+dialog.form .cmd-box .prefix {
+  flex-shrink: 0;
+  padding-left: 10px;
+  color: var(--ink-2);
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+  user-select: none;
+}
+
+dialog.form .cmd-box input:not([type="checkbox"]) {
+  height: 32px;
+  border: 0;
+  outline: none;
+}
+
+dialog.form .cmd-box .prefix:not([hidden]) + input {
+  padding-left: 6px;
+}
+
 dialog.form .pick {
   flex-shrink: 0;
   padding: 0 12px;
