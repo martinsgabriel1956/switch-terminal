@@ -723,10 +723,10 @@ header {
 /* o destino só cede largura depois que o recado ao lado já cedeu tudo; até 40% da faixa (ao menos 220px) */
 #destination {
   display: grid;
-  /* O piso do destino é a coluna do nome (6em: o projeto truncado, a "/" e o começo da branch) e a palheta inteira.
-     Em flex, o piso era o nome inteiro (a branch não quebra) e, com o painel aberto na janela mínima, a faixa
-     transbordava. Sem piso nenhum, a palheta passava por cima das abas com zoom de 200%. */
-  grid-template-columns: minmax(6em, max-content) auto;
+  /* O piso do destino é a palheta inteira (coluna auto): ela nunca passa por cima das abas, como fazia com zoom de 200%.
+     O nome cede antes dela. Em flex, o piso era o nome inteiro (a branch não quebra) e, com o painel aberto na janela
+     mínima, a faixa transbordava; um piso fixo (6em) abria um buraco depois de um nome mais curto que ele. */
+  grid-template-columns: minmax(0, max-content) auto;
   align-items: center;
   gap: 10px;
   max-width: max(40%, 220px);
@@ -771,6 +771,12 @@ header {
 #destination .where > .project {
   flex-shrink: 1000;
   min-width: 2.5em;
+}
+
+/* até 3 letras o nome é mais curto que o piso: não trunca, e o piso não abre um buraco antes da "/" */
+#destination .where > .project.short {
+  flex-shrink: 0;
+  min-width: auto;
 }
 
 #destination .where > .sep {

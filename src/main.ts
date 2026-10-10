@@ -462,7 +462,7 @@ function render(focus = false) {
   if (destEl.dataset.sig !== sig) {
     destEl.dataset.sig = sig;
     destEl.replaceChildren(
-      el("span", { className: "where" }, el("span", { className: "project", textContent: project }), el("span", { className: "sep", textContent: "/", ariaHidden: "true" }), el("span", { className: "branch-name" }, ...labelNodes(wt.label))),
+      el("span", { className: "where" }, el("span", { className: project.length <= 3 ? "project short" : "project", textContent: project }), el("span", { className: "sep", textContent: "/", ariaHidden: "true" }), el("span", { className: "branch-name" }, ...labelNodes(wt.label))),
       flap(state, `head:${ck}`),
       el("span", { className: "sr", textContent: `: ${say(project, wt, state)}` }),
     );
@@ -692,7 +692,7 @@ const openProblems = new Set<string>();
 let boardHtml = "";
 
 function renderBoard() {
-  // O painel é recriado quando muda; o foco do teclado volta para a mesma linha.
+  // O painel é recriado quando muda; o foco do teclado volta para o mesmo controle (linha, placa, +, erro), pela data-key.
   const focusedKey = board.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.key : undefined;
   const sections = config.projects.map((p) => {
     const add = el(
@@ -708,6 +708,7 @@ function renderBoard() {
       icon("M8 3v10M3 8h10"),
     );
     if (p.error) add.setAttribute("aria-disabled", "true");
+    add.dataset.key = `add:${p.name}`;
     const problem = p.error
       ? el(
           "details",
@@ -722,6 +723,7 @@ function renderBoard() {
           el("button", { type: "button", className: "btn small", textContent: "Abrir o config.json", onclick: () => invoke("open_config") }),
         )
       : null;
+    if (problem) keyFocusables(problem, `problem:${p.name}`);
     // Recolhido, o projeto ainda mostra a worktree ativa: o que está de pé não some da tela.
     const open = !collapsed.has(p.name);
     const shownWts = open ? p.worktrees : p.worktrees.filter((wt) => wt.id === active[p.name] || key(p.name, wt.id) === currentKey());
@@ -770,6 +772,7 @@ function renderBoard() {
         ),
       ),
     );
+  if (configError && config.projects.length && current) keyFocusables(sections[0], "problem:config");
   // Sem projeto: uma plataforma em branco, com a palheta esperando virar. A ação fica no centro da janela.
   if (!config.projects.length)
     sections.push(
@@ -790,6 +793,12 @@ function renderBoard() {
   if (stop) stop.tabIndex = 0;
   focused?.focus();
   fitBranches();
+}
+
+/** Resumo e botão de um erro ganham chave: com o foco neles, o painel recriado devolve o foco ao mesmo lugar. */
+function keyFocusables(root: HTMLElement, prefix: string) {
+  root.querySelector<HTMLElement>("summary")!.dataset.key = `${prefix}:summary`;
+  root.querySelector<HTMLElement>("button")!.dataset.key = `${prefix}:open`;
 }
 
 /** Nome que não cabe perde o prefixo inteiro ("feat/"), em vez de virar "f." com cara de abreviação.
