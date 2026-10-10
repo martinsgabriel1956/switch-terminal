@@ -1600,6 +1600,18 @@ function toggleAndFocus() {
 toggleBtn.addEventListener("click", toggleAndFocus);
 setSidebar(load<string>("sidebar", "open") !== "off");
 $("main").addEventListener("pointerdown", closeOverlay);
+// Por cima, o painel é uma gaveta: o Tab que sai dele (para o cabeçalho, debaixo dele) e o Esc em qualquer controle fecham.
+// relatedTarget nulo (clique num vazio do painel, janela perdendo o foco) não fecha.
+$("#sidebar").addEventListener("focusout", (e) => {
+  const to = e.relatedTarget as Node | null;
+  if (to && !$("#sidebar").contains(to)) closeOverlay();
+});
+$("#sidebar").addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !isOverlay()) return;
+  e.preventDefault();
+  closeOverlay();
+  render(true);
+});
 
 // Largura arrastável da barra lateral, lembrada entre sessões.
 const SIDEBAR_W = { min: 200, max: 480, default: 280 };
