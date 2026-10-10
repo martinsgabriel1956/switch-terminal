@@ -579,10 +579,54 @@ kbd {
   background: var(--flap);
 }
 
-.quiet:disabled {
+/* rodapé do painel: criar projeto ocupa a linha; reler é um ícone na ponta */
+#sidebar-foot {
+  display: flex;
+  align-items: center;
+  padding-right: 6px;
+  border-top: 1px solid var(--rule);
+}
+
+#sidebar-foot[hidden] {
+  display: none;
+}
+
+#sidebar-foot .quiet {
+  flex: 1;
+  min-width: 0;
+  border-top: 0;
+}
+
+/* lendo: o ícone gira em degraus, como o resto do painel; o clique repetido não faz nada */
+#reload[aria-disabled="true"] {
   color: var(--ink-3);
   background: none;
   cursor: progress;
+}
+
+#reload[aria-busy="true"] .icon {
+  animation: turn 640ms steps(8) infinite;
+}
+
+@keyframes turn {
+  to {
+    rotate: 1turn;
+  }
+}
+
+/* sem projeto: uma plataforma em branco, a palheta vazia esperando virar */
+.ghost-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  padding: 5px 10px 5px 14px;
+  color: var(--ink-2);
+}
+
+.ghost .tile {
+  color: var(--ink-2);
 }
 
 #sidebar-handle {
@@ -1287,7 +1331,9 @@ dialog.form code {
   font: 12px var(--mono);
 }
 
+/* min-inline-size 0: o padrão (min-content) deixava um caminho longo alargar o fieldset para fora do diálogo */
 dialog.form fieldset {
+  min-inline-size: 0;
   margin: 0 0 12px;
   padding: 8px 14px 2px;
   border: 1px solid var(--rule);
@@ -1356,25 +1402,54 @@ dialog.form .pick:hover {
   background: var(--flap);
 }
 
-/* "Ler worktrees": o que o app vai encontrar no repositório escolhido */
+/* worktrees do repositório escolhido: o que o painel vai mostrar depois de salvar */
 dialog.form .found {
-  margin: 0 0 12px;
-  padding: 0;
-  list-style: none;
+  margin: -4px 0 12px;
   font-size: 13px;
 }
 
-dialog.form .found li {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+dialog.form .found[hidden] {
+  display: none;
 }
 
 dialog.form .found .count {
+  margin: 0 0 4px;
   color: var(--ink-2);
 }
 
+/* ~6 linhas: um repositório com 20 worktrees não empurra os botões para fora da tela */
+dialog.form .found ul {
+  max-height: calc(6 * 20px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+dialog.form .found li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+  line-height: 20px;
+}
+
+/* o caminho só aparece quando foge de <pasta>/<branch>; o completo fica no title */
+dialog.form .found .branch {
+  flex-shrink: 0;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
 dialog.form .found code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--ink-2);
 }
 
@@ -1420,6 +1495,10 @@ dialog.form menu {
 
   .fold .chev {
     transition: none;
+  }
+
+  #reload[aria-busy="true"] .icon {
+    animation: none;
   }
 
 }

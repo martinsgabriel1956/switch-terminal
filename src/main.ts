@@ -125,8 +125,8 @@ urlEl.addEventListener("click", (e) => {
 });
 
 let lastStopTimer = 0;
-/** "feat/x parou em 1,8 s" no cabeçalho por alguns segundos, depois some. */
-function noteStopped(...nodes: (Node | string)[]) {
+/** Recado curto no cabeçalho ("feat/x parou em 1,8 s", "Worktrees relidas: nada mudou."), por alguns segundos. */
+function headerNote(...nodes: (Node | string)[]) {
   lastStopEl.replaceChildren(...nodes);
   clearTimeout(lastStopTimer);
   lastStopTimer = setTimeout(() => lastStopEl.replaceChildren(), 8000);
@@ -386,7 +386,7 @@ function activate(project: string, wt: Worktree, created: boolean) {
       // O fim da troca também tem fechamento: quanto a anterior levou para sair, e se foi à força.
       if (hadProcs) {
         const secs = ((Date.now() - state.deadline + config.stopTimeoutMs) / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-        noteStopped(...labelNodes(state.from), state.forcing ? ` encerrada à força em ${secs} s` : ` parou em ${secs} s`);
+        headerNote(...labelNodes(state.from), state.forcing ? ` encerrada à força em ${secs} s` : ` parou em ${secs} s`);
       }
     }
     const k = key(project, wt.id);
@@ -501,9 +501,9 @@ function renderEmpty() {
     ...(configError
       ? [
           el("h2", { textContent: missing ? "Nenhum projeto configurado" : "O config tem um problema" }),
-          el("p", { textContent: missing ? "Crie o primeiro projeto apontando os repositórios da API e do front." : configError }),
+          el("p", { textContent: missing ? "Aponte os repositórios da API e do front; as worktrees deles viram as linhas do painel." : configError }),
           el("p", {}, el("button", { type: "button", className: "btn primary", textContent: "Criar projeto", onclick: () => openProjectDialog() })),
-          el("p", { textContent: `Ou edite ${CONFIG_PATH} à mão:` }),
+          el("p", { textContent: `Ou edite ${CONFIG_PATH} à mão; o painel relê quando você volta para a janela:` }),
           el("pre", { textContent: CONFIG_EXAMPLE }),
         ]
       : config.projects.length
@@ -513,6 +513,7 @@ function renderEmpty() {
           ]
         : [
             el("h2", { textContent: "Nenhum projeto ainda" }),
+            el("p", { textContent: "Aponte os repositórios da API e do front; as worktrees deles viram as linhas do painel." }),
             el("p", {}, el("button", { type: "button", className: "btn primary", textContent: "Criar projeto", onclick: () => openProjectDialog() })),
           ]),
   );
@@ -736,6 +737,32 @@ function renderBoard() {
       el("ul", { className: "lines" }, ...shownWts.map((wt) => el("li", {}, lineButton(p.name, wt)))),
     );
   });
+  // Config quebrado com uma worktree aberta (o centro está no terminal): o painel continua com a última leitura boa e diz por que parou de atualizar.
+  if (configError && config.projects.length && current)
+    sections.unshift(
+      el(
+        "section",
+        { className: "platform", ariaLabel: "Erro no config" },
+        el(
+          "details",
+          { className: "problem", open: openProblems.has(CONFIG_PATH), ontoggle: (e: Event) => ((e.target as HTMLDetailsElement).open ? openProblems.add(CONFIG_PATH) : openProblems.delete(CONFIG_PATH)) },
+          el("summary", { textContent: "O config tem um problema; o painel mostra a última leitura boa." }),
+          el("code", { textContent: configError }),
+          el("button", { type: "button", className: "btn small", textContent: "Abrir o config.json", onclick: () => invoke("open_config") }),
+        ),
+      ),
+    );
+  // Sem projeto: uma plataforma em branco, com a palheta esperando virar. A ação fica no centro da janela.
+  if (!config.projects.length)
+    sections.push(
+      el(
+        "section",
+        { className: "platform ghost", ariaLabel: "Nenhum projeto" },
+        el("div", { className: "platform-head" }, el("h3", {}, el("span", { className: "tile", textContent: "Sem projeto" }))),
+        el("p", { className: "ghost-line" }, el("span", { textContent: "Nenhuma worktree ainda" }), flap("idle", "ghost", "")),
+      ),
+    );
+  $("#sidebar-foot").hidden = !config.projects.length;
   const html = sections.map((s) => s.outerHTML).join("");
   if (html === boardHtml) return;
   boardHtml = html;
@@ -1236,13 +1263,14 @@ const projectError = projectDialog.querySelector<HTMLElement>(".error")!;
 const pfield = (name: string) => projectForm.elements.namedItem(name) as HTMLInputElement;
 const pSideMsg = (t: Tab) => projectForm.querySelector<HTMLElement>(`fieldset[data-side="${t}"] .side-error`)!;
 
-const pFound = (t: Tab) => projectForm.querySelector<HTMLUListElement>(`fieldset[data-side="${t}"] .found`)!;
+const pFound = (t: Tab) => projectForm.querySelector<HTMLElement>(`fieldset[data-side="${t}"] .found`)!;
 
 function openProjectDialog() {
   projectForm.reset();
   projectError.textContent = "";
   clearInvalid(projectForm);
   for (const t of TABS) {
+    readReq[t]++; // leitura de uma abertura anterior não pinta este formulário
     pSideMsg(t).textContent = "";
     pFound(t).hidden = true;
   }
@@ -1250,32 +1278,67 @@ function openProjectDialog() {
   pfield("name").focus();
 }
 
-/** Mostra as worktrees que o app vai encontrar no repositório escolhido, antes de salvar o projeto. */
+/** Erro do git sobre a pasta do repositório: resumo legível; o texto cru fica embaixo. */
+function repoErrorSummary(message: string) {
+  const raw = message.toLowerCase();
+  if (raw.includes("no such file") || raw.includes("cannot change to")) return "Essa pasta não existe.";
+  if (raw.includes("not a git repository") || raw.includes("não é um repositório git")) return "Essa pasta não é um repositório git.";
+  return message;
+}
+
+/** Erro no lado: resumo, texto cru quando difere, e o campo marcado como inválido. `focus` só quando o usuário enviou. */
+function showRepoError(t: Tab, message: string, focus: boolean) {
+  const text = repoErrorSummary(message);
+  const msg = pSideMsg(t);
+  msg.replaceChildren(text, ...(text !== message ? [el("code", { className: "raw", textContent: message })] : []));
+  const input = pfield(`${t}-repo`);
+  input.setAttribute("aria-invalid", "true");
+  input.setAttribute("aria-describedby", msg.id);
+  if (focus) input.focus();
+}
+
+const readReq: Record<Tab, number> = { api: 0, front: 0 };
+
+/** Ao escolher ou colar a pasta: as worktrees que o painel vai mostrar, antes de salvar o projeto. */
 async function readWorktrees(t: Tab) {
+  const input = pfield(`${t}-repo`);
   const found = pFound(t);
-  pSideMsg(t).textContent = "";
+  const req = ++readReq[t];
+  pSideMsg(t).replaceChildren();
+  input.removeAttribute("aria-invalid");
+  input.removeAttribute("aria-describedby");
   found.hidden = true;
+  if (!input.value.trim()) return;
   try {
-    const wts = await invoke<{ branch: string; path: string }[]>("list_worktrees", { repo: pfield(`${t}-repo`).value });
+    const wts = await invoke<{ branch: string; path: string }[]>("list_worktrees", { repo: input.value });
+    if (req !== readReq[t]) return; // a pasta mudou enquanto o git lia: vale a leitura mais nova
     found.replaceChildren(
-      el("li", { className: "count", textContent: wts.length === 1 ? "1 worktree encontrada" : `${wts.length} worktrees encontradas` }),
-      ...wts.map((w) => el("li", { title: w.path }, el("strong", { textContent: w.branch }), " ", el("code", { textContent: w.path }))),
+      el("p", {
+        className: "count",
+        textContent: !wts.length
+          ? "Nenhuma worktree ainda. Depois de salvar, crie a primeira pelo + do projeto."
+          : wts.length === 1
+            ? "1 worktree vai aparecer no painel:"
+            : `${wts.length} worktrees vão aparecer no painel:`,
+      }),
+      ...(wts.length ? [el("ul", {}, ...wts.map((w) => el("li", { title: w.path }, el("span", { className: "branch", textContent: w.branch }), w.path.endsWith(`/${w.branch}`) ? null : el("code", { textContent: w.path }))))] : []),
     );
     found.hidden = false;
   } catch (err) {
-    pSideMsg(t).textContent = String(err);
+    if (req === readReq[t]) showRepoError(t, String(err), false);
   }
 }
 
 for (const t of TABS) {
   const box = projectForm.querySelector<HTMLFieldSetElement>(`fieldset[data-side="${t}"]`)!;
-  box.querySelector<HTMLButtonElement>(".pick:not(.read)")!.addEventListener("click", async () => {
+  box.querySelector<HTMLButtonElement>(".pick")!.addEventListener("click", async () => {
     const dir = await pickFolder({ directory: true, defaultPath: pfield(`${t}-repo`).value || undefined, title: `Repositório (${TAB_LABEL[t]})` });
     if (typeof dir !== "string") return;
     pfield(`${t}-repo`).value = dir;
     readWorktrees(t);
   });
-  box.querySelector<HTMLButtonElement>(".read")!.addEventListener("click", () => readWorktrees(t));
+  // change: depois de colar ou digitar e sair do campo.
+  pfield(`${t}-repo`).addEventListener("change", () => readWorktrees(t));
 }
 
 projectForm.addEventListener("submit", async (e) => {
@@ -1296,8 +1359,8 @@ projectForm.addEventListener("submit", async (e) => {
   } catch (err) {
     const fe = asFormError(err);
     if (fe.side) {
-      pSideMsg(fe.side).textContent = fe.message;
-      markInvalid(pfield(`${fe.side}-repo`), pSideMsg(fe.side));
+      pFound(fe.side).hidden = true;
+      showRepoError(fe.side, fe.message, true);
     } else {
       projectError.textContent = fe.message;
       markInvalid(pfield("name"), projectError);
@@ -1311,13 +1374,41 @@ projectForm.addEventListener("submit", async (e) => {
 projectDialog.addEventListener("close", () => render(true));
 $("#new-project").addEventListener("click", () => openProjectDialog());
 
-// Relê o `git worktree list` na hora, sem esperar a janela ganhar foco (worktree criada pelo terminal, por exemplo).
-$<HTMLButtonElement>("#reload").addEventListener("click", async (e) => {
-  const btn = e.currentTarget as HTMLButtonElement;
-  btn.disabled = true;
-  await refresh();
-  btn.disabled = false;
-});
+// ---------- reler worktrees ----------
+
+const reloadBtn = $<HTMLButtonElement>("#reload");
+let reloading = false;
+
+const worktreeNames = () => new Map(config.projects.flatMap((p) => p.worktrees.map((wt) => [key(p.name, wt.id), `${p.name} / ${wt.label}`] as const)));
+
+/** Relê o `git worktree list` na hora (worktree criada pelo terminal, por exemplo) e diz no cabeçalho o que mudou. */
+async function reload() {
+  if (reloading) return;
+  reloading = true;
+  // aria-disabled e não disabled: o botão focado continua com o foco do teclado.
+  reloadBtn.setAttribute("aria-disabled", "true");
+  reloadBtn.setAttribute("aria-busy", "true");
+  const before = worktreeNames();
+  try {
+    await refresh();
+  } finally {
+    reloading = false;
+    reloadBtn.removeAttribute("aria-disabled");
+    reloadBtn.removeAttribute("aria-busy");
+  }
+  if (configError) return headerNote("Não consegui reler: o config tem um problema.");
+  const after = worktreeNames();
+  const added = [...after].filter(([k]) => !before.has(k)).map(([, name]) => name);
+  const removed = [...before].filter(([k]) => !after.has(k)).map(([, name]) => name);
+  if (!added.length && !removed.length) return headerNote("Worktrees relidas: nada mudou.");
+  const parts = [
+    added.length === 1 ? `nova: ${added[0]}` : added.length ? `${added.length} novas` : "",
+    removed.length === 1 ? `saiu: ${removed[0]}` : removed.length ? `${removed.length} saíram` : "",
+  ].filter(Boolean);
+  headerNote(`Worktrees relidas: ${parts.join(" · ")}.`);
+}
+
+reloadBtn.addEventListener("click", () => reload());
 
 // ---------- barra lateral ----------
 
@@ -1401,7 +1492,9 @@ window.addEventListener(
     } else if (e.code === "KeyE") focusBoard();
     else if (e.code === "KeyH") helpEl.togglePopover();
     else if (e.code === "KeyN") openAddDialog(current?.project);
-    else if (e.code === "KeyJ") {
+    else if (e.code === "KeyL") {
+      if (config.projects.length) reload();
+    } else if (e.code === "KeyJ") {
       if (current?.wt.api && current.wt.front) setTab(tab === "api" ? "front" : "api", true);
     } else return;
     e.preventDefault();

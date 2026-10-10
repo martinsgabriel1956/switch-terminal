@@ -238,7 +238,7 @@ A marca na barra lateral redesenha a geometria da logo com `--mark-bg` / `--mark
 
 Duas colunas: a barra lateral (`--sidebar-w`, padrão 280px, redimensionável por uma alça de 5px; `Ctrl+Shift+B` recolhe) e a área principal. Ambas abrem com uma faixa de 44px separada por um fio de 1px (marca à esquerda; destino, abas, outros rodando e ajuda à direita). O terminal ocupa todo o restante, com respiro de `8px 4px 4px 12px`.
 
-O ritmo é denso e regular em passos de 2px: 4, 6, 8, 10, 14 e 22px. A margem lateral do painel é 14px (`gutter`) em todas as linhas, cabeçalhos de plataforma e no botão "Novo projeto"; linhas têm 5px de respiro vertical; plataformas se separam por 10px. O nome alinha na margem de 14px e a palheta fica à direita dele, na coluna de situação de um painel de partidas, encostada na margem direita; linha nunca aberta não leva palheta e usa a largura toda para o nome. Superfícies flutuantes: aviso 440px, paleta 560px, diálogos 500px, ajuda 360px, todas limitadas a 90–92% da viewport.
+O ritmo é denso e regular em passos de 2px: 4, 6, 8, 10, 14 e 22px. A margem lateral do painel é 14px (`gutter`) em todas as linhas, cabeçalhos de plataforma e no rodapé ("Novo projeto"); linhas têm 5px de respiro vertical; plataformas se separam por 10px. O nome alinha na margem de 14px e a palheta fica à direita dele, na coluna de situação de um painel de partidas, encostada na margem direita; linha nunca aberta não leva palheta e usa a largura toda para o nome. Superfícies flutuantes: aviso 440px, paleta 560px, diálogos 500px, ajuda 360px, todas limitadas a 90–92% da viewport.
 
 ## Elevation & Depth
 
@@ -271,6 +271,8 @@ O estado de cada worktree em 7 caracteres.
 - **Ordem:** a do git, fixa. A linha não muda de lugar ao entrar em serviço; só a palheta vira.
 - **Estados:** repouso transparente com texto `ink-2`; hover `--hover`; atual `flap` com fios internos `ink-3` em cima e embaixo; foco com o anel recolhido para dentro (`outline-offset: -2px`).
 - **Teclado:** o painel é uma parada de Tab só (roving tabindex); setas, Home/End navegam.
+- **Sem projeto:** uma plataforma em branco, placa "SEM PROJETO" em `ink-2` e uma linha "Nenhuma worktree ainda" com a palheta vazia (metades e entalhes, sem texto) esperando virar. Não é clicável: o painel não duplica o "Criar projeto" do centro.
+- **Config quebrado com uma worktree aberta:** o painel fica com a última leitura boa e, no topo, um `.problem` ("O config tem um problema; o painel mostra a última leitura boa.") com o erro cru e "Abrir o config.json". Sem worktree aberta, quem diz é o centro, e o painel não repete.
 - **Recolher:** a placa do projeto é um botão (`aria-expanded`) com chevron de 12px; recolhido, o projeto mostra só a worktree ativa (o estado de pé nunca some) e `+N` em `ink-2` com as ocultas; o erro de projeto também sai da frente e fica no title da placa. Lembrado entre sessões.
 
 ### Abas (API | FRONT)
@@ -282,7 +284,7 @@ O estado de cada worktree em 7 caracteres.
 - **Primary:** fundo `ink` (`--primary`), texto `board` (`--primary-ink`); hover em `ink-2`. Vem primeiro no DOM (Enter envia por ele) e aparece à direita (`row-reverse`).
 - **Secondary:** contorno `rule`, fundo transparente, texto `ink`; hover `flap`.
 - **Ícone:** 28×28, raio 4px, ícone `ink-2`; hover fundo `flap` e ícone `ink`; desabilitado em `ink-3`.
-- **Quiet (rodapé do painel):** linha de 40px com fio superior, texto `ink-2`, hover `ink` sobre `flap`.
+- **Rodapé do painel:** uma linha só, de 40px, com fio superior: "Novo projeto" (botão quiet com ícone de pasta com +, para não repetir o `+` de nova worktree das placas; texto `ink-2`, hover `ink` sobre `flap`) ocupa a largura, e "Reler worktrees" é um botão de ícone de 28px na ponta (`Ctrl+Shift+L`, listado na ajuda). Enquanto lê, o reler fica `aria-disabled` (o foco não sai dele), em `ink-3`, e o ícone gira em 8 degraus (`steps(8)`, desligado com reduzir movimento); ao terminar, o cabeçalho diz o que mudou na mesma região `status` do "parou em" ("Worktrees relidas: nada mudou.", "nova: interno / feat/x", "2 novas · 1 saiu"). Sem projeto, o rodapé inteiro some: a ação é o "Criar projeto" do centro.
 - **Aviso de troca:** nenhum botão é primário nem recebe o foco; o foco vai para o card (esperar é a ação padrão). "Voltar para X" e "Forçar agora" são secundários, nessa ordem (Tab + Enter nunca vira SIGKILL), com Forçar empurrado para a direita (o nome trunca, o verbo fica); depois de voltar, ou já no SIGKILL, o Voltar some e o card diz "Voltando para X". Sem atalho de Esc: no reflexo do vim, ele desfazia a troca recém-pedida. O texto diz o que recebe o Ctrl+C (`npm run dev`, em mono), lido do processo em primeiro plano. O card é um `group` com nome ("Troca em andamento"): o foco nele não relê o que a região viva já anunciou. Ao terminar, o cabeçalho diz por 8 s, logo depois das abas, quanto a anterior levou ("feat/x parou em 1,8 s", ou "encerrada à força"), em 13px `ink-2`, numa região `status`; durante a troca o destino fica com `aria-live="off"` para não falar junto com o aviso.
 - **Disabled:** opacidade 0.5.
 
@@ -300,7 +302,8 @@ O estado de cada worktree em 7 caracteres.
 ### Inputs / Fields
 - **Style:** 34px, fundo `board`, contorno `ink-3` 1px (≥3:1), raio 4px, 15px/500; placeholder `ink-2`; select com seta desenhada em gradiente; checkbox com `accent-color: ink`.
 - **Focus:** anel neutro de 2px em `--focus` (tinta), afastado 2px, em todos os controles.
-- **Error / Disabled:** erro em texto `fail` 13px abaixo do campo, resumo legível com o erro cru do git em mono `ink-2` embaixo; campos vazios recebem a mesma mensagem do app logo abaixo do campo (`aria-errormessage`; os formulários têm `novalidate`, sem a bolha nativa do WebKit); o campo culpado ganha contorno `fail` e o foco; placeholder começa com "ex.:", para não parecer valor digitado; depois de um erro parcial, o botão nomeia o lado que falta ("Criar no Front") e a branch fica travada (`readonly`, em `ink-2`), porque o outro lado precisa do mesmo nome; fieldset desabilitado a 0.45, menos o aviso do lado ("Já criada em…").
+- **Error / Disabled:** erro em texto `fail` 13px abaixo do campo, resumo legível com o erro cru do git em mono `ink-2` embaixo; campos vazios recebem a mesma mensagem do app logo abaixo do campo (`aria-errormessage`; os formulários têm `novalidate`, sem a bolha nativa do WebKit); o campo culpado ganha contorno `fail` e o foco; placeholder começa com "ex.:", para não parecer valor digitado; depois de um erro parcial, o botão nomeia o lado que falta ("Criar no Front") e a branch fica travada (`readonly`, em `ink-2`), porque o outro lado precisa do mesmo nome; fieldset desabilitado a 0.45, menos o aviso do lado ("Já criada em…"). Fieldsets com `min-inline-size: 0`: um caminho longo não alarga o diálogo.
+- **Repositório no Novo projeto:** escolher a pasta ou sair do campo depois de colar lê as worktrees dela (sem botão de ler). Logo abaixo da linha do repositório, primeiro o erro (resumo "Essa pasta não é um repositório git." / "Essa pasta não existe." e o cru em mono), depois a lista do que o painel vai mostrar: contagem em `ink-2` e branches em `ink-2`/600 (nada ali está em serviço), o caminho em mono só quando foge de `<pasta>/<branch>` (o completo no title), no máximo ~6 linhas com rolagem. Leitura sem worktree diz o próximo passo ("Depois de salvar, crie a primeira pelo + do projeto").
 
 ### Navigation
 - **Paleta de troca** (`Ctrl+Shift+K`): busca de 44px com ícone de lupa, lista com nome do projeto em rótulo caixa-alta; item selecionado igual à linha atual (`flap` + fios internos `ink-3`); ordem por qualidade do casamento (trecho no começo de palavra > trecho > subsequência), depois recência; a atual leva a etiqueta ATUAL; rodapé com uma mini palheta ENCERRA e o que o Enter ou o clique encerra, com o processo em mono ("Encerra feat/x (npm run dev) em PROJETO"; sem espaço, só o nome da worktree trunca); com esse aviso, a legenda Enter/Esc sai e o rodapé inteiro é dele; o mouse também move a seleção.
@@ -312,7 +315,7 @@ O estado de cada worktree em 7 caracteres.
 - **Do** mostrar estado só pela palheta e pelas três cores de estado (`run` de pé, `start`/`wait` em movimento, `fail` falha).
 - **Do** usar tinta cheia (`ink`) apenas no que está em serviço; o resto em `ink-2`.
 - **Do** desenhar ícones como SVG de traço 1.5 em viewBox 16 (16px, inline 12px), em `currentColor`.
-- **Do** animar só em degraus (`steps`), só na mudança de estado, e desligar com `prefers-reduced-motion`.
+- **Do** animar só em degraus (`steps`), só na mudança de estado (ou enquanto um estado dura, como o reler lendo), e desligar com `prefers-reduced-motion`.
 - **Do** dar a toda superfície flutuante borda `rule` de 1px, raio 6px, fundo `rail` e a sombra `0 4px 8px`.
 - **Do** manter o terminal sobre `board`, sem moldura.
 - **Do** definir todo valor novo nas duas paletas (noite e dia) com contraste AA.

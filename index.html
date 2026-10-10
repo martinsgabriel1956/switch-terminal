@@ -18,14 +18,15 @@
         <span>switch-terminal</span>
       </div>
       <nav id="board" aria-label="Projetos" aria-description="Setas andam entre as worktrees; Enter troca"></nav>
-      <button id="reload" type="button" class="quiet" title="Relê o git worktree list de todos os projetos">
-        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3" /></svg>
-        Reler worktrees
-      </button>
-      <button id="new-project" type="button" class="quiet">
-        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>
-        Novo projeto
-      </button>
+      <div id="sidebar-foot">
+        <button id="new-project" type="button" class="quiet">
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5V12.5H14V6H7.5L6 4.5Z" /><path d="M8 7.8v3.4M6.3 9.5h3.4" /></svg>
+          Novo projeto
+        </button>
+        <button id="reload" type="button" class="icon-btn" aria-label="Reler worktrees" title="Reler worktrees (Ctrl+Shift+L)">
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3" /></svg>
+        </button>
+      </div>
     </aside>
     <div id="sidebar-handle" role="separator" aria-orientation="vertical" aria-controls="sidebar" aria-label="Redimensionar barra lateral" tabindex="0" title="Arraste para redimensionar · duplo clique restaura"></div>
     <main>
@@ -57,6 +58,7 @@
         <dt><kbd>N</kbd></dt><dd>Nova worktree</dd>
         <dt><kbd>E</kbd></dt><dd>Ir para o painel (setas navegam, Esc volta)</dd>
         <dt><kbd>B</kbd></dt><dd>Recolher ou abrir o painel</dd>
+        <dt><kbd>L</kbd></dt><dd>Reler as worktrees (o painel também relê ao voltar para a janela)</dd>
         <dt><kbd>H</kbd></dt><dd>Abrir ou fechar esta ajuda (Esc fecha)</dd>
       </dl>
       <h2>Estados</h2>
@@ -151,11 +153,11 @@
             <span class="dir-row">
               <input name="api-repo" required spellcheck="false" autocomplete="off" />
               <button type="button" class="pick">Escolher…</button>
-              <button type="button" class="pick read">Ler worktrees</button>
             </span>
           </label>
-          <ul class="found" aria-live="polite" hidden></ul>
-          <p class="hint">No layout bare, é a pasta que contém o <code>.bare</code>.</p>
+          <p class="side-error" id="project-api-error" role="alert"></p>
+          <div class="found" role="status" hidden></div>
+          <p class="hint">Repositório bare: escolha a pasta que contém o <code>.bare</code>.</p>
           <label>
             Comando de start
             <input name="api-start" value="npm run dev" spellcheck="false" autocomplete="off" />
@@ -168,7 +170,6 @@
             </label>
             <p class="hint">Roda antes do start só na primeira vez de uma worktree criada pelo app.</p>
           </details>
-          <p class="side-error" id="project-api-error" role="alert"></p>
         </fieldset>
         <fieldset data-side="front">
           <legend>Front</legend>
@@ -177,11 +178,11 @@
             <span class="dir-row">
               <input name="front-repo" required spellcheck="false" autocomplete="off" />
               <button type="button" class="pick">Escolher…</button>
-              <button type="button" class="pick read">Ler worktrees</button>
             </span>
           </label>
-          <ul class="found" aria-live="polite" hidden></ul>
-          <p class="hint">No layout bare, é a pasta que contém o <code>.bare</code>.</p>
+          <p class="side-error" id="project-front-error" role="alert"></p>
+          <div class="found" role="status" hidden></div>
+          <p class="hint">Repositório bare: escolha a pasta que contém o <code>.bare</code>.</p>
           <label>
             Comando de start
             <input name="front-start" value="npm run dev" spellcheck="false" autocomplete="off" />
@@ -194,7 +195,6 @@
             </label>
             <p class="hint">Roda antes do start só na primeira vez de uma worktree criada pelo app.</p>
           </details>
-          <p class="side-error" id="project-front-error" role="alert"></p>
         </fieldset>
         <p class="error" id="project-error" role="alert"></p>
         <menu>

@@ -41,13 +41,13 @@ Estado persistido no `localStorage` do webview: `{ "<projeto>": "<id da worktree
 - Pareamento automático pelo **nome exato da branch**, com `manualPairs` como override.
 - Worktrees sem par aparecem como **solo** (uma aba só).
 - O app **cria** worktrees (veja abaixo), mas não remove.
-- A lista é relida ao abrir a paleta, quando a janela ganha foco e no botão "Reler worktrees" no fim da sidebar (visível mesmo sem projeto).
+- A lista é relida ao abrir a paleta, quando a janela ganha foco e no botão de reler (ícone no rodapé da sidebar, `Ctrl+Shift+L`), que diz no cabeçalho o que mudou ("nada mudou", "nova: projeto / branch"). Sem projeto, o rodapé some.
 - Worktree que sumiu: os PTYs dela são mortos e ela sai da sidebar.
 
 ## Criar projeto
 
 - Botão "+ Novo projeto" no fim da sidebar (e "Criar projeto" na tela vazia, quando ainda não há config).
-- Campos: nome e, para API e Front, repositório (campo + "Escolher…" + "Ler worktrees", que lista as worktrees do repo; escolher a pasta já lê), comando de start (padrão `npm run dev`) e comando de setup (opcional).
+- Campos: nome e, para API e Front, repositório (campo + "Escolher…"; escolher a pasta ou sair do campo lista as worktrees que o painel vai mostrar, ou o erro legível), comando de start (padrão `npm run dev`) e comando de setup (opcional).
 - Valida: nome preenchido e único; cada pasta precisa ser um repositório git.
 - Grava no `config.json` mantendo a ordem e os campos existentes; caminhos dentro da home viram `~/…`. Escrita atômica (arquivo temporário + rename). Se o config existir com JSON inválido, recusa em vez de sobrescrever.
 
@@ -84,7 +84,7 @@ Identidade visual: **painel de partidas** (split-flap). Tokens, tipografia e reg
 - **Faixa de destino:** palheta de estado + PROJETO / branch + endereço do dev server (abre no navegador via `xdg-open`), abas API | FRONT (tablist com setas), ajuda (?) com atalhos e legenda. Com o painel recolhido, mostra o que roda nos outros projetos.
 - **Aviso de troca:** cobre os terminais, bloqueia a digitação no terminal novo e oferece "Forçar agora" (SIGKILL na hora) e "Voltar para …" (cancela a troca e reinicia a anterior; some no SIGKILL). Sem atalho de Esc, para um reflexo não desfazer a troca. O foco vai para o aviso, não para um botão: um Enter que sobrou da paleta ou do painel não força nada.
 - **Paleta** (`Ctrl+Shift+K`): busca aproximada, ordenada por uso recente e abrindo já na worktree anterior (Ctrl+Shift+K, Enter volta para ela). O rodapé diz o que o Enter encerra quando há algo rodando no projeto. ARIA de combobox/listbox.
-- **Atalhos:** `Ctrl+Shift+K` paleta, `Ctrl+Shift+J` alterna abas, `Ctrl+Shift+N` nova worktree, `Ctrl+Shift+E` foca o painel (setas navegam, Esc volta ao terminal), `Ctrl+Shift+B` recolhe o painel, `Ctrl+Shift+H` abre a ajuda (recebe o foco, Esc fecha, e o foco volta ao terminal). Com um diálogo aberto, nenhum atalho responde. Interceptados na fase de captura, antes do xterm.
+- **Atalhos:** `Ctrl+Shift+K` paleta, `Ctrl+Shift+J` alterna abas, `Ctrl+Shift+N` nova worktree, `Ctrl+Shift+E` foca o painel (setas navegam, Esc volta ao terminal), `Ctrl+Shift+B` recolhe o painel, `Ctrl+Shift+L` relê as worktrees, `Ctrl+Shift+H` abre a ajuda (recebe o foco, Esc fecha, e o foco volta ao terminal). Com um diálogo aberto, nenhum atalho responde. Interceptados na fase de captura, antes do xterm.
 - **Alça da barra lateral:** arrastar redimensiona (200–480 px, padrão 280), duplo clique restaura, setas pelo teclado. A largura fica salva.
 - **Temas:** escuro e claro, seguindo o sistema; o terminal usa o mesmo fundo do painel e troca as cores ANSI junto.
 - **Projeto com erro de git:** uma linha legível (ex.: "API: repositório não encontrado"), detalhe expansível com o erro cru, e o `+` desabilitado.
