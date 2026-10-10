@@ -36,6 +36,9 @@ struct SideCfg {
     repo: String,
     start_command: Option<String>,
     setup_command: Option<String>,
+    /// Start próprio de uma branch ("feat/x": "npm run dev:mock"); a que não está aqui usa o `start_command`.
+    #[serde(default)]
+    branch_commands: HashMap<String, String>,
 }
 
 #[derive(Deserialize)]
@@ -72,8 +75,11 @@ pub struct WorktreeView {
 #[serde(rename_all = "camelCase")]
 pub struct SideView {
     path: String,
+    /// O que sobe: o da branch, senão o do projeto.
     start_command: Option<String>,
     setup_command: Option<String>,
+    /// O do projeto, para o diálogo de edição mostrar o padrão e saber se a branch tem um próprio.
+    project_start: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -177,8 +183,9 @@ pub fn list_worktrees(repo: String) -> Result<Vec<Wt>, String> {
 fn side(w: &Option<Wt>, cfg: &SideCfg) -> Option<SideView> {
     w.as_ref().map(|w| SideView {
         path: w.path.clone(),
-        start_command: cfg.start_command.clone(),
+        start_command: cfg.branch_commands.get(&w.branch).cloned().or_else(|| cfg.start_command.clone()),
         setup_command: cfg.setup_command.clone(),
+        project_start: cfg.start_command.clone(),
     })
 }
 
@@ -302,7 +309,8 @@ impl FormError {
 }
 
 /// Cria `<dir>/<branch>`. Branch que já existe (local ou `origin/<branch>`) é reaproveitada e `base` é ignorada.
-fn add_one(repo: &str, dir: &str, branch: &str, base: &str) -> Result<(), String> {
+/// Retorna se criou a branch (desfazer uma edição apaga só o que ela criou).
+fn add_one(repo: &str, dir: &str, branch: &str, base: &str) -> Result<bool, String> {
     // Também barra "..", espaços etc.: o nome vira caminho no disco.
     git(repo, &["check-ref-format", "--branch", branch])?;
     let dir = expand(dir.trim());
@@ -314,13 +322,14 @@ fn add_one(repo: &str, dir: &str, branch: &str, base: &str) -> Result<(), String
     let has = |r: &str| git(repo, &["rev-parse", "--verify", "--quiet", r]).is_ok();
     if has(&format!("refs/heads/{branch}")) || has(&format!("refs/remotes/origin/{branch}")) {
         git(repo, &["worktree", "add", path, branch])?;
+        Ok(false)
     } else {
         if base.is_empty() {
             return Err("escolha a branch de origem".into());
         }
         git(repo, &["worktree", "add", "-b", branch, path, base])?;
+        Ok(true)
     }
-    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -350,6 +359,267 @@ pub async fn add_worktree(project: String, branch: String, api: Option<SideReque
         created.push(key);
     }
     Ok(())
+}
+
+// ---------- editar worktree ----------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SideInfo {
+    /// Pasta principal de um repo não-bare: o git não a move.
+    main: bool,
+    /// "origin/feat/x" quando a branch tem upstream: renomear não muda o remoto.
+    upstream: Option<String>,
+    /// Pasta-mãe quando a pasta segue `<diretório>/<branch>`; None quando foi criada fora da convenção.
+    dir: Option<String>,
+}
+
+/// O que o diálogo de edição precisa saber de um lado antes de abrir.
+#[tauri::command]
+pub async fn worktree_info(path: String, branch: String) -> Result<SideInfo, String> {
+    let abs = |what: &str| git(&path, &["rev-parse", "--path-format=absolute", what]);
+    let main = abs("--git-dir")? == abs("--git-common-dir")?;
+    let upstream = git(&path, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", &format!("{branch}@{{upstream}}")]).ok();
+    let dir = path.strip_suffix(&format!("/{branch}")).filter(|d| !d.is_empty()).map(str::to_string);
+    Ok(SideInfo { main, upstream, dir })
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditSide {
+    path: String,
+    branch: String,
+    new_branch: String,
+    /// Pasta-mãe para onde a pasta vai (`<move_to>/<new_branch>`); None: a pasta fica onde está.
+    move_to: Option<String>,
+    /// Start desta branch; vazio volta ao do projeto.
+    command: String,
+}
+
+/// O lado que falta (solo) ou o par manual: fica, desfaz, pareia com uma solo do outro lado ou cria o outro lado.
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum PairChange {
+    Keep,
+    Unpair,
+    With { branch: String },
+    Create { dir: String, base: String },
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditRequest {
+    project: String,
+    api: Option<EditSide>,
+    front: Option<EditSide>,
+    pair: PairChange,
+}
+
+/// Cada passo feito, para desfazer na ordem inversa se um seguinte falhar.
+enum Undo {
+    Rename { repo: String, from: String, to: String, upstream: Option<String> },
+    Move { repo: String, from: String, to: String },
+    Create { repo: String, path: String, branch: Option<String> },
+}
+
+fn undo(done: Vec<Undo>) {
+    for step in done.into_iter().rev() {
+        // Desfazer é o melhor possível: um passo que não volta não impede os outros.
+        let _ = match step {
+            Undo::Rename { repo, from, to, upstream } => git(&repo, &["branch", "-m", &to, &from]).and_then(|_| match upstream {
+                Some(u) => git(&repo, &["branch", "-u", &u, &from]),
+                None => Ok(String::new()),
+            }),
+            Undo::Move { repo, from, to } => {
+                if let Some(parent) = Path::new(&from).parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let back = git(&repo, &["worktree", "move", &to, &from]);
+                // A pasta-mãe que o passo criou ("fix/") volta a não existir.
+                if let Some(parent) = Path::new(&to).parent() {
+                    let _ = std::fs::remove_dir(parent);
+                }
+                back
+            }
+            Undo::Create { repo, path, branch } => git(&repo, &["worktree", "remove", "--force", &path]).and_then(|_| match branch {
+                Some(b) => git(&repo, &["branch", "-D", &b]),
+                None => Ok(String::new()),
+            }),
+        };
+    }
+}
+
+/// Valida um lado antes de mexer em qualquer coisa. Retorna o destino da pasta, se ela muda.
+fn check_side(repo: &str, s: &EditSide) -> Result<Option<PathBuf>, String> {
+    let new = s.new_branch.trim();
+    if new.is_empty() {
+        return Err("Informe a branch.".into());
+    }
+    let has = |b: &str| git(repo, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{b}")]).is_ok();
+    if new != s.branch {
+        git(repo, &["check-ref-format", "--branch", new]).map_err(|_| "Nome de branch inválido.".to_string())?;
+        if !has(&s.branch) {
+            return Err("Esta worktree está sem branch (HEAD destacado): não há o que renomear.".into());
+        }
+        if has(new) {
+            return Err(format!("Já existe a branch {new} neste repositório."));
+        }
+    }
+    let Some(dir) = &s.move_to else { return Ok(None) };
+    let dir = expand(dir.trim());
+    if !Path::new(&dir).is_absolute() {
+        return Err(format!("O diretório precisa ser um caminho absoluto: {dir}"));
+    }
+    let dest = Path::new(&dir).join(new);
+    if dest == Path::new(&s.path) {
+        return Ok(None);
+    }
+    if dest.exists() {
+        return Err(format!("Já existe {}.", dest.display()));
+    }
+    let porcelain = git(repo, &["worktree", "list", "--porcelain"])?;
+    let locked = porcelain.split("\n\n").any(|b| b.lines().next() == Some(&format!("worktree {}", s.path)) && b.lines().any(|l| l.starts_with("locked")));
+    if locked {
+        return Err("A worktree está travada (git worktree lock): o git não a move.".into());
+    }
+    Ok(Some(dest))
+}
+
+const KEYS: [&str; 2] = ["api", "front"];
+
+/// Edita a worktree inteira ou nada: valida tudo, aplica (renomeia, move, cria o outro lado, grava o config)
+/// e, se um passo falhar, desfaz os anteriores.
+fn edit_worktree_in(config: &str, req: &EditRequest) -> Result<(), FormError> {
+    let side_err = |key: &'static str| move |message: String| FormError { side: Some(key), message, created: vec![] };
+    let cfg: Config = serde_json::from_str(&std::fs::read_to_string(config).map_err(|e| FormError::general(e.to_string()))?).map_err(|e| FormError::general(e.to_string()))?;
+    let p = cfg.projects.iter().find(|p| p.name == req.project).ok_or(FormError::general("Projeto não encontrado."))?;
+    let sides = [(&p.api, &req.api), (&p.front, &req.front)];
+
+    // 1. Valida tudo antes de mexer.
+    let mut dests = [None, None];
+    for (i, (cfg_side, s)) in sides.iter().enumerate() {
+        if let Some(s) = s {
+            dests[i] = check_side(&expand(&cfg_side.repo), s).map_err(side_err(KEYS[i]))?;
+        }
+    }
+    // O lado que o seletor de par mexe é o que falta; num par, os dois existem.
+    let missing = sides.iter().position(|(_, s)| s.is_none());
+    let current = |i: usize| sides[i].1.as_ref().map(|s| s.branch.as_str()).unwrap_or("");
+    let renamed = |i: usize| sides[i].1.as_ref().map(|s| s.new_branch.trim()).unwrap_or("");
+    match (&req.pair, missing) {
+        (PairChange::Keep, _) => {}
+        (PairChange::Unpair, None) => {
+            if !p.manual_pairs.iter().any(|m| m.api == current(0) && m.front == current(1)) {
+                return Err(FormError::general("Só um par manual (nomes diferentes) pode ser desfeito."));
+            }
+        }
+        (PairChange::With { branch }, Some(i)) => {
+            let (a, f) = (git_worktrees(&expand(&p.api.repo)), git_worktrees(&expand(&p.front.repo)));
+            let solo = match (a, f) {
+                (Ok(a), Ok(f)) => pair(a, f, &p.manual_pairs).into_iter().any(|(a, f)| {
+                    let (mine, theirs) = if i == 0 { (a, f) } else { (f, a) };
+                    mine.as_ref().is_some_and(|w| &w.branch == branch) && theirs.is_none()
+                }),
+                _ => false,
+            };
+            if !solo {
+                return Err(side_err(KEYS[i])(format!("{branch} não é mais uma worktree solo; releia as worktrees.")));
+            }
+        }
+        (PairChange::Create { .. }, Some(_)) => {}
+        _ => return Err(FormError::general("Mudança de par inválida para esta worktree.")),
+    }
+
+    // 2. Aplica, guardando como desfazer.
+    let mut done = vec![];
+    let result = (|| -> Result<(), FormError> {
+        for (i, (cfg_side, s)) in sides.iter().enumerate() {
+            let Some(s) = s else { continue };
+            let repo = expand(&cfg_side.repo);
+            let err = side_err(KEYS[i]);
+            let new = s.new_branch.trim();
+            if new != s.branch {
+                let upstream = git(&repo, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", &format!("{}@{{upstream}}", s.branch)]).ok();
+                git(&repo, &["branch", "-m", &s.branch, new]).map_err(err)?;
+                done.push(Undo::Rename { repo: repo.clone(), from: s.branch.clone(), to: new.to_string(), upstream: upstream.clone() });
+                // A remota continua com o nome antigo: sem upstream, o próximo push cria a nova em vez de ir para a antiga.
+                if upstream.is_some() {
+                    let _ = git(&repo, &["branch", "--unset-upstream", new]);
+                }
+            }
+            if let Some(dest) = &dests[i] {
+                let dest = dest.to_string_lossy().to_string();
+                if let Some(parent) = Path::new(&dest).parent() {
+                    std::fs::create_dir_all(parent).map_err(|e| err(format!("Não consegui criar {}: {e}", parent.display())))?;
+                }
+                git(&repo, &["worktree", "move", &s.path, &dest]).map_err(err)?;
+                done.push(Undo::Move { repo: repo.clone(), from: s.path.clone(), to: dest });
+                // "feat/" vazia depois de mover a última worktree dela; remove_dir só apaga pasta vazia.
+                if let Some(parent) = Path::new(&s.path).parent() {
+                    let _ = std::fs::remove_dir(parent);
+                }
+            }
+        }
+        if let (PairChange::Create { dir, base }, Some(i)) = (&req.pair, missing) {
+            let repo = expand(&sides[i].0.repo);
+            let branch = renamed(1 - i);
+            let made = add_one(&repo, dir, branch, base.trim()).map_err(side_err(KEYS[i]))?;
+            let path = Path::new(&expand(dir.trim())).join(branch).to_string_lossy().to_string();
+            done.push(Undo::Create { repo, path, branch: made.then(|| branch.to_string()) });
+        }
+
+        // 3. Config: comandos por branch e pares manuais, mexendo só nisso.
+        let mut json = read_config_json(config).map_err(FormError::general)?;
+        let proj = json["projects"]
+            .as_array_mut()
+            .and_then(|ps| ps.iter_mut().find(|x| x["name"] == req.project.as_str()))
+            .ok_or(FormError::general("Projeto não encontrado no config."))?;
+        for (i, (cfg_side, s)) in sides.iter().enumerate() {
+            let Some(s) = s else { continue };
+            let side = proj[KEYS[i]].as_object_mut().ok_or(FormError::general(format!("\"{}\" do projeto precisa ser um objeto.", KEYS[i])))?;
+            let mut cmds = side.remove("branchCommands").and_then(|v| v.as_object().cloned()).unwrap_or_default();
+            cmds.remove(&s.branch);
+            let cmd = s.command.trim();
+            if !cmd.is_empty() && Some(cmd) != cfg_side.start_command.as_deref() {
+                cmds.insert(s.new_branch.trim().to_string(), cmd.into());
+            }
+            if !cmds.is_empty() {
+                side.insert("branchCommands".into(), cmds.into());
+            }
+        }
+        let obj = proj.as_object_mut().ok_or(FormError::general("Projeto inválido no config."))?;
+        let mut pairs = obj.remove("manualPairs").and_then(|v| v.as_array().cloned()).unwrap_or_default();
+        // O par manual acompanha os nomes novos.
+        for m in pairs.iter_mut() {
+            for i in 0..2 {
+                if sides[i].1.is_some() && m[KEYS[i]] == current(i) {
+                    m[KEYS[i]] = renamed(i).into();
+                }
+            }
+        }
+        match (&req.pair, missing) {
+            (PairChange::Unpair, _) => pairs.retain(|m| !(m["api"] == renamed(0) && m["front"] == renamed(1))),
+            (PairChange::With { branch }, Some(i)) => {
+                let (api, front) = if i == 0 { (branch.as_str(), renamed(1)) } else { (renamed(0), branch.as_str()) };
+                pairs.push(serde_json::json!({ "api": api, "front": front }));
+            }
+            _ => {}
+        }
+        if !pairs.is_empty() {
+            obj.insert("manualPairs".into(), pairs.into());
+        }
+        write_config_json(config, &json).map_err(FormError::general)
+    })();
+    if result.is_err() {
+        undo(done);
+    }
+    result
+}
+
+/// Salvar do diálogo de edição. async: mover a pasta pode demorar e não deve travar a UI.
+#[tauri::command]
+pub async fn edit_worktree(req: EditRequest) -> Result<(), FormError> {
+    edit_worktree_in(&config_path(), &req)
 }
 
 // ---------- novo projeto ----------
@@ -642,6 +912,83 @@ mod tests {
         assert!(add_one(&path("bare"), &path("bare"), "../fora", "main").is_err());
         assert!(add_one(&path("bare"), "relativo", "feat/z", "main").is_err());
         assert!(add_one(&path("bare"), &path("bare"), "feat/sem-base", "").is_err());
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn edits_worktree_all_or_nothing() {
+        let tmp = std::env::temp_dir().join(format!("switch-terminal-edit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let sh = |cmd: &str| assert!(Command::new("sh").arg("-c").arg(cmd).current_dir(&tmp).status().unwrap().success(), "{cmd}");
+        std::fs::create_dir_all(&tmp).unwrap();
+        for r in ["api", "web"] {
+            sh(&format!("git init -q -b main src-{r} && git -C src-{r} -c user.name=t -c user.email=t@t commit -q --allow-empty -m init"));
+            sh(&format!("mkdir {r} && git clone -q --bare src-{r} {r}/.bare && echo 'gitdir: ./.bare' > {r}/.git"));
+        }
+        let path = |d: &str| tmp.join(d).to_str().unwrap().to_string();
+        add_one(&path("api"), &path("api"), "feat/x", "main").unwrap();
+        add_one(&path("web"), &path("web"), "feat/x", "main").unwrap();
+        add_one(&path("api"), &path("api"), "solo-api", "main").unwrap();
+        add_one(&path("web"), &path("web"), "solo-web", "main").unwrap();
+        let config = path("config.json");
+        let raw = format!(r#"{{"projects":[{{"name":"p","api":{{"repo":"{}","startCommand":"npm run dev"}},"front":{{"repo":"{}"}}}}]}}"#, path("api"), path("web"));
+        std::fs::write(&config, &raw).unwrap();
+        let branch_of = |r: &str, wt: &str| git(&path(&format!("{r}/{wt}")), &["branch", "--show-current"]).unwrap();
+        let side = |r: &str, from: &str, to: &str, move_to: Option<String>, cmd: &str| EditSide { path: path(&format!("{r}/{from}")), branch: from.into(), new_branch: to.into(), move_to, command: cmd.into() };
+
+        // Renomeia e move os dois lados; o comando próprio vai para a branch nova, o igual ao do projeto não é gravado.
+        let req = EditRequest {
+            project: "p".into(),
+            api: Some(side("api", "feat/x", "feat/y", Some(path("api")), "npm run dev:mock")),
+            front: Some(side("web", "feat/x", "feat/y", Some(path("web")), "")),
+            pair: PairChange::Keep,
+        };
+        edit_worktree_in(&config, &req).unwrap();
+        assert_eq!(branch_of("api", "feat/y"), "feat/y");
+        assert_eq!(branch_of("web", "feat/y"), "feat/y");
+        assert!(!tmp.join("api/feat/x").exists());
+        let cfg: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&config).unwrap()).unwrap();
+        assert_eq!(cfg["projects"][0]["api"]["branchCommands"], serde_json::json!({ "feat/y": "npm run dev:mock" }));
+        assert!(cfg["projects"][0]["front"].get("branchCommands").is_none());
+
+        // O front falha no meio (a pasta-mãe é um arquivo): a API, já renomeada e movida, volta ao que era.
+        std::fs::write(tmp.join("blocker"), "").unwrap();
+        let before = std::fs::read_to_string(&config).unwrap();
+        let req = EditRequest {
+            project: "p".into(),
+            api: Some(side("api", "feat/y", "fix/z", Some(path("api")), "")),
+            front: Some(side("web", "feat/y", "fix/z", Some(path("blocker")), "")),
+            pair: PairChange::Keep,
+        };
+        let err = edit_worktree_in(&config, &req).unwrap_err();
+        assert_eq!(err.side, Some("front"));
+        assert_eq!(branch_of("api", "feat/y"), "feat/y", "API desfeita");
+        assert_eq!(branch_of("web", "feat/y"), "feat/y", "front desfeito");
+        assert!(!tmp.join("api/fix").exists());
+        assert_eq!(std::fs::read_to_string(&config).unwrap(), before, "config intocado");
+
+        // Validação barra antes de mexer: branch que já existe.
+        let req = EditRequest { project: "p".into(), api: Some(side("api", "feat/y", "solo-api", None, "")), front: None, pair: PairChange::Keep };
+        assert_eq!(edit_worktree_in(&config, &req).unwrap_err().side, Some("api"));
+
+        // Pareia duas solos (grava manualPairs) e desfaz o par.
+        let req = EditRequest { project: "p".into(), api: Some(side("api", "solo-api", "solo-api", None, "")), front: None, pair: PairChange::With { branch: "solo-web".into() } };
+        edit_worktree_in(&config, &req).unwrap();
+        let cfg = read_config_json(&config).unwrap();
+        assert_eq!(cfg["projects"][0]["manualPairs"], serde_json::json!([{ "api": "solo-api", "front": "solo-web" }]));
+        let req = EditRequest {
+            project: "p".into(),
+            api: Some(side("api", "solo-api", "solo-api", None, "")),
+            front: Some(side("web", "solo-web", "solo-web", None, "")),
+            pair: PairChange::Unpair,
+        };
+        edit_worktree_in(&config, &req).unwrap();
+        assert!(read_config_json(&config).unwrap()["projects"][0].get("manualPairs").is_none());
+
+        // Completa o par: cria o front com o nome da API.
+        let req = EditRequest { project: "p".into(), api: Some(side("api", "solo-api", "solo-api", None, "")), front: None, pair: PairChange::Create { dir: path("web"), base: "main".into() } };
+        edit_worktree_in(&config, &req).unwrap();
+        assert_eq!(branch_of("web", "solo-api"), "solo-api");
         std::fs::remove_dir_all(&tmp).unwrap();
     }
 

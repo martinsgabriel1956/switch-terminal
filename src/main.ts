@@ -8,7 +8,8 @@ import "@fontsource/barlow-semi-condensed/latin-600.css";
 import "@fontsource/barlow-semi-condensed/latin-700.css";
 import "./styles.css";
 
-type Side = { path: string; startCommand: string | null; setupCommand: string | null };
+/** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto. */
+type Side = { path: string; startCommand: string | null; setupCommand: string | null; projectStart: string | null };
 type Worktree = { id: string; label: string; api: Side | null; front: Side | null };
 type Project = { name: string; error: string | null; worktrees: Worktree[] };
 type Config = { stopTimeoutMs: number; screenReader: boolean; projects: Project[] };
@@ -704,6 +705,34 @@ function lineButton(project: string, wt: Worktree) {
   return b;
 }
 
+// Rodando ou no meio de uma troca: não edita (renomear ou mover a pasta embaixo de um dev server o derruba).
+const BUSY: LineState[] = [...LIVE, "stop", "kill"];
+const PENCIL = "M11 2.5 13.5 5 6 12.5H3.5V10ZM9.5 4 12 6.5";
+
+/** Lápis da linha: irmão do botão de trocar (botão dentro de botão é inválido). Rodando, fica aria-disabled com o motivo. */
+function editButton(project: string, wt: Worktree) {
+  const busyNow = BUSY.includes(lineState(project, wt));
+  const spoken = spokenLabel(wt.label);
+  const b = el(
+    "button",
+    {
+      type: "button",
+      className: "icon-btn edit",
+      tabIndex: -1,
+      title: busyNow ? `${wt.label} está rodando: troque para outra worktree do projeto antes de editar` : `Editar ${wt.label}`,
+      ariaLabel: busyNow ? `Editar ${spoken}: indisponível, está rodando; troque para outra worktree do projeto antes` : `Editar ${spoken}`,
+      onclick: () => {
+        const fresh = findWt(project, wt.id);
+        if (fresh && !BUSY.includes(lineState(project, fresh))) openEditDialog(project, fresh);
+      },
+    },
+    icon(PENCIL),
+  );
+  if (busyNow) b.setAttribute("aria-disabled", "true");
+  b.dataset.key = `edit:${key(project, wt.id)}`;
+  return b;
+}
+
 // Projetos recolhidos no painel; lembrados entre sessões.
 const collapsed = new Set<string>(load<string[]>("collapsed", []));
 const CHEVRON = "M6 4l4 4-4 4";
@@ -776,7 +805,7 @@ function renderBoard() {
       el("div", { className: "platform-head" }, el("h2", {}, fold), add),
       // Recolhido, o erro some junto com as linhas: quem recolheu já viu e não quer o vermelho o dia todo.
       open ? problem : null,
-      el("ul", { className: "lines" }, ...shownWts.map((wt) => el("li", {}, lineButton(p.name, wt)))),
+      el("ul", { className: "lines" }, ...shownWts.map((wt) => el("li", { className: "row" }, lineButton(p.name, wt), editButton(p.name, wt)))),
     );
   });
   // Config quebrado com uma worktree aberta (o centro está no terminal): o painel continua com a última leitura boa e diz por que parou de atualizar.
@@ -802,7 +831,7 @@ function renderBoard() {
         "section",
         { className: "platform ghost" },
         el("div", { className: "platform-head" }, el("h2", {}, el("span", { className: "tile", textContent: "Sem projeto" }))),
-        el("p", { className: "ghost-line" }, el("span", { textContent: "Nenhuma worktree ainda" }), flap("idle", "ghost", "")),
+        el("p", { className: "ghost-line" }, el("span", { textContent: "Nenhuma worktree ainda" }), flap("none", "ghost")),
       ),
     );
   $("#sidebar-foot").hidden = !config.projects.length;
@@ -810,12 +839,16 @@ function renderBoard() {
   if (html === boardHtml) return;
   boardHtml = html;
   board.replaceChildren(...sections);
-  const focused = focusedKey ? board.querySelector<HTMLElement>(`[data-key="${CSS.escape(focusedKey)}"]`) : null;
+  const focused = focusedKey ? byKey(focusedKey) : undefined;
   const stop = (focused?.classList.contains("line") ? focused : null) ?? board.querySelector<HTMLElement>('.line[aria-current="true"]') ?? board.querySelector<HTMLElement>(".line");
   if (stop) stop.tabIndex = 0;
   focused?.focus();
   fitBranches();
 }
+
+/** Controle do painel pela chave. Comparação direta e não seletor: a chave tem "\u0000", que o CSS.escape troca por U+FFFD,
+ *  e o seletor nunca casava (o foco não voltava à linha depois de o painel ser recriado). */
+const byKey = (k: string) => [...board.querySelectorAll<HTMLElement>("[data-key]")].find((e) => e.dataset.key === k);
 
 /** Resumo e botão de um erro ganham chave: com o foco neles, o painel recriado devolve o foco ao mesmo lugar. */
 function keyFocusables(root: HTMLElement, prefix: string) {
@@ -915,15 +948,19 @@ tabsEl.addEventListener("keydown", (e) => {
   $<HTMLButtonElement>(`#tab-${tab}`).focus();
 });
 
-// Painel pelo teclado: setas andam pelas linhas, Esc volta ao terminal.
+// Painel pelo teclado: setas andam pelas linhas (ou pelos lápis, na coluna deles), → e ← entre a linha e o lápis, Esc volta ao terminal.
 board.addEventListener("keydown", (e) => {
-  const lines = [...board.querySelectorAll<HTMLButtonElement>(".line")];
-  const i = lines.indexOf(document.activeElement as HTMLButtonElement);
+  const at = document.activeElement as HTMLElement;
+  const column = at.classList.contains("edit") ? ".edit" : ".line";
+  const items = [...board.querySelectorAll<HTMLElement>(column)];
+  const i = items.indexOf(at);
   if (i < 0) return;
-  if (e.key === "ArrowDown") lines[Math.min(i + 1, lines.length - 1)].focus();
-  else if (e.key === "ArrowUp") lines[Math.max(i - 1, 0)].focus();
-  else if (e.key === "Home") lines[0].focus();
-  else if (e.key === "End") lines[lines.length - 1].focus();
+  if (e.key === "ArrowDown") items[Math.min(i + 1, items.length - 1)].focus();
+  else if (e.key === "ArrowUp") items[Math.max(i - 1, 0)].focus();
+  else if (e.key === "Home") items[0].focus();
+  else if (e.key === "End") items[items.length - 1].focus();
+  else if (e.key === "ArrowRight" && column === ".line") at.parentElement!.querySelector<HTMLElement>(".edit")!.focus();
+  else if (e.key === "ArrowLeft" && column === ".edit") at.parentElement!.querySelector<HTMLElement>(".line")!.focus();
   else if (e.key === "Escape") {
     closeOverlay();
     render(true);
@@ -1382,6 +1419,293 @@ addForm.addEventListener("submit", async (e) => {
 });
 
 addDialog.addEventListener("close", () => render(true));
+
+// ---------- editar worktree ----------
+
+type SideInfo = { main: boolean; upstream: string | null; dir: string | null };
+type PairChange = { kind: "keep" } | { kind: "unpair" } | { kind: "with"; branch: string } | { kind: "create"; dir: string; base: string };
+
+const editDialog = $<HTMLDialogElement>("#edit-dialog");
+const editForm = editDialog.querySelector("form")!;
+const editError = editDialog.querySelector<HTMLElement>(".error")!;
+const editField = <T extends HTMLElement>(name: string) => editForm.elements.namedItem(name) as unknown as T;
+const sharedBranch = editField<HTMLInputElement>("branch");
+const sharedBranchMsg = $("#edit-branch-error");
+const eBox = (t: Tab) => editForm.querySelector<HTMLFieldSetElement>(`fieldset[data-side="${t}"]`)!;
+const ePart = <T extends HTMLElement>(t: Tab, sel: string) => eBox(t).querySelector<T>(sel)!;
+const eMsg = (t: Tab) => ePart<HTMLElement>(t, ".side-error");
+const otherTab = (t: Tab): Tab => (t === "api" ? "front" : "api");
+/** "na API", "no Front". */
+const inSide = (t: Tab) => (t === "api" ? "na API" : "no Front");
+
+/** O que o diálogo está editando; `info` chega depois de abrir (o git pode demorar). */
+let editing: { project: string; wt: Worktree; branches: Record<Tab, string>; divergent: boolean; info: Partial<Record<Tab, SideInfo>> } | null = null;
+let editReq = 0;
+
+const newBranch = (t: Tab) => (editing!.divergent ? editField<HTMLInputElement>(`${t}-branch`).value : sharedBranch.value).trim();
+
+function openEditDialog(project: string, wt: Worktree) {
+  const [api, front] = wt.id.split("|");
+  const branches: Record<Tab, string> = { api, front };
+  const divergent = !!api && !!front && api !== front;
+  editing = { project, wt, branches, divergent, info: {} };
+  const req = ++editReq;
+  editForm.querySelector(".where")!.replaceChildren(el("span", { className: "project", textContent: project }), " / ", ...labelNodes(wt.label));
+  editForm.querySelector<HTMLElement>(".shared-branch")!.hidden = divergent;
+  sharedBranch.value = divergent ? "" : api || front;
+  sharedBranchMsg.textContent = "";
+  editError.textContent = "";
+  clearInvalid(editForm);
+  const proj = config.projects.find((p) => p.name === project)!;
+  for (const t of TABS) {
+    const side = wt[t];
+    ePart<HTMLElement>(t, ".has").hidden = !side;
+    ePart<HTMLElement>(t, ".own-branch").hidden = !divergent;
+    editField<HTMLInputElement>(`${t}-branch`).value = branches[t];
+    eMsg(t).textContent = "";
+    ePart<HTMLElement>(t, ".upstream").hidden = true;
+    ePart<HTMLElement>(t, ".main-hint").hidden = true;
+    ePart<HTMLDetailsElement>(t, ".move-dir").open = false;
+    if (side) {
+      const cmd = editField<HTMLInputElement>(`${t}-cmd`);
+      cmd.placeholder = side.projectStart ? `${side.projectStart} (padrão do projeto)` : "Sem comando: abre só o shell";
+      cmd.value = side.startCommand !== side.projectStart ? (side.startCommand ?? "") : "";
+      // Até o git responder, a pasta fica onde está.
+      editField<HTMLInputElement>(`${t}-move`).checked = false;
+      editField<HTMLInputElement>(`${t}-move`).disabled = true;
+      editField<HTMLInputElement>(`${t}-dir`).value = side.path.slice(0, side.path.lastIndexOf("/"));
+    }
+    // Seletor de par: no lado que falta (solo) ou no Front de um par manual. Par de nome igual não desfaz.
+    const pairSel = editField<HTMLSelectElement>(`${t}-pair`);
+    const opts: HTMLOptionElement[] = [];
+    if (!side) {
+      const mine = otherTab(t);
+      opts.push(el("option", { value: "keep", textContent: `Sem ${TAB_LABEL[t]}` }));
+      opts.push(el("option", { value: "create", textContent: `Criar ${branches[mine]} ${inSide(t)}` }));
+      for (const solo of proj.worktrees.filter((w) => !w[mine] && w[t])) {
+        const running = BUSY.includes(lineState(project, solo));
+        opts.push(el("option", { value: `with:${solo.label}`, textContent: `Parear com ${solo.label}${running ? " (rodando)" : ""}`, disabled: running }));
+      }
+    } else if (t === "front" && divergent) {
+      opts.push(el("option", { value: "keep", textContent: "Pareada com a API" }), el("option", { value: "unpair", textContent: "Desfazer o par" }));
+    }
+    pairSel.replaceChildren(...opts);
+    pairSel.value = "keep";
+    ePart<HTMLElement>(t, ".pair-row").hidden = !opts.length;
+    ePart<HTMLElement>(t, ".create").hidden = true;
+  }
+  syncEdit();
+  editDialog.showModal();
+  (divergent ? editField<HTMLInputElement>(`${api ? "api" : "front"}-branch`) : sharedBranch).focus();
+  loadEditInfo(req);
+}
+
+/** Pasta principal, upstream e convenção de cada lado: decidem a caixa "Mover a pasta junto" e os avisos. */
+async function loadEditInfo(req: number) {
+  const ed = editing!;
+  await Promise.all(
+    TABS.filter((t) => ed.wt[t]).map(async (t) => {
+      let info: SideInfo;
+      try {
+        info = await invoke<SideInfo>("worktree_info", { path: ed.wt[t]!.path, branch: ed.branches[t] });
+      } catch {
+        info = { main: true, upstream: null, dir: null }; // sem resposta do git: não oferece mover
+      }
+      if (req !== editReq) return;
+      ed.info[t] = info;
+      const move = editField<HTMLInputElement>(`${t}-move`);
+      move.disabled = info.main;
+      move.checked = !info.main && !!info.dir;
+      ePart<HTMLElement>(t, ".move").hidden = info.main;
+      ePart<HTMLElement>(t, ".main-hint").hidden = !info.main;
+      if (info.dir) editField<HTMLInputElement>(`${t}-dir`).value = info.dir;
+    }),
+  );
+  if (req === editReq) syncEdit();
+}
+
+/** Valores do lado a criar (pasta padrão e branches), só quando "Criar" é escolhido. */
+async function loadCreateDefaults(t: Tab) {
+  const req = editReq;
+  const base = editField<HTMLSelectElement>(`${t}-base`);
+  base.replaceChildren(el("option", { value: "", textContent: "Carregando…" }));
+  try {
+    const d = (await invoke<Defaults>("worktree_defaults", { project: editing!.project }))[t];
+    if (req !== editReq) return;
+    if ("Err" in d) {
+      eMsg(t).textContent = d.Err;
+      base.replaceChildren();
+      return;
+    }
+    editField<HTMLInputElement>(`${t}-new-dir`).value = d.Ok.dir;
+    const group = (label: string, list: string[]) => el("optgroup", { label }, ...list.map((b) => el("option", { value: b, textContent: b })));
+    base.replaceChildren(group("Locais", d.Ok.local), ...(d.Ok.remote.length ? [group("Remotas", d.Ok.remote)] : []));
+    base.value = d.Ok.defaultBase;
+  } catch (err) {
+    if (req === editReq) eMsg(t).textContent = String(err);
+  }
+  syncEdit();
+}
+
+/** Prévias dos caminhos e o aviso do upstream, a cada tecla. */
+function syncEdit() {
+  if (!editing) return;
+  const ed = editing;
+  for (const t of TABS) {
+    const side = ed.wt[t];
+    if (side) {
+      const nb = newBranch(t) || "<branch>";
+      const move = editField<HTMLInputElement>(`${t}-move`);
+      const dir = editField<HTMLInputElement>(`${t}-dir`).value.trim().replace(/\/+$/, "");
+      ePart<HTMLElement>(t, ".move-dir").hidden = !move.checked;
+      ePart<HTMLElement>(t, ".has > .preview").replaceChildren(move.checked ? `${dir}/${nb}` : side.path);
+      const up = ed.info[t]?.upstream;
+      const renamed = newBranch(t) !== ed.branches[t];
+      ePart<HTMLElement>(t, ".upstream").hidden = !(up && renamed);
+      if (up && renamed) ePart<HTMLElement>(t, ".upstream").textContent = `A remota ${up} continua com o nome antigo; o próximo push cria ${nb}.`;
+    }
+    // "Criar <branch> no Front" acompanha o nome que está sendo digitado.
+    const createOpt = editField<HTMLSelectElement>(`${t}-pair`).querySelector<HTMLOptionElement>('option[value="create"]');
+    if (createOpt) createOpt.textContent = `Criar ${newBranch(otherTab(t)) || "<branch>"} ${inSide(t)}`;
+    const creating = editField<HTMLSelectElement>(`${t}-pair`).value === "create";
+    ePart<HTMLElement>(t, ".create").hidden = !creating;
+    if (creating) {
+      const dir = editField<HTMLInputElement>(`${t}-new-dir`).value.trim().replace(/\/+$/, "");
+      const base = editField<HTMLSelectElement>(`${t}-base`).value;
+      const nb = newBranch(otherTab(t)) || "<branch>";
+      ePart<HTMLElement>(t, ".create > .preview").replaceChildren(...(dir ? [`${dir}/${nb}`, ...(base ? [icon(FROM_ICON, "inline"), base] : [])] : ["Carregando…"]));
+    }
+  }
+}
+
+editForm.addEventListener("input", syncEdit);
+editForm.addEventListener("change", (e) => {
+  const sel = e.target as HTMLSelectElement;
+  if (sel.name?.endsWith("-pair") && sel.value === "create") loadCreateDefaults(sel.name.split("-")[0] as Tab);
+  syncEdit();
+});
+for (const t of TABS) {
+  for (const [name, pick] of [[`${t}-dir`, ".move-dir .pick"], [`${t}-new-dir`, ".create .pick"]]) {
+    ePart<HTMLButtonElement>(t, pick).addEventListener("click", async () => {
+      const input = editField<HTMLInputElement>(name);
+      const dir = await pickFolder({ directory: true, defaultPath: input.value || undefined, title: `Diretório (${TAB_LABEL[t]})` });
+      if (typeof dir === "string") {
+        input.value = dir;
+        syncEdit();
+      }
+    });
+  }
+}
+
+editForm.addEventListener("submit", async (e) => {
+  if ((e.submitter as HTMLButtonElement | null)?.value !== "ok" || !editing) return;
+  e.preventDefault();
+  const submit = e.submitter as HTMLButtonElement;
+  if (isBusy(submit)) return;
+  const ed = editing;
+  editError.textContent = "";
+  sharedBranchMsg.textContent = "";
+  clearInvalid(editForm);
+  for (const t of TABS) eMsg(t).textContent = "";
+  const branchInput = (t: Tab) => (ed.divergent ? editField<HTMLInputElement>(`${t}-branch`) : sharedBranch);
+  const branchMsg = (t: Tab) => (ed.divergent ? eMsg(t) : sharedBranchMsg);
+  // Branch vazia: a mensagem ao lado do campo, como nos outros formulários.
+  for (const t of TABS) {
+    if (ed.wt[t] && !newBranch(t)) {
+      branchMsg(t).textContent = "Informe a branch.";
+      return markInvalid(branchInput(t), branchMsg(t));
+    }
+  }
+  const sideReq = (t: Tab) => {
+    const side = ed.wt[t];
+    if (!side) return null;
+    const move = editField<HTMLInputElement>(`${t}-move`);
+    return {
+      path: side.path,
+      branch: ed.branches[t],
+      newBranch: newBranch(t),
+      moveTo: move.checked && !move.disabled ? editField<HTMLInputElement>(`${t}-dir`).value : null,
+      command: editField<HTMLInputElement>(`${t}-cmd`).value,
+    };
+  };
+  const pairT = TABS.find((t) => !ed.wt[t]) ?? "front";
+  const choice = editField<HTMLSelectElement>(`${pairT}-pair`).value || "keep";
+  const pair: PairChange = choice.startsWith("with:")
+    ? { kind: "with", branch: choice.slice(5) }
+    : choice === "create"
+      ? { kind: "create", dir: editField<HTMLInputElement>(`${pairT}-new-dir`).value, base: editField<HTMLSelectElement>(`${pairT}-base`).value }
+      : { kind: choice as "keep" | "unpair" };
+  setBusy(submit, "Salvando…");
+  try {
+    await invoke("edit_worktree", { req: { project: ed.project, api: sideReq("api"), front: sideReq("front"), pair } });
+  } catch (err) {
+    const fe = asFormError(err);
+    if (fe.side) {
+      // O erro nomeia a branch: aponta o campo dela; senão, o da pasta (ou o do lado a criar).
+      const aboutBranch = /branch|HEAD/i.test(fe.message);
+      const msg = aboutBranch ? branchMsg(fe.side) : eMsg(fe.side);
+      msg.textContent = fe.message;
+      const target = aboutBranch
+        ? branchInput(fe.side)
+        : ed.wt[fe.side]
+          ? editField<HTMLInputElement>(`${fe.side}-dir`)
+          : editField<HTMLInputElement>(`${fe.side}-new-dir`);
+      target.closest("details")?.setAttribute("open", "");
+      markInvalid(target, msg);
+    } else {
+      editError.textContent = fe.message;
+      markInvalid(sharedBranch.hidden ? editField<HTMLInputElement>("api-branch") : sharedBranch, editError);
+    }
+    return;
+  } finally {
+    clearBusy(submit, "Salvar");
+  }
+  await afterEdit(ed, pair);
+});
+
+/** Depois de salvar: fecha os terminais dela (e da solo que entrou no par), leva o "ativa" e as recentes para o id novo,
+ *  e reabre só o shell se ela era a atual. Não sobe: editar não é trocar. */
+async function afterEdit(ed: NonNullable<typeof editing>, pair: PairChange) {
+  const { project, wt } = ed;
+  const name = (t: Tab) => (ed.wt[t] ? newBranch(t) : pair.kind === "with" ? pair.branch : pair.kind === "create" ? newBranch(otherTab(t)) : "");
+  const newId = pair.kind === "unpair" ? `${newBranch("api")}|` : `${name("api")}|${name("front")}`;
+  const oldIds = [wt.id];
+  if (pair.kind === "with") {
+    const solo = config.projects.find((p) => p.name === project)?.worktrees.find((w) => w.label === pair.branch && !w[ed.wt.api ? "api" : "front"]);
+    if (solo) oldIds.push(solo.id);
+  }
+  const oldKeys = oldIds.map((id) => key(project, id));
+  const wasCurrent = oldKeys.includes(currentKey() ?? "");
+  for (const k of oldKeys) {
+    const env = envs.get(k);
+    if (env) disposeEnv(k, env);
+  }
+  const newKey = key(project, newId);
+  if (oldIds.includes(active[project])) active[project] = newId;
+  saveActive();
+  recent = [...new Set(recent.map((r) => (oldKeys.includes(r) ? newKey : r)))];
+  save("recent", recent);
+  if (wasCurrent) current = null;
+  editing = null;
+  editDialog.close();
+  await refresh();
+  const newWt = findWt(project, newId);
+  if (wasCurrent && newWt) {
+    current = { project, wt: newWt };
+    ensureEnv(project, newWt);
+  }
+  headerNote(false, newWt && newWt.label !== wt.label ? `Editada: ${wt.label} → ${newWt.label}` : `Editada: ${wt.label}`);
+  render();
+  byKey(`edit:${newKey}`)?.focus();
+}
+
+editDialog.addEventListener("close", () => {
+  if (!editing) return; // salvou: afterEdit cuida do foco
+  const k = key(editing.project, editing.wt.id);
+  editing = null;
+  const pencil = byKey(`edit:${k}`);
+  pencil ? pencil.focus() : render(true);
+});
 
 // ---------- novo projeto ----------
 

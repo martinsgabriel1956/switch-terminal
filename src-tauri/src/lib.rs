@@ -91,6 +91,8 @@ pub fn run() {
             worktrees::open_config,
             worktrees::set_screen_reader,
             worktrees::missing_deps_install,
+            worktrees::worktree_info,
+            worktrees::edit_worktree,
             worktrees::list_worktrees,
             worktrees::github_repos,
             worktrees::clone_github_repo,

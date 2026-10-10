@@ -57,7 +57,7 @@
         <dt><kbd>K</kbd></dt><dd>Trocar de worktree (abre na anterior)</dd>
         <dt><kbd>J</kbd></dt><dd>Alternar API e Front</dd>
         <dt><kbd>N</kbd></dt><dd>Nova worktree</dd>
-        <dt><kbd>E</kbd></dt><dd>Ir para o painel (setas navegam, Esc volta)</dd>
+        <dt><kbd>E</kbd></dt><dd>Ir para o painel (setas navegam, → chega ao lápis de editar, Esc volta)</dd>
         <dt><kbd>B</kbd></dt><dd>Recolher ou abrir o painel</dd>
         <dt><kbd>L</kbd></dt><dd>Reler as worktrees (o painel também relê ao voltar para a janela)</dd>
         <dt><kbd>H</kbd></dt><dd>Abrir ou fechar esta ajuda (Esc fecha)</dd>
@@ -137,6 +137,116 @@
         <p class="error" id="add-error" role="alert"></p>
         <menu>
           <button value="ok" class="primary">Criar worktree</button>
+          <button value="cancel" formnovalidate>Cancelar</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="edit-dialog" class="form" aria-labelledby="edit-title">
+      <form method="dialog" novalidate>
+        <h2 id="edit-title">Editar worktree</h2>
+        <p class="hint where"></p>
+        <label class="shared-branch">
+          Branch
+          <input name="branch" required aria-errormessage="edit-branch-error" spellcheck="false" autocomplete="off" />
+        </label>
+        <p class="side-error" id="edit-branch-error" role="alert"></p>
+        <fieldset class="side" data-side="api">
+          <legend>API</legend>
+          <div class="has">
+            <label class="own-branch">
+              Branch
+              <input name="api-branch" required aria-errormessage="edit-api-error" spellcheck="false" autocomplete="off" />
+            </label>
+            <p class="hint upstream" hidden></p>
+            <label class="check move"><input type="checkbox" name="api-move" /> Mover a pasta junto</label>
+            <p class="hint main-hint" hidden>Pasta principal do repositório: o git não a move.</p>
+            <p class="preview"></p>
+            <details class="more move-dir">
+              <summary>Alterar diretório</summary>
+              <label>
+                <span id="edit-api-dir-label">Diretório</span>
+                <span class="dir-row">
+                  <input name="api-dir" aria-labelledby="edit-api-dir-label" spellcheck="false" autocomplete="off" />
+                  <button type="button" class="pick">Escolher…</button>
+                </span>
+              </label>
+            </details>
+            <label>
+              Comando de start
+              <input name="api-cmd" spellcheck="false" autocomplete="off" />
+            </label>
+          </div>
+          <label class="pair-row">
+            Par
+            <select name="api-pair"></select>
+          </label>
+          <div class="create" hidden>
+            <p class="preview"></p>
+            <label>
+              <span id="edit-api-new-dir-label">Diretório</span>
+              <span class="dir-row">
+                <input name="api-new-dir" aria-labelledby="edit-api-new-dir-label" spellcheck="false" autocomplete="off" />
+                <button type="button" class="pick">Escolher…</button>
+              </span>
+            </label>
+            <label>
+              A partir de
+              <select name="api-base"></select>
+            </label>
+          </div>
+          <p class="side-error" id="edit-api-error" role="alert"></p>
+        </fieldset>
+        <fieldset class="side" data-side="front">
+          <legend>Front</legend>
+          <div class="has">
+            <label class="own-branch">
+              Branch
+              <input name="front-branch" required aria-errormessage="edit-front-error" spellcheck="false" autocomplete="off" />
+            </label>
+            <p class="hint upstream" hidden></p>
+            <label class="check move"><input type="checkbox" name="front-move" /> Mover a pasta junto</label>
+            <p class="hint main-hint" hidden>Pasta principal do repositório: o git não a move.</p>
+            <p class="preview"></p>
+            <details class="more move-dir">
+              <summary>Alterar diretório</summary>
+              <label>
+                <span id="edit-front-dir-label">Diretório</span>
+                <span class="dir-row">
+                  <input name="front-dir" aria-labelledby="edit-front-dir-label" spellcheck="false" autocomplete="off" />
+                  <button type="button" class="pick">Escolher…</button>
+                </span>
+              </label>
+            </details>
+            <label>
+              Comando de start
+              <input name="front-cmd" spellcheck="false" autocomplete="off" />
+            </label>
+          </div>
+          <label class="pair-row">
+            Par
+            <select name="front-pair"></select>
+          </label>
+          <div class="create" hidden>
+            <p class="preview"></p>
+            <label>
+              <span id="edit-front-new-dir-label">Diretório</span>
+              <span class="dir-row">
+                <input name="front-new-dir" aria-labelledby="edit-front-new-dir-label" spellcheck="false" autocomplete="off" />
+                <button type="button" class="pick">Escolher…</button>
+              </span>
+            </label>
+            <label>
+              A partir de
+              <select name="front-base"></select>
+            </label>
+          </div>
+          <p class="side-error" id="edit-front-error" role="alert"></p>
+        </fieldset>
+        <p class="hint">Os terminais dela fecham ao salvar.</p>
+        <p class="error" id="edit-error" role="alert"></p>
+        <menu>
+          <button value="ok" class="primary">Salvar</button>
           <button value="cancel" formnovalidate>Cancelar</button>
         </menu>
       </form>

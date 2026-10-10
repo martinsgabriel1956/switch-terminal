@@ -479,27 +479,61 @@ kbd {
   list-style: none;
 }
 
+/* A linha do painel: o botão de trocar e, na borda direita, o lápis de editar (irmãos: botão dentro de botão é inválido).
+   O fundo do hover e da atual fica na linha inteira, lápis incluído. */
+.row {
+  display: flex;
+  align-items: start;
+}
+
+.row:hover {
+  background: var(--hover);
+}
+
+.row:has(> .line[aria-current="true"]) {
+  background: var(--flap);
+  box-shadow: inset 0 -1px 0 var(--ink-3), inset 0 1px 0 var(--ink-3);
+}
+
+/* Coluna reservada em todas as linhas (a palheta não pula); o lápis aparece com o cursor ou o foco na linha.
+   Opacidade e não visibility: escondido, ele ainda recebe o foco pelas setas. */
+.row > .edit {
+  width: 22px;
+  height: 22px;
+  margin: 6px 6px 0 0;
+  opacity: 0;
+}
+
+.row:is(:hover, :focus-within) > .edit {
+  opacity: 1;
+}
+
+.row > .edit:hover {
+  background: var(--flap-hi);
+}
+
+.row > .edit:focus-visible {
+  outline-offset: -2px;
+}
+
+.row > .edit .icon {
+  width: 14px;
+  height: 14px;
+}
+
 /* nome à esquerda, palheta à direita (coluna de situação): os nomes alinham na margem e só as linhas abertas cedem largura */
 .line {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  width: 100%;
-  padding: 5px 10px 5px 14px;
+  flex: 1;
+  min-width: 0;
+  padding: 5px 2px 5px 14px;
   border: 0;
   background: none;
   color: var(--ink-2);
   text-align: left;
   cursor: pointer;
-}
-
-.line:hover {
-  background: var(--hover);
-}
-
-.line[aria-current="true"] {
-  background: var(--flap);
-  box-shadow: inset 0 -1px 0 var(--ink-3), inset 0 1px 0 var(--ink-3);
 }
 
 /* a linha ocupa a largura toda e o painel corta o overflow: o anel fica por dentro */
@@ -1731,6 +1765,17 @@ dialog.form .side-error .raw {
   margin-top: 4px;
   color: var(--ink-2);
   font: 12px/1.45 var(--mono);
+}
+
+dialog.form .where {
+  margin-top: -10px;
+}
+
+dialog.form .where .project {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 dialog.form .open-hint {

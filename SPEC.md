@@ -42,7 +42,7 @@ Estado persistido no `localStorage` do webview: `{ "<projeto>": "<id da worktree
 - A lista vem de `git worktree list --porcelain` em cada repo.
 - Pareamento automático pelo **nome exato da branch**, com `manualPairs` como override.
 - Worktrees sem par aparecem como **solo** (uma aba só).
-- O app **cria** worktrees (veja abaixo), mas não remove.
+- O app **cria** e **edita** worktrees (veja abaixo), mas não remove.
 - A lista é relida ao abrir a paleta, quando a janela ganha foco e no botão de reler (ícone no rodapé da sidebar, `Ctrl+Shift+L`), que diz no cabeçalho o que mudou ("nada mudou", "nova: projeto / branch"). Sem projeto, o rodapé some.
 - Worktree que sumiu: os PTYs dela são mortos e ela sai da sidebar.
 
@@ -64,6 +64,16 @@ Estado persistido no `localStorage` do webview: `{ "<projeto>": "<id da worktree
 - Branch que já existe (local ou `origin/<branch>`) é reaproveitada e "a partir de" é ignorado.
 - Se um lado falhar depois do outro ter sido criado, o erro diz qual já foi criado, e ele aparece na lista como solo.
 - Depois de criada, a worktree é selecionada e sobe com `setupCommand && startCommand`.
+
+## Editar worktree
+
+- Lápis na borda direita de cada linha do painel (aparece com o cursor ou o foco na linha; → a partir da linha). Só edita a worktree parada (INATIVA ou nunca aberta); rodando, subindo, aguardando, parando ou no SIGKILL, o lápis fica desabilitado com o motivo: troque para outra worktree do projeto antes.
+- **Branch:** renomeia só local (`git branch -m`). Par de nome igual tem um campo (renomeia os dois lados); par manual tem um por lado, e o `manualPairs` acompanha os nomes novos. Branch com upstream: o diálogo avisa que a remota continua com o nome antigo, e o upstream é desligado (o próximo push cria a nova).
+- **Pasta:** "Mover a pasta junto" (`git worktree move` para `<diretório>/<nova branch>`), marcada quando a pasta segue a convenção `<diretório>/<branch>`. A pasta principal de um repo não-bare não move. A pasta-mãe que ficou vazia (`feat/`) é apagada.
+- **Comando de start por branch:** grava `branchCommands` no lado do projeto (`"api": { "startCommand": "npm run dev", "branchCommands": { "feat/x": "npm run dev:mock" } }`); vazio ou igual ao do projeto volta ao padrão. Renomear a branch leva o comando junto.
+- **Par:** na solo, o lado que falta pode ficar vazio, ser criado com o nome da branch (diretório e origem, como na criação) ou parear com uma solo do outro lado (grava `manualPairs`). Um par manual pode ser desfeito; par de nome igual não (o pareamento automático juntaria de novo).
+- **Tudo ou nada:** valida antes de mexer (nome válido, branch nova livre, pasta de destino livre, worktree não travada, solo ainda solo); se um passo falhar mesmo assim, desfaz os anteriores na ordem inversa (renomeia de volta, move de volta, remove o lado criado e a branch que ele criou) e o config não é gravado.
+- Ao salvar, os terminais dela (e os da solo que entrou no par) fecham; o "ativa" e as recentes passam para o id novo; se era a atual, abre só o shell, sem o start. O cabeçalho diz "Editada: feat/x → feat/y".
 
 ## Terminais e ciclo de vida
 
