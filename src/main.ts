@@ -102,7 +102,18 @@ const TERM_THEME: Record<"dark" | "light", ITheme> = {
   },
 };
 const scheme = matchMedia("(prefers-color-scheme: light)");
-const termTheme = () => TERM_THEME[scheme.matches ? "light" : "dark"];
+/** Fundo, cursor e seleção vêm dos tokens do CSS (o terminal fica sobre o mesmo fundo do painel); as cores ANSI são conteúdo. */
+function termTheme(): ITheme {
+  const css = getComputedStyle(document.documentElement);
+  const token = (name: string) => css.getPropertyValue(name).trim();
+  return {
+    ...TERM_THEME[scheme.matches ? "light" : "dark"],
+    background: token("--term-bg"),
+    cursor: token("--ink"),
+    cursorAccent: token("--term-bg"),
+    selectionBackground: token("--selection")
+  };
+}
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 const board = $("#board");
@@ -454,7 +465,7 @@ function render(focus = false) {
   if (destEl.dataset.sig !== sig) {
     destEl.dataset.sig = sig;
     destEl.replaceChildren(
-      el("span", { className: "where" }, el("span", { className: "project", textContent: project }), el("span", { className: "sep", textContent: "/" }), ...labelNodes(wt.label)),
+      el("span", { className: "where" }, el("span", { className: "project", textContent: project }), el("span", { className: "sep", textContent: "/" }), el("span", { className: "branch-name" }, ...labelNodes(wt.label))),
       flap(state, `head:${ck}`),
       el("span", { className: "sr", textContent: `: ${say(project, wt, state)}` }),
     );
@@ -781,16 +792,19 @@ function renderBoard() {
 /** Nome que não cabe perde o prefixo inteiro ("feat/"), em vez de virar "f." com cara de abreviação.
  *  Decide por plataforma, todas ou nenhuma: na mesma coluna, um nome sem prefixo não pode parecer não ter prefixo. */
 function fitBranches() {
-  for (const platform of board.querySelectorAll(".platform")) {
-    const branches = [...platform.querySelectorAll<HTMLElement>(".line .branch")];
-    for (const b of branches) b.classList.remove("tight");
-    const tight = branches.some((b) => {
+  const platforms = [...board.querySelectorAll(".platform")].map(p => [...p.querySelectorAll<HTMLElement>(".line .branch")]);
+  for (const branches of platforms) for (const b of branches) b.classList.remove("tight");
+  // Mede todas as plataformas antes de escrever: um reflow só, não um por plataforma.
+  const tight = platforms.map(branches =>
+    branches.some(b => {
       // O nome em si foi cortado (mesmo elemento, sem somar larguras arredondadas de partes diferentes).
       const rest = b.lastElementChild as HTMLElement;
       return rest.scrollWidth > rest.clientWidth;
-    });
-    for (const b of branches) b.classList.toggle("tight", tight);
-  }
+    })
+  );
+  platforms.forEach((branches, i) => {
+    for (const b of branches) b.classList.toggle("tight", tight[i]);
+  });
 }
 new ResizeObserver(fitBranches).observe(board);
 
@@ -1035,9 +1049,13 @@ paletteInput.addEventListener("input", () => {
   sel = 0;
   renderPalette();
 });
+/** Linhas que o PageUp/PageDown pulam na paleta. */
+const PAGE = 8;
 paletteInput.addEventListener("keydown", (e) => {
   if (e.key === "ArrowDown") sel = Math.min(sel + 1, items.length - 1);
   else if (e.key === "ArrowUp") sel = Math.max(sel - 1, 0);
+  else if (e.key === "PageDown") sel = Math.min(sel + PAGE, items.length - 1);
+  else if (e.key === "PageUp") sel = Math.max(sel - PAGE, 0);
   else if (e.key === "Enter" || e.key === "Escape") {
     e.preventDefault();
     return e.key === "Enter" ? choose(items[sel]) : closePalette();
@@ -1078,6 +1096,17 @@ function worktreeErrorSummary(message: string): { field: "dir" | "base" | "branc
 }
 
 /** Campo culpado: anunciado como inválido e ligado à mensagem que explica. */
+/** Botão ocupado: aria-disabled (o foco continua nele; disabled jogaria o foco no body, atrás do diálogo) e o texto do que está fazendo. */
+function setBusy(button: HTMLButtonElement, label: string) {
+  button.setAttribute("aria-disabled", "true");
+  button.textContent = label;
+}
+function clearBusy(button: HTMLButtonElement, label: string) {
+  button.removeAttribute("aria-disabled");
+  button.textContent = label;
+}
+const isBusy = (button: HTMLElement | null) => button?.getAttribute("aria-disabled") === "true";
+
 function markInvalid(input: HTMLElement, msg: HTMLElement) {
   input.setAttribute("aria-invalid", "true");
   input.setAttribute("aria-describedby", msg.id);
@@ -1217,6 +1246,7 @@ for (const t of TABS) {
 addForm.addEventListener("submit", async (e) => {
   if ((e.submitter as HTMLButtonElement | null)?.value !== "ok") return;
   e.preventDefault();
+  if (isBusy(e.submitter as HTMLButtonElement)) return; // já criando: Enter de novo não envia duas vezes
   const project = projectSel.value;
   const branch = branchInput.value.trim();
   const side = (t: Tab) => (sideCheck(t).checked ? { dir: sideDir(t).value, base: sideBase(t).value } : null);
@@ -1231,8 +1261,7 @@ addForm.addEventListener("submit", async (e) => {
   }
   if (missingField(addForm, addError)) return;
   const submit = e.submitter as HTMLButtonElement;
-  submit.disabled = true;
-  submit.textContent = "Criando…";
+  setBusy(submit, "Criando…");
   try {
     await invoke("add_worktree", { project, branch, api, front });
     addDialog.close();
@@ -1258,8 +1287,7 @@ addForm.addEventListener("submit", async (e) => {
       markInvalid(branchInput, addError);
     }
   } finally {
-    submit.disabled = false;
-    submit.textContent = addSubmitLabel();
+    clearBusy(submit, addSubmitLabel());
   }
   // Mesmo com erro parcial (ex.: API criada, front falhou) o que foi criado aparece na lista.
   await refresh();
@@ -1343,24 +1371,25 @@ async function cloneFromGithub(t: Tab, button: HTMLButtonElement) {
   if (typeof parent !== "string") return;
   save("cloneParent", parent);
   const req = ++readReq[t];
-  button.disabled = true;
-  button.textContent = "Clonando…";
-  input.disabled = true;
+  // readOnly e aria-disabled, não disabled: o foco fica onde estava (no campo, se foi o Enter; no botão, se foi o clique).
+  setBusy(button, "Clonando…");
+  input.readOnly = true;
   try {
     const path = await invoke<string>("clone_github_repo", { fullName: full, parent });
     if (req !== readReq[t]) return; // o diálogo foi fechado ou reaberto enquanto clonava
-    pfield(`${t}-repo`).value = path;
+    const repo = pfield(`${t}-repo`);
+    repo.value = path;
     input.value = "";
     if (!pfield("name").value.trim()) pfield("name").value = projectNameFrom(name);
     readWorktrees(t);
+    repo.focus();
   } catch (err) {
     if (req !== readReq[t]) return;
     msg.textContent = String(err);
     markInvalid(input, msg);
   } finally {
-    button.disabled = false;
-    button.textContent = "Clonar…";
-    input.disabled = false;
+    clearBusy(button, "Clonar…");
+    input.readOnly = false;
   }
 }
 
@@ -1426,26 +1455,26 @@ for (const t of TABS) {
   // change: depois de colar ou digitar e sair do campo.
   pfield(`${t}-repo`).addEventListener("change", () => readWorktrees(t));
   const clone = box.querySelector<HTMLButtonElement>(".clone")!;
-  clone.addEventListener("click", () => cloneFromGithub(t, clone));
+  clone.addEventListener("click", () => !isBusy(clone) && cloneFromGithub(t, clone));
   // Enter no campo do GitHub clona; não envia o formulário, que ainda não tem a pasta do repositório.
   pfield(`${t}-gh`).addEventListener("keydown", e => {
     if (e.key !== "Enter") return;
     e.preventDefault();
-    if (!clone.disabled) cloneFromGithub(t, clone);
+    if (!isBusy(clone)) cloneFromGithub(t, clone);
   });
 }
 
 projectForm.addEventListener("submit", async (e) => {
   if ((e.submitter as HTMLButtonElement | null)?.value !== "ok") return;
   e.preventDefault();
+  if (isBusy(e.submitter as HTMLButtonElement)) return;
   const side = (t: Tab) => ({ repo: pfield(`${t}-repo`).value, startCommand: pfield(`${t}-start`).value, setupCommand: pfield(`${t}-setup`).value });
   projectError.textContent = "";
   clearInvalid(projectForm);
   for (const t of TABS) pSideMsg(t).textContent = "";
   if (missingField(projectForm, projectError)) return;
   const submit = e.submitter as HTMLButtonElement;
-  submit.disabled = true;
-  submit.textContent = "Criando…";
+  setBusy(submit, "Criando…");
   try {
     await invoke("add_project", { project: { name: pfield("name").value, api: side("api"), front: side("front") } });
     projectDialog.close();
@@ -1460,8 +1489,7 @@ projectForm.addEventListener("submit", async (e) => {
       markInvalid(pfield("name"), projectError);
     }
   } finally {
-    submit.disabled = false;
-    submit.textContent = "Criar projeto";
+    clearBusy(submit, "Criar projeto");
   }
 });
 
@@ -1530,15 +1558,29 @@ const SIDEBAR_W = { min: 200, max: 480, default: 280 };
 const handle = $("#sidebar-handle");
 const sidebarEl = $("#sidebar");
 
-function setSidebarWidth(w: number) {
-  const px = Math.round(Math.min(SIDEBAR_W.max, Math.max(SIDEBAR_W.min, w)));
+/** Área principal mínima: o cabeçalho (abas, destino, ajuda) e um terminal utilizável. */
+const MAIN_MIN = 440;
+/** Maior largura que a janela comporta agora (px CSS: o zoom também estreita a janela). */
+const sidebarMax = () => Math.max(SIDEBAR_W.min, Math.min(SIDEBAR_W.max, innerWidth - MAIN_MIN));
+let sidebarWanted: number = SIDEBAR_W.default;
+
+/** Aplica a largura pedida, limitada pela janela; só a pedida fica salva, para voltar quando a janela crescer. */
+function applySidebarWidth() {
+  const max = sidebarMax();
+  const px = Math.min(max, sidebarWanted);
   document.body.style.setProperty("--sidebar-w", `${px}px`);
+  handle.setAttribute("aria-valuemax", String(max));
   handle.setAttribute("aria-valuenow", String(px));
-  save("sidebarWidth", px);
 }
 
+function setSidebarWidth(w: number) {
+  sidebarWanted = Math.round(Math.min(sidebarMax(), Math.max(SIDEBAR_W.min, w)));
+  applySidebarWidth();
+  save("sidebarWidth", sidebarWanted);
+}
+window.addEventListener("resize", applySidebarWidth);
+
 handle.setAttribute("aria-valuemin", String(SIDEBAR_W.min));
-handle.setAttribute("aria-valuemax", String(SIDEBAR_W.max));
 let dragPointer: number | null = null;
 handle.addEventListener("pointerdown", (e) => {
   if (dragPointer !== null || e.button !== 0) return; // um segundo ponteiro não sequestra o arraste
@@ -1565,11 +1607,13 @@ handle.addEventListener("keydown", (e) => {
   if (e.key === "ArrowLeft") setSidebarWidth(w - step);
   else if (e.key === "ArrowRight") setSidebarWidth(w + step);
   else if (e.key === "Home") setSidebarWidth(SIDEBAR_W.min);
-  else if (e.key === "End") setSidebarWidth(SIDEBAR_W.max);
+  else if (e.key === "End") setSidebarWidth(sidebarMax());
   else return;
   e.preventDefault();
 });
-setSidebarWidth(Number(load("sidebarWidth", SIDEBAR_W.default)) || SIDEBAR_W.default);
+// Restaura a pedida sem cortá-la pela janela de agora: numa janela pequena, ela volta quando a janela crescer.
+sidebarWanted = Math.min(SIDEBAR_W.max, Math.max(SIDEBAR_W.min, Number(load("sidebarWidth", SIDEBAR_W.default)) || SIDEBAR_W.default));
+applySidebarWidth();
 
 // ---------- atalhos e janela ----------
 
@@ -1610,8 +1654,16 @@ scheme.addEventListener("change", () => {
   for (const env of envs.values()) for (const pane of Object.values(env.panes)) pane.term.options.theme = termTheme();
 });
 
+// Só o terminal visível, uma vez por quadro: os ocultos se ajustam ao aparecer (render), e arrastando a barra
+// o ajuste espera soltar (o lostpointercapture redesenha). Antes, cada quadro do arraste mandava pty_resize a todos.
+let fitFrame = 0;
 new ResizeObserver(() => {
-  for (const env of envs.values()) for (const pane of Object.values(env.panes)) pane.fit.fit();
+  if (fitFrame || document.body.classList.contains("resizing")) return;
+  fitFrame = requestAnimationFrame(() => {
+    fitFrame = 0;
+    const ck = currentKey();
+    if (ck) envs.get(ck)?.panes[tab]?.fit.fit();
+  });
 }).observe(panesEl);
 
 // ---------- início: restaura a última worktree ativa de cada projeto ----------

@@ -15,7 +15,7 @@
           <rect x="512" y="604" width="272" height="136" rx="68" fill="var(--run)" />
           <circle cx="716" cy="672" r="48" fill="var(--mark-bg)" />
         </svg>
-        <span>switch-terminal</span>
+        <h1>switch-terminal</h1>
       </div>
       <nav id="board" aria-label="Projetos" aria-description="Setas andam entre as worktrees; Enter troca"></nav>
       <div id="sidebar-foot">
@@ -96,9 +96,9 @@
           <details class="more">
             <summary>Alterar diretório ou origem</summary>
             <label>
-              Diretório
+              <span id="api-dir-label">Diretório</span>
               <span class="dir-row">
-                <input name="api-dir" required spellcheck="false" autocomplete="off" />
+                <input name="api-dir" aria-labelledby="api-dir-label" required spellcheck="false" autocomplete="off" />
                 <button type="button" class="pick">Escolher…</button>
               </span>
             </label>
@@ -115,9 +115,9 @@
           <details class="more">
             <summary>Alterar diretório ou origem</summary>
             <label>
-              Diretório
+              <span id="front-dir-label">Diretório</span>
               <span class="dir-row">
-                <input name="front-dir" required spellcheck="false" autocomplete="off" />
+                <input name="front-dir" aria-labelledby="front-dir-label" required spellcheck="false" autocomplete="off" />
                 <button type="button" class="pick">Escolher…</button>
               </span>
             </label>
@@ -151,17 +151,17 @@
         <fieldset data-side="api">
           <legend>API</legend>
           <label>
-            Repositório
+            <span id="api-repo-label">Repositório</span>
             <span class="dir-row">
-              <input name="api-repo" required spellcheck="false" autocomplete="off" />
+              <input name="api-repo" aria-labelledby="api-repo-label" required spellcheck="false" autocomplete="off" />
               <button type="button" class="pick">Escolher…</button>
             </span>
           </label>
           <p class="hint">Repositório bare: escolha a pasta que contém o <code>.bare</code>.</p>
           <label class="gh-row" hidden>
-            <span class="gh-label">Ou clone do GitHub</span>
+            <span class="gh-label" id="api-gh-label">Ou clone do GitHub</span>
             <span class="dir-row">
-              <input name="api-gh" list="gh-repos" placeholder="ex.: dono/repositório" spellcheck="false" autocomplete="off" />
+              <input name="api-gh" aria-labelledby="api-gh-label" list="gh-repos" placeholder="ex.: dono/repositório" spellcheck="false" autocomplete="off" />
               <button type="button" class="pick clone">Clonar…</button>
             </span>
           </label>
@@ -183,17 +183,17 @@
         <fieldset data-side="front">
           <legend>Front</legend>
           <label>
-            Repositório
+            <span id="front-repo-label">Repositório</span>
             <span class="dir-row">
-              <input name="front-repo" required spellcheck="false" autocomplete="off" />
+              <input name="front-repo" aria-labelledby="front-repo-label" required spellcheck="false" autocomplete="off" />
               <button type="button" class="pick">Escolher…</button>
             </span>
           </label>
           <p class="hint">Repositório bare: escolha a pasta que contém o <code>.bare</code>.</p>
           <label class="gh-row" hidden>
-            <span class="gh-label">Ou clone do GitHub</span>
+            <span class="gh-label" id="front-gh-label">Ou clone do GitHub</span>
             <span class="dir-row">
-              <input name="front-gh" list="gh-repos" placeholder="ex.: dono/repositório" spellcheck="false" autocomplete="off" />
+              <input name="front-gh" aria-labelledby="front-gh-label" list="gh-repos" placeholder="ex.: dono/repositório" spellcheck="false" autocomplete="off" />
               <button type="button" class="pick clone">Clonar…</button>
             </span>
           </label>

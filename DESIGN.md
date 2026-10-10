@@ -210,7 +210,7 @@ A marca na barra lateral redesenha a geometria da logo com `--mark-bg` / `--mark
 
 **A Regra da Tinta em Serviço.** Só o que está em serviço (worktree atual ou rodando/subindo/aguardando) recebe tinta cheia; todo o resto fica em meia-tinta. Ênfase nunca vem de cor.
 
-**A Regra do Terminal sem Moldura.** O terminal fica sobre `board`, o mesmo fundo do painel, sem borda nem cartão. O tema ANSI do xterm (`TERM_THEME`) segue o fundo, o cursor e a seleção do sistema e alinha vermelho/verde/amarelo aos tokens de estado; as outras cores ANSI pertencem ao conteúdo do terminal, não à interface, mas todas passam AA (≥4,5:1) sobre o fundo do terminal nos dois temas.
+**A Regra do Terminal sem Moldura.** O terminal fica sobre `board`, o mesmo fundo do painel, sem borda nem cartão. Fundo, cursor e seleção do xterm são lidos dos tokens (`--term-bg`, `--ink`, `--selection`) ao criar o terminal e ao trocar de tema; o tema ANSI (`TERM_THEME`) alinha vermelho/verde/amarelo aos tokens de estado; as outras cores ANSI pertencem ao conteúdo do terminal, não à interface, mas todas passam AA (≥4,5:1) sobre o fundo do terminal nos dois temas.
 
 ## Typography
 
@@ -236,7 +236,7 @@ A marca na barra lateral redesenha a geometria da logo com `--mark-bg` / `--mark
 
 ## Layout
 
-Duas colunas: a barra lateral (`--sidebar-w`, padrão 280px, redimensionável por uma alça de 5px; `Ctrl+Shift+B` recolhe) e a área principal. Ambas abrem com uma faixa de 44px separada por um fio de 1px (marca à esquerda; destino, abas, outros rodando e ajuda à direita). O terminal ocupa todo o restante, com respiro de `8px 4px 4px 12px`.
+Duas colunas: a barra lateral (`--sidebar-w`, padrão 280px, redimensionável por uma alça de 5px até deixar 440px para a área principal, limite refeito quando a janela ou o zoom mudam; `Ctrl+Shift+B` recolhe) e a área principal. Ambas abrem com uma faixa de 44px separada por um fio de 1px (marca à esquerda; destino, abas, outros rodando e ajuda à direita). O terminal ocupa todo o restante, com respiro de `8px 4px 4px 12px`.
 
 O ritmo é denso e regular em passos de 2px: 4, 6, 8, 10, 14 e 22px. A margem lateral do painel é 14px (`gutter`) em todas as linhas, cabeçalhos de plataforma e no rodapé ("Novo projeto"); linhas têm 5px de respiro vertical; plataformas se separam por 10px. O nome alinha na margem de 14px e a palheta fica à direita dele, na coluna de situação de um painel de partidas, encostada na margem direita; linha nunca aberta leva a palheta vazia, para o painel já ler como painel de partidas no primeiro frame. Superfícies flutuantes: aviso 440px, paleta 560px, diálogos 500px (ancorados a 8vh do topo, até 84vh: um erro ou a lista crescem para baixo e o diálogo não pula), ajuda 360px (até a altura da janela, com rolagem), todas limitadas a 90–92% da largura.
 
@@ -245,7 +245,7 @@ O ritmo é denso e regular em passos de 2px: 4, 6, 8, 10, 14 e 22px. A margem la
 O sistema é plano. A profundidade do painel vem de tons (`board` < `rail` < `flap`) e de fios de 1px, não de sombras. A linha atual é marcada por fundo `flap` e fios internos em cima e embaixo (`inset 0 ±1px 0 ink-3`, ≥3:1), não por elevação. Só as superfícies que flutuam acima do terminal (paleta, ajuda, diálogos) recebem uma sombra curta, e sempre junto de uma borda de 1px em `rule`. O aviso de troca fica sobre o véu, sem sombra.
 
 ### Shadow Vocabulary
-- **Flutuante** (`box-shadow: 0 4px 8px rgb(0 0 0 / 28%)`): paleta, popover de ajuda, diálogos de formulário.
+- **Flutuante** (`--float-shadow`: `0 4px 8px rgb(0 0 0 / 28%)`): paleta, popover de ajuda, diálogos de formulário.
 
 ### Named Rules
 **A Regra do Plano no Painel.** Nada no painel ou na faixa de destino tem sombra. Sombra existe só para o que flutua sobre o terminal, e é curta.
@@ -277,7 +277,7 @@ O estado de cada worktree em 7 caracteres.
 
 ### Abas (API | FRONT)
 - **Forma:** 26px de altura, raio 2px, rótulo em caixa-alta 12px/700.
-- **Não selecionada:** contorno `rule`, texto `ink-2`. **Selecionada:** fundo `flap` liso, sem contorno, texto `ink`. **Lado caído (PARCIAL):** texto `fail` com um quadrado de 6px (raio 2px) na frente.
+- **Não selecionada:** contorno `rule`, texto `ink-2`. **Selecionada:** fundo `flap` liso, sem contorno, texto `ink` e um fio de 2px em `ink` na base (`inset`, não é sombra): o fundo sozinho dá 1,2:1 sobre `board` e não distingue o estado. **Lado caído (PARCIAL):** texto `fail` com um quadrado de 6px (raio 2px) na frente.
 
 ### Buttons
 - **Shape:** cantos discretos (4px), 32px de altura, `0 14px`, 600.
@@ -286,7 +286,7 @@ O estado de cada worktree em 7 caracteres.
 - **Ícone:** 28×28, raio 4px, ícone `ink-2`; hover fundo `flap` e ícone `ink`; desabilitado em `ink-3`.
 - **Rodapé do painel:** uma linha só, de 40px, com fio superior: "Novo projeto" (botão quiet com ícone de pasta com +, para não repetir o `+` de nova worktree das placas; texto `ink-2`, hover `ink` sobre `flap`) ocupa a largura, e "Reler worktrees" é um botão de ícone de 28px na ponta (`Ctrl+Shift+L`, listado na ajuda). Enquanto lê, o reler fica `aria-disabled` (o foco não sai dele), em `ink-3`, e o ícone gira em 8 degraus (`steps(8)`, desligado com reduzir movimento); ao terminar, o cabeçalho diz o que mudou na mesma região `status` do "Parou em" ("Worktrees relidas: nada mudou.", "nova: interno / feat/x", "2 novas · 1 saiu"). Sem projeto, o rodapé inteiro some: a ação é o "Criar projeto" do centro.
 - **Aviso de troca:** nenhum botão é primário nem recebe o foco; o foco vai para o card (esperar é a ação padrão). "Voltar para X" e "Forçar agora" são secundários, nessa ordem (Tab + Enter nunca vira SIGKILL), com Forçar empurrado para a direita (o nome trunca, o verbo fica); depois de voltar, ou já no SIGKILL, o Voltar some e o card diz "Voltando para X". Sem atalho de Esc: no reflexo do vim, ele desfazia a troca recém-pedida. O texto diz o que recebe o Ctrl+C (`npm run dev`, em mono), lido do processo em primeiro plano. O card é um `group` com nome ("Troca em andamento"): o foco nele não relê o que a região viva já anunciou. Ao terminar, o cabeçalho diz por 8 s, logo depois das abas e da porta, quanto a anterior levou, com o tempo primeiro ("Parou em 1,8 s · feat/x", ou "Encerrada à força em…"), em 13px `ink-2`, numa região `status`; é o primeiro a ceder largura no cabeçalho e, dentro dele, o nome trunca antes do tempo. Um SUBINDO que desiste depois de 15 s usa o mesmo recado ("Front não subiu em 15 s · feat/x"); durante a troca o destino fica com `aria-live="off"` para não falar junto com o aviso.
-- **Disabled:** opacidade 0.5.
+- **Disabled:** opacidade 0.5. **Ocupado** (clonando, criando): mesma opacidade com `aria-disabled` e cursor `progress`, nunca `disabled`, que jogaria o foco do teclado no `body`, atrás do diálogo; o clique repetido é ignorado e o texto diz o que está fazendo ("Clonando…", "Criando…").
 
 ### Chips
 - **Etiqueta:** contorno `rule` de 1px, raio 2px, `0 4px`, 12px/700 com 0.06em, texto `ink-2`.
@@ -307,7 +307,7 @@ O estado de cada worktree em 7 caracteres.
 
 ### Navigation
 - **Paleta de troca** (`Ctrl+Shift+K`): busca de 44px com ícone de lupa, lista com nome do projeto em rótulo caixa-alta; item na ordem do painel, nome | projeto | palheta, com a palheta na coluna de situação à direita; item selecionado igual à linha atual (`flap` + fios internos `ink-3`); ordem por qualidade do casamento (trecho no começo de palavra > trecho > subsequência), depois recência; a atual leva a etiqueta ATUAL; rodapé com uma mini palheta ENCERRA e o que o Enter ou o clique encerra, com o processo em mono ("Encerra feat/x (npm run dev) em PROJETO"; sem espaço, só o nome da worktree trunca); com esse aviso, a legenda Enter/Esc sai e o rodapé inteiro é dele; o mouse também move a seleção.
-- **Faixa de destino:** projeto em rótulo caixa-alta `ink-2`, separador `ink-3`, branch em 17px/600 e a palheta depois dela, como no painel; o destino guarda a largura natural até 40% da faixa e só então a branch trunca; as abas logo depois, e logo depois delas a porta do dev server da aba aberta (`:3333`, o endereço inteiro no title), junto da aba a que pertence, que aparecer ou trocar de porta não desloca as abas, lida da saída do terminal, em mono 12px `ink-2`, link que abre no navegador padrão (sublinha no hover) e curta o bastante para nunca truncar; troca junto com a aba. Com a barra recolhida, os outros projetos em serviço vêm à direita depois de um fio `rule`, cada um um botão (28px, hover `--hover`, título "Ir para…") que leva até a worktree dele; sem espaço, o nome trunca e a palheta fica inteira. O nome de projeto é caixa-alta em todo lugar.
+- **Faixa de destino:** projeto em rótulo caixa-alta `ink-2`, separador `ink-3`, branch em 17px/600 e a palheta depois dela, como no painel; o destino guarda a largura natural até 40% da faixa (ao menos 220px) e, sem espaço, o nome do projeto trunca primeiro (até "INT…") e só depois a branch; o piso do destino é a palheta inteira e 3em do nome, para nada passar por cima das abas; com a faixa abaixo de 480px (janela pequena ou zoom alto, por container query), a porta, o recado e os outros em serviço saem primeiro; as abas logo depois, e logo depois delas a porta do dev server da aba aberta (`:3333`, o endereço inteiro no title), junto da aba a que pertence, que aparecer ou trocar de porta não desloca as abas, lida da saída do terminal, em mono 12px `ink-2`, link que abre no navegador padrão (sublinha no hover) e curta o bastante para nunca truncar; troca junto com a aba. Com a barra recolhida, os outros projetos em serviço vêm à direita depois de um fio `rule`, cada um um botão (28px, hover `--hover`, título "Ir para…") que leva até a worktree dele; sem espaço, o nome trunca e a palheta fica inteira. O nome de projeto é caixa-alta em todo lugar.
 
 ## Do's and Don'ts
 
