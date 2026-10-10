@@ -89,6 +89,7 @@ pub fn run() {
             worktrees::worktree_defaults,
             worktrees::add_project,
             worktrees::open_config,
+            worktrees::list_worktrees,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

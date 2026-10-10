@@ -1236,20 +1236,46 @@ const projectError = projectDialog.querySelector<HTMLElement>(".error")!;
 const pfield = (name: string) => projectForm.elements.namedItem(name) as HTMLInputElement;
 const pSideMsg = (t: Tab) => projectForm.querySelector<HTMLElement>(`fieldset[data-side="${t}"] .side-error`)!;
 
+const pFound = (t: Tab) => projectForm.querySelector<HTMLUListElement>(`fieldset[data-side="${t}"] .found`)!;
+
 function openProjectDialog() {
   projectForm.reset();
   projectError.textContent = "";
   clearInvalid(projectForm);
-  for (const t of TABS) pSideMsg(t).textContent = "";
+  for (const t of TABS) {
+    pSideMsg(t).textContent = "";
+    pFound(t).hidden = true;
+  }
   projectDialog.showModal();
   pfield("name").focus();
 }
 
+/** Mostra as worktrees que o app vai encontrar no repositório escolhido, antes de salvar o projeto. */
+async function readWorktrees(t: Tab) {
+  const found = pFound(t);
+  pSideMsg(t).textContent = "";
+  found.hidden = true;
+  try {
+    const wts = await invoke<{ branch: string; path: string }[]>("list_worktrees", { repo: pfield(`${t}-repo`).value });
+    found.replaceChildren(
+      el("li", { className: "count", textContent: wts.length === 1 ? "1 worktree encontrada" : `${wts.length} worktrees encontradas` }),
+      ...wts.map((w) => el("li", { title: w.path }, el("strong", { textContent: w.branch }), " ", el("code", { textContent: w.path }))),
+    );
+    found.hidden = false;
+  } catch (err) {
+    pSideMsg(t).textContent = String(err);
+  }
+}
+
 for (const t of TABS) {
-  projectForm.querySelector<HTMLButtonElement>(`fieldset[data-side="${t}"] .pick`)!.addEventListener("click", async () => {
+  const box = projectForm.querySelector<HTMLFieldSetElement>(`fieldset[data-side="${t}"]`)!;
+  box.querySelector<HTMLButtonElement>(".pick:not(.read)")!.addEventListener("click", async () => {
     const dir = await pickFolder({ directory: true, defaultPath: pfield(`${t}-repo`).value || undefined, title: `Repositório (${TAB_LABEL[t]})` });
-    if (typeof dir === "string") pfield(`${t}-repo`).value = dir;
+    if (typeof dir !== "string") return;
+    pfield(`${t}-repo`).value = dir;
+    readWorktrees(t);
   });
+  box.querySelector<HTMLButtonElement>(".read")!.addEventListener("click", () => readWorktrees(t));
 }
 
 projectForm.addEventListener("submit", async (e) => {
@@ -1284,6 +1310,14 @@ projectForm.addEventListener("submit", async (e) => {
 
 projectDialog.addEventListener("close", () => render(true));
 $("#new-project").addEventListener("click", () => openProjectDialog());
+
+// Relê o `git worktree list` na hora, sem esperar a janela ganhar foco (worktree criada pelo terminal, por exemplo).
+$<HTMLButtonElement>("#reload").addEventListener("click", async (e) => {
+  const btn = e.currentTarget as HTMLButtonElement;
+  btn.disabled = true;
+  await refresh();
+  btn.disabled = false;
+});
 
 // ---------- barra lateral ----------
 

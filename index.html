@@ -18,6 +18,10 @@
         <span>switch-terminal</span>
       </div>
       <nav id="board" aria-label="Projetos" aria-description="Setas andam entre as worktrees; Enter troca"></nav>
+      <button id="reload" type="button" class="quiet" title="Relê o git worktree list de todos os projetos">
+        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3" /></svg>
+        Reler worktrees
+      </button>
       <button id="new-project" type="button" class="quiet">
         <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>
         Novo projeto
@@ -147,8 +151,10 @@
             <span class="dir-row">
               <input name="api-repo" required spellcheck="false" autocomplete="off" />
               <button type="button" class="pick">Escolher…</button>
+              <button type="button" class="pick read">Ler worktrees</button>
             </span>
           </label>
+          <ul class="found" aria-live="polite" hidden></ul>
           <p class="hint">No layout bare, é a pasta que contém o <code>.bare</code>.</p>
           <label>
             Comando de start
@@ -171,8 +177,10 @@
             <span class="dir-row">
               <input name="front-repo" required spellcheck="false" autocomplete="off" />
               <button type="button" class="pick">Escolher…</button>
+              <button type="button" class="pick read">Ler worktrees</button>
             </span>
           </label>
+          <ul class="found" aria-live="polite" hidden></ul>
           <p class="hint">No layout bare, é a pasta que contém o <code>.bare</code>.</p>
           <label>
             Comando de start

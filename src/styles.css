@@ -579,6 +579,12 @@ kbd {
   background: var(--flap);
 }
 
+.quiet:disabled {
+  color: var(--ink-3);
+  background: none;
+  cursor: progress;
+}
+
 #sidebar-handle {
   position: relative;
   z-index: 2;
@@ -1348,6 +1354,28 @@ dialog.form .pick {
 
 dialog.form .pick:hover {
   background: var(--flap);
+}
+
+/* "Ler worktrees": o que o app vai encontrar no repositório escolhido */
+dialog.form .found {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+dialog.form .found li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+dialog.form .found .count {
+  color: var(--ink-2);
+}
+
+dialog.form .found code {
+  color: var(--ink-2);
 }
 
 dialog.form .side-error,

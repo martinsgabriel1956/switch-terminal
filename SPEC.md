@@ -41,13 +41,13 @@ Estado persistido no `localStorage` do webview: `{ "<projeto>": "<id da worktree
 - Pareamento automático pelo **nome exato da branch**, com `manualPairs` como override.
 - Worktrees sem par aparecem como **solo** (uma aba só).
 - O app **cria** worktrees (veja abaixo), mas não remove.
-- A lista é relida ao abrir a paleta e quando a janela ganha foco.
+- A lista é relida ao abrir a paleta, quando a janela ganha foco e no botão "Reler worktrees" no fim da sidebar (visível mesmo sem projeto).
 - Worktree que sumiu: os PTYs dela são mortos e ela sai da sidebar.
 
 ## Criar projeto
 
 - Botão "+ Novo projeto" no fim da sidebar (e "Criar projeto" na tela vazia, quando ainda não há config).
-- Campos: nome e, para API e Front, repositório (campo + "Escolher…"), comando de start (padrão `npm run dev`) e comando de setup (opcional).
+- Campos: nome e, para API e Front, repositório (campo + "Escolher…" + "Ler worktrees", que lista as worktrees do repo; escolher a pasta já lê), comando de start (padrão `npm run dev`) e comando de setup (opcional).
 - Valida: nome preenchido e único; cada pasta precisa ser um repositório git.
 - Grava no `config.json` mantendo a ordem e os campos existentes; caminhos dentro da home viram `~/…`. Escrita atômica (arquivo temporário + rename). Se o config existir com JSON inválido, recusa em vez de sobrescrever.
 

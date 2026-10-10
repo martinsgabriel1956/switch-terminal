@@ -72,8 +72,8 @@ pub struct SideView {
     setup_command: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-struct Wt {
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct Wt {
     branch: String,
     path: String,
 }
@@ -158,6 +158,16 @@ fn git(repo: &str, args: &[&str]) -> Result<String, String> {
 
 fn git_worktrees(repo: &str) -> Result<Vec<Wt>, String> {
     git(repo, &["worktree", "list", "--porcelain"]).map(|out| parse_porcelain(&out))
+}
+
+/// "Ler worktrees" no formulário de novo projeto: o que o app vai encontrar no repositório escolhido.
+#[tauri::command]
+pub fn list_worktrees(repo: String) -> Result<Vec<Wt>, String> {
+    let repo = expand(repo.trim()).trim_end_matches('/').to_string();
+    if repo.is_empty() {
+        return Err("Escolha a pasta do repositório.".into());
+    }
+    git_worktrees(&repo)
 }
 
 fn side(w: &Option<Wt>, cfg: &SideCfg) -> Option<SideView> {
@@ -496,6 +506,9 @@ mod tests {
         assert!(tmp.join("bare/feat/x/.git").exists());
         assert!(tmp.join("bare/old/.git").exists());
         assert!(tmp.join("custom/feat/y/.git").exists());
+        let branches_of = |r: &str| list_worktrees(path(r)).unwrap().into_iter().map(|w| w.branch).collect::<Vec<_>>();
+        assert_eq!(branches_of("bare"), vec!["feat/x", "old"]);
+        assert!(list_worktrees(tmp.to_str().unwrap().into()).is_err(), "pasta que não é repo");
 
         assert!(add_one(&path("bare"), &path("bare"), "../fora", "main").is_err());
         assert!(add_one(&path("bare"), "relativo", "feat/z", "main").is_err());
