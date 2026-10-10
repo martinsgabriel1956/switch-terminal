@@ -90,6 +90,7 @@ pub fn run() {
             worktrees::add_project,
             worktrees::open_config,
             worktrees::set_screen_reader,
+            worktrees::missing_deps_install,
             worktrees::list_worktrees,
             worktrees::github_repos,
             worktrees::clone_github_repo,

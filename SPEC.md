@@ -30,6 +30,7 @@ Arquivo `~/.config/switch-terminal/config.json`. Projetos novos podem ser criado
 
 - `startCommand` é opcional; sem ele, abre só o shell.
 - `setupCommand` (opcional, por lado) roda antes do `startCommand` só na primeira subida de uma worktree criada pelo app. Exemplo: `"npm install && cp ../main/.env ."`.
+- Lado Node sem dependências (tem `package.json`, falta `node_modules`, como numa worktree criada fora do app): o start vira `<install> && <startCommand>`, com o instalador escolhido pelo lockfile (`pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `bun.lock(b)` → bun, senão npm). A checagem é antes de subir, não depois do erro: um crash ou Ctrl+C nunca dispara reinstalação. Não roda quando o `setupCommand` da primeira subida já está na linha.
 - `baseBranch` (opcional, padrão `main`) preenche o campo "A partir de" ao criar uma worktree.
 - `stopTimeoutMs` é opcional (padrão 5000).
 - `screenReader` é opcional (padrão `false`): liga o modo leitor de tela do xterm, que expõe a saída dos terminais como texto acessível. Custa desempenho com saída intensa; o painel relê ao voltar para a janela e aplica nos terminais abertos. A ajuda (`Ctrl+Shift+H`) tem um interruptor que grava esse campo no config sem mexer no resto.

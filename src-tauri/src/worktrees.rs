@@ -446,6 +446,19 @@ fn write_config_json(path: &str, cfg: &serde_json::Value) -> Result<(), String> 
     std::fs::rename(&tmp, path).map_err(io)
 }
 
+/// Lado Node sem dependências instaladas (tem package.json, falta node_modules): o comando de instalação, escolhido
+/// pelo lockfile (sem lockfile, npm), para rodar antes do startCommand. Worktree criada fora do app nasce assim,
+/// e o `npm run dev` falharia por falta do binário do dev server.
+#[tauri::command]
+pub fn missing_deps_install(path: String) -> Option<&'static str> {
+    let dir = Path::new(&path);
+    if !dir.join("package.json").is_file() || dir.join("node_modules").exists() {
+        return None;
+    }
+    let by_lock = [("pnpm-lock.yaml", "pnpm install"), ("yarn.lock", "yarn install"), ("bun.lock", "bun install"), ("bun.lockb", "bun install")];
+    Some(by_lock.iter().find(|(lock, _)| dir.join(lock).is_file()).map_or("npm install", |(_, cmd)| *cmd))
+}
+
 /// Interruptor da ajuda: grava "screenReader" no config (o app relê em seguida e aplica nos terminais abertos).
 #[tauri::command]
 pub fn set_screen_reader(on: bool) -> Result<(), String> {
@@ -543,6 +556,24 @@ mod tests {
 
     fn wt(b: &str) -> Wt {
         Wt { branch: b.into(), path: format!("/r/{b}") }
+    }
+
+    #[test]
+    fn install_only_when_node_modules_is_missing() {
+        let dir = std::env::temp_dir().join(format!("switch-terminal-deps-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.to_string_lossy().to_string();
+
+        assert_eq!(missing_deps_install(path.clone()), None, "sem package.json não é Node");
+        std::fs::write(dir.join("package.json"), "{}").unwrap();
+        assert_eq!(missing_deps_install(path.clone()), Some("npm install"));
+        std::fs::write(dir.join("pnpm-lock.yaml"), "").unwrap();
+        assert_eq!(missing_deps_install(path.clone()), Some("pnpm install"));
+        std::fs::create_dir(dir.join("node_modules")).unwrap();
+        assert_eq!(missing_deps_install(path), None);
+
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

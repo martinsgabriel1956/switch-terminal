@@ -358,11 +358,15 @@ function disposeEnv(k: string, env: Env) {
   envs.delete(k);
 }
 
-function writeStart(k: string, pane: Pane, isFresh: boolean) {
-  const cmd = [isFresh && pane.side.setupCommand, pane.side.startCommand].filter(Boolean).join(" && ");
-  if (!cmd) return;
+async function writeStart(k: string, pane: Pane, isFresh: boolean) {
+  const setup = isFresh ? pane.side.setupCommand : null;
+  if (!setup && !pane.side.startCommand) return;
   pane.url = null;
   starting.set(k, Date.now());
+  // Sem node_modules o start falharia: instala antes, na mesma linha, à vista no terminal.
+  // O setupCommand de uma worktree recém-criada já cuida disso; checar antes (e não a cada erro) não reinstala num crash.
+  const install = setup || !pane.side.startCommand ? null : await invoke<string | null>("missing_deps_install", { path: pane.side.path });
+  const cmd = [setup, install, pane.side.startCommand].filter(Boolean).join(" && ");
   invoke("pty_write", { id: pane.ptyId, data: cmd + "\r" });
 }
 const stopPane = (pane: Pane) => invoke("pty_stop", { id: pane.ptyId, timeoutMs: config.stopTimeoutMs });
