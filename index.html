@@ -36,8 +36,8 @@
         </button>
         <div id="destination" aria-live="polite"></div>
         <div id="tabs" role="tablist" aria-label="Terminal"></div>
-        <span id="last-stop" role="status"></span>
         <a id="dev-url" hidden></a>
+        <span id="last-stop" role="status"></span>
         <div id="running" role="group" aria-label="Rodando em outros projetos"></div>
         <button id="help-btn" type="button" class="icon-btn" popovertarget="help" aria-label="Atalhos e legenda" title="Atalhos e legenda (Ctrl+Shift+H)">
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" /><path d="M6.3 6.2a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.4" /><path d="M8 11.6v.1" /></svg>
@@ -71,7 +71,7 @@
         <dt><span class="flap" data-state="kill"><span>SIGKILL</span></span></dt><dd>Não parou a tempo (ou você forçou): encerrada à força</dd>
         <dt><span class="flap" data-state="stop"><span>ENCERRA</span></span></dt><dd>Prévia: trocar para a linha sob o cursor (ou a escolhida na paleta) encerra esta</dd>
         <dt><span class="flap" data-state="idle"><span>INATIVA</span></span></dt><dd>Terminais abertos, nada rodando</dd>
-        <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Sem palheta: ainda não aberta nesta sessão</dd>
+        <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Palheta vazia: ainda não aberta nesta sessão</dd>
       </dl>
     </div>
 
@@ -146,6 +146,8 @@
           <input name="name" required placeholder="ex.: meu-projeto" aria-errormessage="project-name-error" spellcheck="false" autocomplete="off" />
         </label>
         <p class="side-error" id="project-name-error" role="alert"></p>
+        <p class="hint" id="gh-hint" hidden></p>
+        <datalist id="gh-repos"></datalist>
         <fieldset data-side="api">
           <legend>API</legend>
           <label>
@@ -155,9 +157,16 @@
               <button type="button" class="pick">Escolher…</button>
             </span>
           </label>
+          <p class="hint">Repositório bare: escolha a pasta que contém o <code>.bare</code>.</p>
+          <label class="gh-row" hidden>
+            <span class="gh-label">Ou clone do GitHub</span>
+            <span class="dir-row">
+              <input name="api-gh" list="gh-repos" placeholder="ex.: dono/repositório" spellcheck="false" autocomplete="off" />
+              <button type="button" class="pick clone">Clonar…</button>
+            </span>
+          </label>
           <p class="side-error" id="project-api-error" role="alert"></p>
           <div class="found" role="status" hidden></div>
-          <p class="hint">Repositório bare: escolha a pasta que contém o <code>.bare</code>.</p>
           <label>
             Comando de start
             <input name="api-start" value="npm run dev" spellcheck="false" autocomplete="off" />
@@ -180,9 +189,16 @@
               <button type="button" class="pick">Escolher…</button>
             </span>
           </label>
+          <p class="hint">Repositório bare: escolha a pasta que contém o <code>.bare</code>.</p>
+          <label class="gh-row" hidden>
+            <span class="gh-label">Ou clone do GitHub</span>
+            <span class="dir-row">
+              <input name="front-gh" list="gh-repos" placeholder="ex.: dono/repositório" spellcheck="false" autocomplete="off" />
+              <button type="button" class="pick clone">Clonar…</button>
+            </span>
+          </label>
           <p class="side-error" id="project-front-error" role="alert"></p>
           <div class="found" role="status" hidden></div>
-          <p class="hint">Repositório bare: escolha a pasta que contém o <code>.bare</code>.</p>
           <label>
             Comando de start
             <input name="front-start" value="npm run dev" spellcheck="false" autocomplete="off" />

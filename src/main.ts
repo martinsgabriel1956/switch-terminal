@@ -92,12 +92,12 @@ const TERM_THEME: Record<"dark" | "light", ITheme> = {
     cyan: "#0b6e7a",
     white: "#6c6e72",
     brightBlack: "#55575c",
-    brightRed: "#d0362b",
-    brightGreen: "#13824f",
+    brightRed: "#ce352a",
+    brightGreen: "#127f4d",
     brightYellow: "#9a5f00",
-    brightBlue: "#2c6fd6",
-    brightMagenta: "#a24fbd",
-    brightCyan: "#0f7f8c",
+    brightBlue: "#2b6cd1",
+    brightMagenta: "#9d4cb7",
+    brightCyan: "#0e7a87",
     brightWhite: "#3a3c40",
   },
 };
@@ -125,9 +125,9 @@ urlEl.addEventListener("click", (e) => {
 });
 
 let lastStopTimer = 0;
-/** Recado curto no cabeçalho ("feat/x parou em 1,8 s", "Worktrees relidas: nada mudou."), por alguns segundos. */
+/** Recado curto no cabeçalho ("Parou em 1,8 s · feat/x", "Worktrees relidas: nada mudou."), por alguns segundos. */
 function headerNote(...nodes: (Node | string)[]) {
-  lastStopEl.replaceChildren(...nodes);
+  lastStopEl.replaceChildren(...nodes.map((n) => (typeof n === "string" ? el("span", { textContent: n }) : n)));
   clearTimeout(lastStopTimer);
   lastStopTimer = setTimeout(() => lastStopEl.replaceChildren(), 8000);
 }
@@ -386,7 +386,8 @@ function activate(project: string, wt: Worktree, created: boolean) {
       // O fim da troca também tem fechamento: quanto a anterior levou para sair, e se foi à força.
       if (hadProcs) {
         const secs = ((Date.now() - state.deadline + config.stopTimeoutMs) / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-        headerNote(...labelNodes(state.from), state.forcing ? ` encerrada à força em ${secs} s` : ` parou em ${secs} s`);
+        // O tempo primeiro: sem espaço, quem trunca é o nome, nunca o "parou em".
+        headerNote(state.forcing ? `Encerrada à força em ${secs} s` : `Parou em ${secs} s`, el("span", { className: "who" }, "· ", ...labelNodes(state.from)));
       }
     }
     const k = key(project, wt.id);
@@ -453,8 +454,8 @@ function render(focus = false) {
   if (destEl.dataset.sig !== sig) {
     destEl.dataset.sig = sig;
     destEl.replaceChildren(
-      flap(state, `head:${ck}`),
       el("span", { className: "where" }, el("span", { className: "project", textContent: project }), el("span", { className: "sep", textContent: "/" }), ...labelNodes(wt.label)),
+      flap(state, `head:${ck}`),
       el("span", { className: "sr", textContent: `: ${say(project, wt, state)}` }),
     );
   }
@@ -497,6 +498,7 @@ function render(focus = false) {
 
 function renderEmpty() {
   const missing = configError?.includes("Não consegui ler");
+  const hadFocus = document.activeElement === document.body || emptyEl.contains(document.activeElement);
   emptyEl.replaceChildren(
     ...(configError
       ? [
@@ -517,6 +519,7 @@ function renderEmpty() {
             el("p", {}, el("button", { type: "button", className: "btn primary", textContent: "Criar projeto", onclick: () => openProjectDialog() })),
           ]),
   );
+  if (hadFocus) emptyEl.querySelector<HTMLButtonElement>(".btn.primary")?.focus();
 }
 
 /** Aviso sobre os terminais enquanto a worktree anterior do projeto é encerrada. */
@@ -637,7 +640,8 @@ function lineButton(project: string, wt: Worktree) {
   }
   const live = LIVE.includes(state);
   const ends = wouldStop(project, wt.id);
-  const endsText = ends ? `Encerra ${ends.label}${procs(project, ends).length ? ` (${procs(project, ends).join(", ")})` : ""}` : "";
+  const endsProcs = ends && procs(project, ends).length ? ` (${procs(project, ends).join(", ")})` : "";
+  const endsText = ends ? `Encerra ${ends.label}${endsProcs}` : "";
   const f = flap(state, `line:${k}`);
   // A linha em serviço mostra ENCERRA enquanto o cursor (ou o foco) está em outra do mesmo projeto: o clique é destrutivo.
   if (live) f.append(el("span", { className: "ends", textContent: "ENCERRA" }));
@@ -656,10 +660,10 @@ function lineButton(project: string, wt: Worktree) {
       },
     },
     el("span", { className: "name" }, el("span", { className: "top" }, el("span", { className: "branch" }, ...top)), pair, tag),
-    // A palheta fica à direita, como a coluna de situação de um painel de partidas; nunca aberta, não ocupa espaço e o nome usa a linha toda.
-    state === "none" ? null : f,
+    // A palheta fica à direita, como a coluna de situação de um painel de partidas; nunca aberta, ela fica vazia (metades e entalhe) esperando virar.
+    f,
   );
-  if (ends) b.setAttribute("aria-description", endsText);
+  if (ends) b.setAttribute("aria-description", `Encerra ${spokenLabel(ends.label)}${endsProcs}`);
   b.dataset.key = k;
   if (currentKey() === k) b.setAttribute("aria-current", "true");
   return b;
@@ -802,13 +806,22 @@ function renderRunning() {
         const spoken = say(p.name, wt, state);
         return [
           el(
-            "span",
-            { className: "other", title: `${p.name} / ${wt.label}: ${spoken}` },
-            flap(state, `run:${p.name}`),
+            "button",
+            {
+              type: "button",
+              className: "other",
+              title: `Ir para ${p.name} / ${wt.label} (${spoken})`,
+              // Já está em serviço: selecionar não troca nada, só leva o terminal até ela.
+              onclick: () => {
+                const fresh = findWt(p.name, wt.id);
+                if (fresh) select(p.name, fresh);
+              },
+            },
             el("span", { className: "project", textContent: p.name }),
             el("span", { className: "sep", textContent: "/" }),
-            ...labelNodes(wt.label),
+            el("span", { className: "label" }, ...labelNodes(wt.label)),
             el("span", { className: "sr", textContent: `: ${spoken}` }),
+            flap(state, `run:${p.name}`),
           ),
         ];
       }),
@@ -907,9 +920,13 @@ async function pollStatus() {
   busy = next;
   for (const [k, t] of starting) {
     // Start enviado: vira RODANDO quando todos os lados sobem, ou desiste depois de 15 s (e mostra o que subiu).
-    if (!sides(k).down.length || Date.now() - t > 15000) {
+    const { down } = sides(k);
+    if (!down.length || Date.now() - t > 15000) {
       starting.delete(k);
       changed = true;
+      const [project, id] = k.split("\u0000");
+      const wt = down.length && findWt(project, id);
+      if (wt) headerNote(`${down.map((t) => TAB_LABEL[t]).join(" e ")} não subiu em 15 s`, el("span", { className: "who" }, "· ", ...labelNodes(wt.label)));
     }
   }
   if (changed) render();
@@ -951,9 +968,9 @@ function renderPalette() {
           const li = el(
             "li",
             { id: `opt-${i}`, onclick: () => choose(it) },
-            flap(lineState(it.project, it.wt), `pal:${key(it.project, it.wt.id)}`),
             el("span", { className: "label" }, ...labelNodes(it.wt.label), currentKey() === key(it.project, it.wt.id) ? el("span", { className: "tag", textContent: "ATUAL" }) : null),
             el("span", { className: "project", textContent: it.project }),
+            flap(lineState(it.project, it.wt), `pal:${key(it.project, it.wt.id)}`),
           );
           li.setAttribute("role", "option");
           li.setAttribute("aria-selected", String(i === sel));
@@ -1276,6 +1293,75 @@ function openProjectDialog() {
   }
   projectDialog.showModal();
   pfield("name").focus();
+  loadGithubRepos();
+}
+
+// ---------- clonar do GitHub ----------
+
+type GithubRepos = { login: string; repos: string[] };
+const ghHint = $("#gh-hint");
+const ghList = $("#gh-repos");
+// Lista da sessão: o gh leva alguns segundos para paginar. Falha não fica guardada, para o próximo abrir tentar de novo.
+let ghRepos: Promise<GithubRepos> | null = null;
+
+/** Repositórios da conta logada no gh viram as sugestões do campo "Ou clone do GitHub"; sem gh, uma linha diz o próximo passo. */
+async function loadGithubRepos() {
+  ghRepos ??= invoke<GithubRepos>("github_repos");
+  try {
+    const { login, repos } = await ghRepos;
+    ghList.replaceChildren(...repos.map(full => el("option", { value: full })));
+    for (const row of projectForm.querySelectorAll<HTMLElement>(".gh-row")) {
+      row.hidden = false;
+      row.querySelector(".gh-label")!.textContent = `Ou clone do GitHub de ${login}`;
+    }
+    ghHint.hidden = true;
+  } catch (err) {
+    ghRepos = null;
+    ghHint.textContent = `Clonar do GitHub não está disponível: ${String(err)}`;
+    ghHint.hidden = false;
+  }
+}
+
+/** "gtech-api" → "gtech": sugestão de nome do projeto quando o campo ainda está vazio. */
+const projectNameFrom = (repo: string) => repo.replace(/[-_.](api|app|web|front|frontend|back|backend|server)$/i, "");
+
+/** Clona o repositório escolhido (bare + worktree da branch padrão) numa pasta que o usuário escolhe e aponta o lado para ele. */
+async function cloneFromGithub(t: Tab, button: HTMLButtonElement) {
+  const input = pfield(`${t}-gh`);
+  const msg = pSideMsg(t);
+  const full = input.value.trim();
+  msg.replaceChildren();
+  input.removeAttribute("aria-invalid");
+  const { repos } = await (ghRepos ?? Promise.resolve({ login: "", repos: [] as string[] }));
+  if (!repos.includes(full)) {
+    msg.textContent = "Escolha um repositório da lista, no formato dono/repositório.";
+    markInvalid(input, msg);
+    return;
+  }
+  const name = full.split("/")[1];
+  const parent = await pickFolder({ directory: true, defaultPath: load<string | undefined>("cloneParent", undefined), title: `Clonar ${name} em…` });
+  if (typeof parent !== "string") return;
+  save("cloneParent", parent);
+  const req = ++readReq[t];
+  button.disabled = true;
+  button.textContent = "Clonando…";
+  input.disabled = true;
+  try {
+    const path = await invoke<string>("clone_github_repo", { fullName: full, parent });
+    if (req !== readReq[t]) return; // o diálogo foi fechado ou reaberto enquanto clonava
+    pfield(`${t}-repo`).value = path;
+    input.value = "";
+    if (!pfield("name").value.trim()) pfield("name").value = projectNameFrom(name);
+    readWorktrees(t);
+  } catch (err) {
+    if (req !== readReq[t]) return;
+    msg.textContent = String(err);
+    markInvalid(input, msg);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Clonar…";
+    input.disabled = false;
+  }
 }
 
 /** Erro do git sobre a pasta do repositório: resumo legível; o texto cru fica embaixo. */
@@ -1339,6 +1425,14 @@ for (const t of TABS) {
   });
   // change: depois de colar ou digitar e sair do campo.
   pfield(`${t}-repo`).addEventListener("change", () => readWorktrees(t));
+  const clone = box.querySelector<HTMLButtonElement>(".clone")!;
+  clone.addEventListener("click", () => cloneFromGithub(t, clone));
+  // Enter no campo do GitHub clona; não envia o formulário, que ainda não tem a pasta do repositório.
+  pfield(`${t}-gh`).addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    if (!clone.disabled) cloneFromGithub(t, clone);
+  });
 }
 
 projectForm.addEventListener("submit", async (e) => {
@@ -1491,9 +1585,12 @@ window.addEventListener(
       render(true);
     } else if (e.code === "KeyE") focusBoard();
     else if (e.code === "KeyH") helpEl.togglePopover();
-    else if (e.code === "KeyN") openAddDialog(current?.project);
-    else if (e.code === "KeyL") {
-      if (config.projects.length) reload();
+    else if (e.code === "KeyN" || e.code === "KeyL") {
+      if (!config.projects.length) {
+        headerNote("Sem projeto ainda: crie um primeiro.");
+        emptyEl.querySelector<HTMLButtonElement>(".btn.primary")?.focus();
+      } else if (e.code === "KeyN") openAddDialog(current?.project);
+      else reload();
     } else if (e.code === "KeyJ") {
       if (current?.wt.api && current.wt.front) setTab(tab === "api" ? "front" : "api", true);
     } else return;

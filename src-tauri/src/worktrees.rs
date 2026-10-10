@@ -439,6 +439,83 @@ pub fn add_project(project: NewProject) -> Result<(), FormError> {
     add_project_to(&config_path(), &project)
 }
 
+// ---------- GitHub ----------
+
+/// Roda o `gh` (GitHub CLI) com a conta já logada nele; erro de instalação ou login vira o próximo passo.
+fn gh(args: &[&str]) -> Result<String, String> {
+    let out = Command::new("gh").args(args).output().map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => "Instale o GitHub CLI (gh) para clonar do GitHub.".to_string(),
+        _ => e.to_string(),
+    })?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        if err.contains("gh auth login") {
+            return Err("Entre no GitHub pelo terminal com gh auth login.".into());
+        }
+        return Err(err);
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+#[derive(Serialize)]
+pub struct GithubRepos {
+    login: String,
+    repos: Vec<String>,
+}
+
+/// Repositórios que a conta logada no `gh` alcança (dela, de colaborador e das organizações), os mexidos por último primeiro.
+#[tauri::command]
+pub async fn github_repos() -> Result<GithubRepos, String> {
+    let login = gh(&["api", "user", "--jq", ".login"])?;
+    let list = gh(&["api", "--paginate", "user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member", "--jq", ".[].full_name"])?;
+    Ok(GithubRepos { login, repos: list.lines().map(str::to_string).collect() })
+}
+
+/// "dono/repo" do GitHub: só letras, números, ".", "-" e "_"; o nome vira pasta no disco.
+fn valid_full_name(full: &str) -> bool {
+    let ok = |p: &str| !p.is_empty() && p != "." && p != ".." && p.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c));
+    matches!(full.split_once('/'), Some((owner, name)) if ok(owner) && ok(name))
+}
+
+/// Deixa um clone `--bare` em `<dest>/.bare` no layout do app: `.git` apontando para ele, branches remotas
+/// rastreadas (o `--bare` não configura) e a worktree da branch padrão em `<dest>/<branch>`.
+fn bare_layout(dest: &Path) -> Result<(), String> {
+    std::fs::write(dest.join(".git"), "gitdir: ./.bare\n").map_err(|e| e.to_string())?;
+    let repo = dest.to_str().ok_or("caminho inválido")?;
+    git(repo, &["config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"])?;
+    git(repo, &["fetch", "-q", "origin"])?;
+    let branch = git(repo, &["symbolic-ref", "--short", "HEAD"])?;
+    let path = dest.join(&branch);
+    git(repo, &["worktree", "add", path.to_str().ok_or("caminho inválido")?, &branch])?;
+    Ok(())
+}
+
+/// Clona `dono/repo` em `<parent>/<repo>` (bare + worktree da branch padrão) e devolve a pasta, pronta para o campo Repositório.
+#[tauri::command]
+pub async fn clone_github_repo(full_name: String, parent: String) -> Result<String, String> {
+    let full = full_name.trim();
+    if !valid_full_name(full) {
+        return Err("Escolha um repositório da lista, no formato dono/repositório.".into());
+    }
+    let parent = expand(parent.trim());
+    if !Path::new(&parent).is_absolute() {
+        return Err(format!("A pasta de destino precisa ser um caminho absoluto: {parent}"));
+    }
+    let name = full.split_once('/').map(|(_, n)| n).unwrap_or(full);
+    let dest = Path::new(&parent).join(name);
+    if dest.exists() {
+        return Err(format!("Já existe {}; escolha outra pasta ou use Escolher… para apontar para ela.", dest.display()));
+    }
+    let bare = dest.join(".bare");
+    let result = gh(&["repo", "clone", full, bare.to_str().ok_or("caminho inválido")?, "--", "--bare", "-q"]).and_then(|_| bare_layout(&dest));
+    if let Err(e) = result {
+        // A pasta não existia antes deste clone: apaga o que ficou pela metade, para poder tentar de novo.
+        let _ = std::fs::remove_dir_all(&dest);
+        return Err(e);
+    }
+    Ok(dest.to_string_lossy().into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -513,6 +590,30 @@ mod tests {
         assert!(add_one(&path("bare"), &path("bare"), "../fora", "main").is_err());
         assert!(add_one(&path("bare"), "relativo", "feat/z", "main").is_err());
         assert!(add_one(&path("bare"), &path("bare"), "feat/sem-base", "").is_err());
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn bare_layout_from_clone() {
+        let tmp = std::env::temp_dir().join(format!("switch-terminal-gh-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let sh = |cmd: &str| assert!(Command::new("sh").arg("-c").arg(cmd).current_dir(&tmp).status().unwrap().success(), "{cmd}");
+        std::fs::create_dir_all(&tmp).unwrap();
+        sh("git init -q -b main origin && git -C origin -c user.name=t -c user.email=t@t commit -q --allow-empty -m init && git -C origin branch dev");
+        sh("git clone -q --bare origin dest/.bare");
+
+        bare_layout(&tmp.join("dest")).unwrap();
+        let dest = tmp.join("dest").to_str().unwrap().to_string();
+        assert!(tmp.join("dest/main/.git").exists(), "worktree da branch padrão");
+        assert_eq!(default_dir(&dest).unwrap(), tmp.join("dest"), "o app lê como bare");
+        let (_, remote) = branches(&dest).unwrap();
+        assert!(remote.contains(&"origin/dev".to_string()), "branches remotas rastreadas");
+
+        assert!(valid_full_name("goldtech-dev/gtech-api"));
+        assert!(valid_full_name("me/repo.js"));
+        for bad in ["sem-barra", "a/../b", "../x", "a/", "/b", "a/b c", "a/.."] {
+            assert!(!valid_full_name(bad), "{bad}");
+        }
         std::fs::remove_dir_all(&tmp).unwrap();
     }
 

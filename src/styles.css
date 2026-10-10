@@ -199,15 +199,6 @@ kbd {
   color: var(--fail);
 }
 
-/* Palheta vazia (só na legenda da ajuda): nunca aberta. No painel, a linha nem leva palheta. */
-.flap[data-state="none"] {
-  background: none;
-}
-
-.flap[data-state="none"]::after {
-  display: none;
-}
-
 /* Contagem até o SIGKILL: tinta neutra, esperar é o caminho normal. */
 .flap.count {
   color: var(--ink);
@@ -679,14 +670,17 @@ header {
   background: var(--board);
 }
 
+/* o destino só cede largura depois que o recado ao lado já cedeu tudo */
 #destination {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
+  max-width: 40%;
+  flex-shrink: 0;
 }
 
-/* À direita, depois das abas: aparecer ou trocar de porta não empurra as abas.
+/* Logo depois das abas, junto da aba a que pertence: aparecer ou trocar de porta não empurra as abas.
    Só a porta (":3333"): curta o bastante para nunca truncar; o title tem o endereço inteiro. */
 #dev-url {
   flex-shrink: 0;
@@ -766,16 +760,28 @@ header {
   vertical-align: 1px;
 }
 
-/* "feat/x parou em 1,8 s": o fechamento da troca, logo depois das abas (perto do destino, para onde o olho volta); some sozinho */
+/* "Parou em 1,8 s · feat/x": o fechamento da troca, logo depois das abas; some sozinho.
+   É o primeiro a ceder largura, e dentro dele o nome cede antes do tempo. */
 #last-stop {
+  display: flex;
+  gap: 0.3em;
   margin-right: auto;
-  flex-shrink: 20;
+  flex-shrink: 1000;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ink-2);
   font-size: 13px;
+}
+
+#last-stop > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#last-stop > .who {
+  flex-shrink: 1000;
 }
 
 /* um fio separa o que roda nos outros projetos do endereço desta aba */
@@ -799,9 +805,36 @@ header {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 4px 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
   color: var(--ink-2);
-  font-size: 13px;
+  font: 500 13px/1 var(--ui);
   white-space: nowrap;
+  cursor: pointer;
+}
+
+#running .other:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+#running .other .flap {
+  margin-left: 4px;
+}
+
+/* sem espaço, trunca o nome; a palheta (o estado) fica sempre inteira */
+#running .other .label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#running .other > :not(.label) {
+  flex-shrink: 0;
 }
 
 /* nome de projeto: sempre em caixa-alta espaçada, como nas placas */
@@ -1012,6 +1045,8 @@ dialog.form menu button:disabled {
   inset: 52px 12px auto auto;
   margin: 0;
   width: 360px;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
   padding: 16px 18px;
   border: 1px solid var(--rule);
   border-radius: 6px;
@@ -1106,9 +1141,10 @@ dialog.form menu button:disabled {
   overflow-y: auto;
 }
 
+/* nome, projeto, palheta: a mesma coluna de situação do painel */
 #palette li {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   padding: 6px 14px;
@@ -1208,9 +1244,11 @@ dialog.form .open-hint .procs,
 
 /* ---------- formulários ---------- */
 
+/* ancorado no topo: um erro ou a lista de worktrees crescem para baixo, o diálogo não pula */
 dialog.form {
   width: min(500px, 92vw);
-  max-height: 92vh;
+  max-height: 84vh;
+  margin: 8vh auto auto;
   padding: 0;
   border: 1px solid var(--rule);
   border-radius: 6px;
@@ -1272,11 +1310,13 @@ dialog.form input::placeholder {
 }
 
 /* campo culpado: contorno da cor de falha, a mensagem logo abaixo */
-dialog.form [aria-invalid="true"] {
+dialog.form input[aria-invalid="true"],
+dialog.form select[aria-invalid="true"] {
   border-color: var(--fail);
 }
 
-dialog.form label + .side-error {
+dialog.form label + .side-error,
+dialog.form label + .hint {
   margin-top: -4px;
 }
 
@@ -1493,7 +1533,8 @@ dialog.form menu {
     animation: none;
   }
 
-  .fold .chev {
+  .fold .chev,
+  details > summary::before {
     transition: none;
   }
 

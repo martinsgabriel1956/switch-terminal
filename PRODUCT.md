@@ -30,7 +30,7 @@ Pareia worktrees de dois repositórios diferentes (API + front) pelo nome da bra
 - Projetos configurados em `~/.config/switch-terminal/config.json` (também criáveis pela UI); worktrees lidas com `git worktree list`; pares manuais para branches de nomes diferentes.
 - Por worktree: abas API e Front, cada uma um PTY real (xterm.js) com o shell do usuário (fish).
 - Troca: Ctrl+C, espera o grupo de processos sair, SIGKILL no timeout; "Forçar agora" e "Voltar para a anterior" durante a espera.
-- Criar worktree (diretório e branch de origem por lado) e criar projeto pela UI; remover worktree/projeto não é feito pelo app.
+- Criar worktree (diretório e branch de origem por lado) e criar projeto pela UI, apontando pastas locais ou clonando do GitHub da conta logada no `gh` (layout bare); remover worktree/projeto não é feito pelo app.
 - Teclado: `Ctrl+Shift+K` paleta, `Ctrl+Shift+J` alterna abas, `Ctrl+Shift+B` barra lateral.
 - Interface em português do Brasil.
 - Detalhes completos de comportamento em `SPEC.md`.
