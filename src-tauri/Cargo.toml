@@ -1,6 +1,6 @@
 [package]
 name = "switch-terminal"
-version = "0.2.3"
+version = "0.2.4"
 description = "Troca de terminais entre worktrees"
 authors = ["Gabriel Martins"]
 edition = "2021"
