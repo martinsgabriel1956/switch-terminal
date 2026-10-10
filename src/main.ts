@@ -281,9 +281,10 @@ function branchText(branch: string) {
 
 // ---------- terminais ----------
 
-async function createPane(side: Side, parent: HTMLElement): Promise<Pane> {
+async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane> {
   const paneEl = el("div", { className: "pane off" });
   paneEl.setAttribute("role", "tabpanel");
+  paneEl.setAttribute("aria-labelledby", `tab-${t}`);
   parent.append(paneEl);
   const term = new Terminal({
     fontFamily: "'JetBrainsMono Nerd Font', 'Hack Nerd Font Mono', monospace",
@@ -334,7 +335,7 @@ function ensureEnv(project: string, wt: Worktree): { env: Env; created: boolean 
   env.ready = (async () => {
     for (const t of TABS) {
       const side = wt[t];
-      if (side) env.panes[t] = await createPane(side, root);
+      if (side) env.panes[t] = await createPane(t, side, root);
     }
   })();
   envs.set(k, env);
@@ -465,7 +466,7 @@ function render(focus = false) {
   if (destEl.dataset.sig !== sig) {
     destEl.dataset.sig = sig;
     destEl.replaceChildren(
-      el("span", { className: "where" }, el("span", { className: "project", textContent: project }), el("span", { className: "sep", textContent: "/" }), el("span", { className: "branch-name" }, ...labelNodes(wt.label))),
+      el("span", { className: "where" }, el("span", { className: "project", textContent: project }), el("span", { className: "sep", textContent: "/", ariaHidden: "true" }), el("span", { className: "branch-name" }, ...labelNodes(wt.label))),
       flap(state, `head:${ck}`),
       el("span", { className: "sr", textContent: `: ${say(project, wt, state)}` }),
     );
@@ -478,6 +479,7 @@ function render(focus = false) {
     urlEl.href = url;
     urlEl.textContent = shownPane!.url!.replace("localhost", "");
     urlEl.title = `Abrir ${url} no navegador`;
+    urlEl.setAttribute("aria-label", urlEl.title);
   }
   const down = state === "part" ? sides(ck!).down : [];
   for (const t of TABS) {
@@ -746,7 +748,7 @@ function renderBoard() {
     return el(
       "section",
       { className: `platform${open ? "" : " folded"}`, ariaLabel: p.name },
-      el("div", { className: "platform-head" }, el("h3", {}, fold), add),
+      el("div", { className: "platform-head" }, el("h2", {}, fold), add),
       // Recolhido, o erro some junto com as linhas: quem recolheu já viu e não quer o vermelho o dia todo.
       open ? problem : null,
       el("ul", { className: "lines" }, ...shownWts.map((wt) => el("li", {}, lineButton(p.name, wt)))),
@@ -773,7 +775,7 @@ function renderBoard() {
       el(
         "section",
         { className: "platform ghost", ariaLabel: "Nenhum projeto" },
-        el("div", { className: "platform-head" }, el("h3", {}, el("span", { className: "tile", textContent: "Sem projeto" }))),
+        el("div", { className: "platform-head" }, el("h2", {}, el("span", { className: "tile", textContent: "Sem projeto" }))),
         el("p", { className: "ghost-line" }, el("span", { textContent: "Nenhuma worktree ainda" }), flap("idle", "ghost", "")),
       ),
     );
@@ -832,7 +834,7 @@ function renderRunning() {
               },
             },
             el("span", { className: "project", textContent: p.name }),
-            el("span", { className: "sep", textContent: "/" }),
+            el("span", { className: "sep", textContent: "/", ariaHidden: "true" }),
             el("span", { className: "label" }, ...labelNodes(wt.label)),
             el("span", { className: "sr", textContent: `: ${spoken}` }),
             flap(state, `run:${p.name}`),
@@ -979,12 +981,15 @@ function renderPalette() {
   paletteList.replaceChildren(
     ...(items.length
       ? items.map((it, i) => {
+          const state = lineState(it.project, it.wt);
           const li = el(
             "li",
             { id: `opt-${i}`, onclick: () => choose(it) },
             el("span", { className: "label" }, ...labelNodes(it.wt.label), currentKey() === key(it.project, it.wt.id) ? el("span", { className: "tag", textContent: "ATUAL" }) : null),
             el("span", { className: "project", textContent: it.project }),
-            flap(lineState(it.project, it.wt), `pal:${key(it.project, it.wt.id)}`),
+            // A palheta é aria-hidden: o leitor de tela ouve o estado por aqui, como no painel.
+            el("span", { className: "sr", textContent: `: ${say(it.project, it.wt, state)}` }),
+            flap(state, `pal:${key(it.project, it.wt.id)}`),
           );
           li.setAttribute("role", "option");
           li.setAttribute("aria-selected", String(i === sel));
@@ -1095,7 +1100,6 @@ function worktreeErrorSummary(message: string): { field: "dir" | "base" | "branc
   return { field: "dir", text: message };
 }
 
-/** Campo culpado: anunciado como inválido e ligado à mensagem que explica. */
 /** Botão ocupado: aria-disabled (o foco continua nele; disabled jogaria o foco no body, atrás do diálogo) e o texto do que está fazendo. */
 function setBusy(button: HTMLButtonElement, label: string) {
   button.setAttribute("aria-disabled", "true");
@@ -1107,6 +1111,7 @@ function clearBusy(button: HTMLButtonElement, label: string) {
 }
 const isBusy = (button: HTMLElement | null) => button?.getAttribute("aria-disabled") === "true";
 
+/** Campo culpado: anunciado como inválido e ligado à mensagem que explica. */
 function markInvalid(input: HTMLElement, msg: HTMLElement) {
   input.setAttribute("aria-invalid", "true");
   input.setAttribute("aria-describedby", msg.id);

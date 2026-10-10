@@ -135,6 +135,38 @@ select {
   flex-shrink: 0;
 }
 
+.icon.inline {
+  width: 12px;
+  height: 12px;
+  margin: 0 4px;
+  vertical-align: -1px;
+}
+
+/* marcador dos <details>: chevron desenhado no lugar do triângulo nativo */
+details > summary {
+  list-style: none;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+details > summary::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 8px 2px 1px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 90ms steps(2, jump-none);
+}
+
+details[open] > summary::before {
+  transform: rotate(45deg);
+}
+
 kbd {
   display: inline-block;
   min-width: 1.6em;
@@ -198,11 +230,6 @@ kbd {
 .flap[data-state="part"],
 .flap[data-state="kill"] {
   color: var(--fail);
-}
-
-/* Contagem até o SIGKILL: tinta neutra, esperar é o caminho normal. */
-.flap.count {
-  color: var(--ink);
 }
 
 /* Prévia da troca: com o cursor (ou o foco) em outra linha do projeto, a que está em serviço mostra ENCERRA.
@@ -310,7 +337,7 @@ kbd {
   padding: 0 6px 0 14px;
 }
 
-.platform-head h3 {
+.platform-head h2 {
   flex: 1;
   min-width: 0;
   margin: 0;
@@ -540,6 +567,15 @@ kbd {
   white-space: nowrap;
 }
 
+/* "nome feature-api/ ⇄ feature-app/": par com o mesmo nome dos dois lados, numa linha só */
+.pair-pre {
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 /* SÓ API / SÓ FRONT na segunda linha, como o par: a primeira fica inteira para o nome */
 .line .name > .tag {
   display: inline-block;
@@ -583,10 +619,6 @@ kbd {
   align-items: center;
   padding-right: 6px;
   border-top: 1px solid var(--rule);
-}
-
-#sidebar-foot[hidden] {
-  display: none;
 }
 
 #sidebar-foot .quiet {
@@ -635,6 +667,14 @@ kbd {
   margin-left: -3px;
   cursor: col-resize;
   touch-action: none;
+}
+
+/* 5px de fio, 11px de área: os 6px a mais ficam do lado do terminal (o do painel tem a barra de rolagem)
+   e param antes do botão de recolher. */
+#sidebar-handle::before {
+  content: "";
+  position: absolute;
+  inset: 0 -6px 0 0;
 }
 
 #sidebar-handle:hover,
@@ -917,9 +957,17 @@ body:not(.sidebar-off) #running {
   padding: 8px 4px 4px 12px;
 }
 
-/* Escondidos com visibility (não display) para o xterm continuar medindo o tamanho. */
+/* Escondidos com visibility (não display) para o xterm continuar medindo o tamanho, e fora da tela:
+   o xterm só pausa o desenho quando o IntersectionObserver diz que saiu, e ele ignora visibility.
+   -200vw e não -100vw: encostada na borda ainda conta como visível. */
 .off {
   visibility: hidden;
+  translate: -200vw 0;
+}
+
+/* O xterm.css pinta o viewport de preto; a borda vazava 1px ao redor do terminal. */
+.xterm .xterm-viewport {
+  background-color: var(--term-bg) !important;
 }
 
 #empty {
@@ -980,6 +1028,13 @@ body:not(.sidebar-off) #running {
   background: var(--rail);
 }
 
+.wait-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
 .wait-card strong {
   min-width: 0;
   font-size: 19px;
@@ -1009,10 +1064,11 @@ body:not(.sidebar-off) #running {
   font-size: 13px;
 }
 
-/* contagem até o SIGKILL: vira a cada segundo */
+/* contagem até o SIGKILL: vira a cada segundo, em tinta neutra (esperar é o caminho normal) */
 .flap.count {
   width: calc(4ch + 14px);
   margin-left: auto;
+  color: var(--ink);
 }
 
 /* "Voltar para feature-api/…": o nome trunca, o verbo fica */
@@ -1248,15 +1304,34 @@ dialog.form .pick[aria-disabled="true"] {
   display: none;
 }
 
-#palette .keys {
-  margin-left: auto !important;
+#palette .foot .keys {
+  margin-left: auto;
   flex-shrink: 0;
   white-space: nowrap;
 }
 
-#palette .keys kbd + kbd,
 #palette .keys kbd:not(:first-child) {
   margin-left: 8px;
+}
+
+/* Sem espaço, só o nome da worktree trunca: o projeto e o processo continuam legíveis até o fim. */
+#palette .note .ends-text {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3em;
+  min-width: 0;
+  overflow: hidden;
+}
+
+#palette .note .ends-text > * {
+  flex-shrink: 0;
+}
+
+#palette .note .ends-text > strong {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* mini palheta ENCERRA na frente do aviso "Encerra X": a mesma prévia do painel */
@@ -1473,7 +1548,7 @@ dialog.form .dir-row {
 dialog.form .dir-row input {
   flex: 1;
   min-width: 0;
-  margin-top: 0 !important;
+  margin-top: 0;
 }
 
 dialog.form .pick {
@@ -1494,10 +1569,6 @@ dialog.form .pick:hover {
 dialog.form .found {
   margin: -4px 0 12px;
   font-size: 13px;
-}
-
-dialog.form .found[hidden] {
-  display: none;
 }
 
 dialog.form .found .count {
@@ -1566,6 +1637,11 @@ dialog.form .side-error .raw {
   font: 12px/1.45 var(--mono);
 }
 
+dialog.form .open-hint {
+  display: flex;
+  align-items: center;
+}
+
 /* O botão principal vem primeiro no DOM (Enter envia por ele); visualmente fica à direita. */
 dialog.form menu {
   display: flex;
@@ -1589,83 +1665,4 @@ dialog.form menu {
   #reload[aria-busy="true"] .icon {
     animation: none;
   }
-
-}
-
-/* "nome feature-api/ ⇄ feature-app/": par com o mesmo nome dos dois lados, numa linha só */
-.pair-pre {
-  color: var(--ink-2);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-.icon.inline {
-  width: 12px;
-  height: 12px;
-  margin: 0 4px;
-  vertical-align: -1px;
-}
-
-/* marcador dos <details>: chevron desenhado no lugar do triângulo nativo */
-details > summary {
-  list-style: none;
-}
-
-details > summary::-webkit-details-marker {
-  display: none;
-}
-
-details > summary::before {
-  content: "";
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  margin: 0 8px 2px 1px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(-45deg);
-  transition: transform 90ms steps(2, jump-none);
-}
-
-details[open] > summary::before {
-  transform: rotate(45deg);
-}
-
-.wait-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-}
-
-/* O xterm.css pinta o viewport de preto; a borda vazava 1px ao redor do terminal. */
-.xterm .xterm-viewport {
-  background-color: var(--term-bg) !important;
-}
-
-dialog.form .open-hint {
-  display: flex;
-  align-items: center;
-}
-
-/* Sem espaço, só o nome da worktree trunca: o projeto e o processo continuam legíveis até o fim. */
-#palette .note .ends-text {
-  display: flex;
-  align-items: baseline;
-  gap: 0.3em;
-  min-width: 0;
-  overflow: hidden;
-}
-
-#palette .note .ends-text > * {
-  flex-shrink: 0;
-}
-
-#palette .note .ends-text > strong {
-  flex-shrink: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
