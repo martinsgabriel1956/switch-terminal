@@ -415,6 +415,7 @@ function activate(project: string, wt: Worktree, created: boolean) {
 }
 
 async function select(project: string, wt: Worktree) {
+  closeOverlay();
   current = { project, wt };
   const k = key(project, wt.id);
   recent = [k, ...recent.filter((r) => r !== k)].slice(0, 30);
@@ -902,7 +903,10 @@ board.addEventListener("keydown", (e) => {
   else if (e.key === "ArrowUp") lines[Math.max(i - 1, 0)].focus();
   else if (e.key === "Home") lines[0].focus();
   else if (e.key === "End") lines[lines.length - 1].focus();
-  else if (e.key === "Escape") render(true);
+  else if (e.key === "Escape") {
+    closeOverlay();
+    render(true);
+  }
   else return;
   e.preventDefault();
 });
@@ -1577,16 +1581,25 @@ function setSidebar(open: boolean) {
   toggleBtn.title = `${label} (Ctrl+Shift+B)`;
   toggleBtn.setAttribute("aria-label", label);
   toggleBtn.setAttribute("aria-expanded", String(open));
-  save("sidebar", open ? "open" : "off");
+  // Na janela estreita o painel abre por cima e fecha sozinho: isso não muda a preferência salva.
+  if (!document.body.classList.contains("narrow")) save("sidebar", open ? "open" : "off");
   // O ResizeObserver dos painéis reajusta os terminais à nova largura.
 }
 
+/** Painel por cima do terminal (aberto) que fecha ao escolher, com Esc ou com um clique fora. */
+const isOverlay = () => document.body.classList.contains("narrow") && !document.body.classList.contains("sidebar-off");
+const closeOverlay = () => isOverlay() && setSidebar(false);
+
 const toggleSidebar = () => setSidebar(document.body.classList.contains("sidebar-off"));
-toggleBtn.addEventListener("click", () => {
+/** Recolhe ou abre; aberto por cima do terminal, o foco vai para o painel, não para o terminal atrás dele. */
+function toggleAndFocus() {
   toggleSidebar();
-  render(true);
-});
+  if (isOverlay()) focusBoard();
+  else render(true);
+}
+toggleBtn.addEventListener("click", toggleAndFocus);
 setSidebar(load<string>("sidebar", "open") !== "off");
+$("main").addEventListener("pointerdown", closeOverlay);
 
 // Largura arrastável da barra lateral, lembrada entre sessões.
 const SIDEBAR_W = { min: 200, max: 480, default: 280 };
@@ -1598,6 +1611,17 @@ const MAIN_MIN = 440;
 /** Maior largura que a janela comporta agora (px CSS: o zoom também estreita a janela). */
 const sidebarMax = () => Math.max(SIDEBAR_W.min, Math.min(SIDEBAR_W.max, innerWidth - MAIN_MIN));
 let sidebarWanted: number = SIDEBAR_W.default;
+
+/** Janela estreita (pequena, ou com zoom alto): painel e área principal não cabem lado a lado nos seus pisos.
+ *  O painel passa a abrir por cima do terminal e começa fechado; ao alargar, volta a preferência salva. */
+function applyNarrow() {
+  const narrow = innerWidth < SIDEBAR_W.min + MAIN_MIN;
+  if (narrow === document.body.classList.contains("narrow")) return;
+  document.body.classList.toggle("narrow", narrow);
+  setSidebar(!narrow && load<string>("sidebar", "open") !== "off");
+}
+window.addEventListener("resize", applyNarrow);
+applyNarrow();
 
 /** Aplica a largura pedida, limitada pela janela; só a pedida fica salva, para voltar quando a janela crescer. */
 function applySidebarWidth() {
@@ -1659,10 +1683,8 @@ window.addEventListener(
     // Com um diálogo aberto, nada atrás dele responde: a paleta abriria presa sob o véu.
     if (!e.ctrlKey || !e.shiftKey || document.querySelector("dialog[open]")) return;
     if (e.code === "KeyK") palette.hidden ? openPalette() : closePalette();
-    else if (e.code === "KeyB") {
-      toggleSidebar();
-      render(true);
-    } else if (e.code === "KeyE") focusBoard();
+    else if (e.code === "KeyB") toggleAndFocus();
+    else if (e.code === "KeyE") focusBoard();
     else if (e.code === "KeyH") helpEl.togglePopover();
     else if (e.code === "KeyN" || e.code === "KeyL") {
       if (!config.projects.length) {
