@@ -52,18 +52,12 @@ const CONFIG_EXAMPLE = `{
   ]
 }`;
 
-// Cores ANSI dos terminais por tema. São conteúdo (saída dos programas), não paleta da interface.
+// Cores ANSI dos terminais por tema. São conteúdo (saída dos programas), não paleta da interface;
+// vermelho, verde e amarelo são os estados e vêm dos tokens (termTheme).
 const TERM_THEME: Record<"dark" | "light", ITheme> = {
   dark: {
-    background: "#131417",
     foreground: "#e6e5df",
-    cursor: "#ecebe6",
-    cursorAccent: "#131417",
-    selectionBackground: "rgba(236, 235, 230, 0.22)",
     black: "#1b1c20",
-    red: "#f26d6d",
-    green: "#4cc38a",
-    yellow: "#f2b33d",
     blue: "#6ea8fe",
     magenta: "#c792ea",
     cyan: "#5ccfe6",
@@ -78,15 +72,8 @@ const TERM_THEME: Record<"dark" | "light", ITheme> = {
     brightWhite: "#f4f3ee",
   },
   light: {
-    background: "#f4f5f3",
     foreground: "#1d1e22",
-    cursor: "#15161a",
-    cursorAccent: "#f4f5f3",
-    selectionBackground: "rgba(21, 22, 26, 0.16)",
     black: "#1d1e22",
-    red: "#b3261e",
-    green: "#0d6a3f",
-    yellow: "#855000",
     blue: "#1f5fbf",
     magenta: "#8e3fa8",
     cyan: "#0b6e7a",
@@ -102,7 +89,7 @@ const TERM_THEME: Record<"dark" | "light", ITheme> = {
   },
 };
 const scheme = matchMedia("(prefers-color-scheme: light)");
-/** Fundo, cursor e seleção vêm dos tokens do CSS (o terminal fica sobre o mesmo fundo do painel); as cores ANSI são conteúdo. */
+/** Fundo, cursor, seleção e as cores de estado vêm dos tokens do CSS (o terminal fica sobre o mesmo fundo do painel); as outras cores ANSI são conteúdo. */
 function termTheme(): ITheme {
   const css = getComputedStyle(document.documentElement);
   const token = (name: string) => css.getPropertyValue(name).trim();
@@ -111,7 +98,10 @@ function termTheme(): ITheme {
     background: token("--term-bg"),
     cursor: token("--ink"),
     cursorAccent: token("--term-bg"),
-    selectionBackground: token("--selection")
+    selectionBackground: token("--selection"),
+    red: token("--fail"),
+    green: token("--run"),
+    yellow: token("--start")
   };
 }
 
@@ -123,6 +113,8 @@ const runningEl = $("#running");
 const panesEl = $("#panes");
 const emptyEl = $("#empty");
 const waitEl = $("#wait");
+// Fala do aviso de troca numa região viva só de texto: no card, os botões eram relidos a cada mudança.
+const waitSay = $("#wait-say");
 const palette = $("#palette");
 const paletteInput = $<HTMLInputElement>("#palette input");
 const paletteList = $("#palette ul");
@@ -305,11 +297,13 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
   onData.onmessage = (buf) => {
     const bytes = new Uint8Array(buf);
     term.write(bytes);
+    // Endereço já lido: não varre mais a saída (um build verboso). Ao sair o processo, pollStatus limpa e volta a ler.
+    if (pane.url) return;
     // ponytail: sequência ANSI partida entre dois pedaços escapa do filtro; só atrasa a leitura do endereço
     const text = tail + dec.decode(bytes, { stream: true }).replace(ANSI, "");
     tail = text.slice(-80);
     const port = [...text.matchAll(PORT_RE)].pop()?.[1];
-    if (port && pane.url !== `localhost:${port}`) {
+    if (port) {
       pane.url = `localhost:${port}`;
       render();
     }
@@ -545,6 +539,7 @@ function renderWait(project: string, wt: Worktree) {
   waitEl.hidden = !st;
   if (!st) {
     waitEl.dataset.sig = "";
+    waitSay.textContent = "";
     return;
   }
   const goingBack = active[project] === st.fromId;
@@ -623,6 +618,7 @@ function renderWait(project: string, wt: Worktree) {
     el("div", { className: "actions" }, back, force),
   );
   waitEl.replaceChildren(card);
+  waitSay.textContent = `${card.querySelector("strong")!.textContent}. ${[...card.querySelectorAll("p")].map((p) => p.textContent).join(" ")}`;
   if (had) (waitEl.querySelector<HTMLButtonElement>(`[data-act="${had}"]:not(:disabled)`) ?? card).focus();
 }
 
@@ -705,12 +701,13 @@ function renderBoard() {
         type: "button",
         className: "icon-btn",
         title: p.error ? "Corrija o erro do projeto para criar worktrees" : `Nova worktree em ${p.name} (Ctrl+Shift+N)`,
-        ariaLabel: `Nova worktree em ${p.name}`,
-        disabled: !!p.error,
-        onclick: () => openAddDialog(p.name),
+        ariaLabel: p.error ? `Nova worktree em ${p.name}: indisponível, corrija o erro do projeto` : `Nova worktree em ${p.name}`,
+        // aria-disabled e não disabled: o teclado e o leitor de tela também chegam no motivo.
+        onclick: () => !p.error && openAddDialog(p.name),
       },
       icon("M8 3v10M3 8h10"),
     );
+    if (p.error) add.setAttribute("aria-disabled", "true");
     const problem = p.error
       ? el(
           "details",
@@ -751,7 +748,7 @@ function renderBoard() {
     // Ordem do git, fixa: como num painel de partidas, só a palheta vira; a linha não sai do lugar sob o cursor.
     return el(
       "section",
-      { className: `platform${open ? "" : " folded"}`, ariaLabel: p.name },
+      { className: `platform${open ? "" : " folded"}` },
       el("div", { className: "platform-head" }, el("h2", {}, fold), add),
       // Recolhido, o erro some junto com as linhas: quem recolheu já viu e não quer o vermelho o dia todo.
       open ? problem : null,
@@ -763,7 +760,7 @@ function renderBoard() {
     sections.unshift(
       el(
         "section",
-        { className: "platform", ariaLabel: "Erro no config" },
+        { className: "platform" },
         el(
           "details",
           { className: "problem", open: openProblems.has(CONFIG_PATH), ontoggle: (e: Event) => ((e.target as HTMLDetailsElement).open ? openProblems.add(CONFIG_PATH) : openProblems.delete(CONFIG_PATH)) },
@@ -778,7 +775,7 @@ function renderBoard() {
     sections.push(
       el(
         "section",
-        { className: "platform ghost", ariaLabel: "Nenhum projeto" },
+        { className: "platform ghost" },
         el("div", { className: "platform-head" }, el("h2", {}, el("span", { className: "tile", textContent: "Sem projeto" }))),
         el("p", { className: "ghost-line" }, el("span", { textContent: "Nenhuma worktree ainda" }), flap("idle", "ghost", "")),
       ),
@@ -956,6 +953,8 @@ async function pollStatus() {
   const next = new Map(ids.flatMap((id, i) => (res[i] === null ? [] : [[id, res[i]] as const])));
   let changed = next.size !== busy.size || [...next].some(([id, name]) => busy.get(id) !== name);
   busy = next;
+  // Processo saiu: o endereço dele não vale mais, e o próximo start lê o novo.
+  for (const e of envs.values()) for (const p of Object.values(e.panes)) if (!busy.has(p.ptyId)) p.url = null;
   for (const [k, t] of starting) {
     // Start enviado: vira RODANDO quando todos os lados sobem, ou desiste depois de 15 s (e mostra o que subiu).
     const { down } = sides(k);

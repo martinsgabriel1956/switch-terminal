@@ -59,6 +59,7 @@
     --mark-bg: #15161a;
     --mark-prompt: #f4f5f3;
     --term-bg: var(--board);
+    --float-shadow: 0 4px 8px rgb(21 22 26 / 14%);
   }
 }
 
@@ -419,7 +420,8 @@ kbd {
   color: var(--ink);
 }
 
-.icon-btn:disabled {
+.icon-btn:disabled,
+.icon-btn[aria-disabled="true"] {
   color: var(--ink-3);
   background: none;
   cursor: not-allowed;
@@ -720,11 +722,13 @@ header {
 
 /* o destino só cede largura depois que o recado ao lado já cedeu tudo; até 40% da faixa (ao menos 220px) */
 #destination {
-  display: flex;
+  display: grid;
+  /* O piso do destino é a coluna do nome (6em: o projeto truncado, a "/" e o começo da branch) e a palheta inteira.
+     Em flex, o piso era o nome inteiro (a branch não quebra) e, com o painel aberto na janela mínima, a faixa
+     transbordava. Sem piso nenhum, a palheta passava por cima das abas com zoom de 200%. */
+  grid-template-columns: minmax(6em, max-content) auto;
   align-items: center;
   gap: 10px;
-  /* sem min-width: 0, o piso é o conteúdo mínimo: a palheta inteira e 3em do nome (.where). Encolher abaixo disso
-     fazia a palheta transbordar por cima das abas com zoom de 200%. */
   max-width: max(40%, 220px);
   flex-shrink: 1;
 }
@@ -749,8 +753,7 @@ header {
 #destination .where {
   display: flex;
   align-items: baseline;
-  flex-shrink: 1;
-  min-width: 3em;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   font-size: 17px;
@@ -893,6 +896,11 @@ header {
 #running .other:hover {
   background: var(--hover);
   color: var(--ink);
+}
+
+/* #running corta o overflow (fitRunning mede por ele): o anel fica por dentro, senão sai cortado */
+#running .other:focus-visible {
+  outline-offset: -2px;
 }
 
 #running .other .flap {

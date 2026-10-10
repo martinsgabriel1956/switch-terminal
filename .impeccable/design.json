@@ -555,7 +555,7 @@
     "terminalTheme": {
       "source": "src/main.ts TERM_THEME",
       "background": "var(--board)",
-      "note": "Fundo, cursor e seleção seguem os tokens; red/green/yellow alinham a stop/run/start; demais cores ANSI são conteúdo do terminal."
+      "note": "Fundo, cursor, seleção e red/green/yellow são lidos dos tokens (--term-bg, --ink, --selection, --fail, --run, --start); demais cores ANSI são conteúdo do terminal."
     }
   },
   "components": [
@@ -656,7 +656,7 @@
       },
       {
         "name": "A Regra do Terminal sem Moldura",
-        "body": "O terminal fica sobre `board`, o mesmo fundo do painel, sem borda nem cartão. O tema ANSI do xterm (`TERM_THEME`) segue o fundo, o cursor e a seleção do sistema e alinha vermelho/verde/amarelo aos tokens de estado; as outras cores ANSI pertencem ao conteúdo do terminal, não à interface.",
+        "body": "O terminal fica sobre `board`, o mesmo fundo do painel, sem borda nem cartão. O tema ANSI do xterm (`TERM_THEME`) lê dos tokens o fundo, o cursor, a seleção e o vermelho/verde/amarelo dos estados; as outras cores ANSI pertencem ao conteúdo do terminal, não à interface.",
         "section": "colors"
       },
       {
