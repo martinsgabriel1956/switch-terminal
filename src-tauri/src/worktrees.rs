@@ -9,6 +9,9 @@ use serde::{Deserialize, Serialize};
 struct Config {
     #[serde(default = "default_timeout")]
     stop_timeout_ms: u64,
+    /// Liga o modo leitor de tela do xterm (a saída dos terminais vira texto acessível; custa desempenho).
+    #[serde(default)]
+    screen_reader: bool,
     projects: Vec<ProjectCfg>,
 }
 
@@ -45,6 +48,7 @@ struct Pair {
 #[serde(rename_all = "camelCase")]
 pub struct ConfigView {
     stop_timeout_ms: u64,
+    screen_reader: bool,
     projects: Vec<ProjectView>,
 }
 
@@ -217,7 +221,7 @@ pub fn load_config() -> Result<ConfigView, String> {
         })
         .collect();
 
-    Ok(ConfigView { stop_timeout_ms: cfg.stop_timeout_ms, projects })
+    Ok(ConfigView { stop_timeout_ms: cfg.stop_timeout_ms, screen_reader: cfg.screen_reader, projects })
 }
 
 /// Pasta padrão das worktrees: repo bare (`repo/.bare` + uma pasta por branch) → `repo/`; repo normal → `<repo>.worktrees/`.

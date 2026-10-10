@@ -32,6 +32,7 @@ Arquivo `~/.config/switch-terminal/config.json`. Projetos novos podem ser criado
 - `setupCommand` (opcional, por lado) roda antes do `startCommand` só na primeira subida de uma worktree criada pelo app. Exemplo: `"npm install && cp ../main/.env ."`.
 - `baseBranch` (opcional, padrão `main`) preenche o campo "A partir de" ao criar uma worktree.
 - `stopTimeoutMs` é opcional (padrão 5000).
+- `screenReader` é opcional (padrão `false`): liga o modo leitor de tela do xterm, que expõe a saída dos terminais como texto acessível. Custa desempenho com saída intensa; o painel relê ao voltar para a janela e aplica nos terminais abertos.
 
 Estado persistido no `localStorage` do webview: `{ "<projeto>": "<id da worktree ativa>" }`.
 

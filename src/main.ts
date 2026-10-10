@@ -11,7 +11,7 @@ import "./styles.css";
 type Side = { path: string; startCommand: string | null; setupCommand: string | null };
 type Worktree = { id: string; label: string; api: Side | null; front: Side | null };
 type Project = { name: string; error: string | null; worktrees: Worktree[] };
-type Config = { stopTimeoutMs: number; projects: Project[] };
+type Config = { stopTimeoutMs: number; screenReader: boolean; projects: Project[] };
 type Tab = "api" | "front";
 /** `url`: endereço do dev server lido da saída do terminal ("Local: http://localhost:3000"). */
 type Pane = { term: Terminal; fit: FitAddon; el: HTMLElement; ptyId: number; side: Side; url: string | null };
@@ -143,7 +143,7 @@ function headerNote(...nodes: (Node | string)[]) {
   lastStopTimer = setTimeout(() => lastStopEl.replaceChildren(), 8000);
 }
 
-let config: Config = { stopTimeoutMs: 5000, projects: [] };
+let config: Config = { stopTimeoutMs: 5000, screenReader: false, projects: [] };
 let configError: string | null = null;
 const envs = new Map<string, Env>();
 // Projeto em troca: qual worktree está sendo encerrada, os terminais dela e se já passou do Ctrl+C para o SIGKILL (e por quê).
@@ -291,6 +291,7 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
     fontSize: 14,
     lineHeight: 1.15,
     theme: termTheme(),
+    screenReaderMode: config.screenReader,
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
@@ -452,6 +453,7 @@ function render(focus = false) {
     urlEl.hidden = true;
     waitEl.hidden = true;
     renderEmpty();
+    fitRunning();
     return;
   }
 
@@ -498,6 +500,8 @@ function render(focus = false) {
     if (pane) b.setAttribute("aria-controls", pane.el.id);
     tabsEl.append(b);
   }
+  // Mede só com o cabeçalho completo (destino, abas, porta): antes disso a faixa parece ter espaço que não tem.
+  fitRunning();
   renderWait(project, wt);
 
   for (const t of TABS) env?.panes[t]?.el.classList.toggle("off", t !== tab);
@@ -844,6 +848,21 @@ function renderRunning() {
   );
 }
 
+/** Sem espaço no cabeçalho, o outro projeto cuja palheta não caberia sai inteiro: o estado nunca aparece cortado.
+ *  Mede com todos à mostra e esconde de uma vez; o painel e a paleta continuam mostrando o que roda. */
+function fitRunning() {
+  if (!document.body.classList.contains("sidebar-off")) return; // com o painel aberto, #running nem aparece
+  const items = [...runningEl.children] as HTMLElement[];
+  for (const b of items) b.hidden = false;
+  const edge = runningEl.getBoundingClientRect().right + 0.5;
+  const cut = items.filter((b) => b.querySelector(".flap")!.getBoundingClientRect().right > edge);
+  for (const b of cut) b.hidden = true;
+}
+// A faixa (não o #running, que some e reaparece ao medir) muda de largura com a janela, o zoom e o painel.
+new ResizeObserver(fitRunning).observe($("header"));
+// A Barlow chega depois do primeiro render e alarga os nomes sem mudar a largura da faixa.
+document.fonts.addEventListener("loadingdone", fitRunning);
+
 function icon(d: string, extra = "") {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 16 16");
@@ -905,6 +924,9 @@ async function refresh() {
     render();
     return;
   }
+
+  // "screenReader" no config: liga ou desliga nos terminais já abertos também.
+  for (const env of envs.values()) for (const pane of Object.values(env.panes)) pane.term.options.screenReaderMode = config.screenReader;
 
   const alive = new Map<string, Worktree>();
   const loaded = new Set<string>();

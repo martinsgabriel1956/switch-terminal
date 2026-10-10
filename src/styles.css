@@ -854,20 +854,23 @@ header {
   flex-shrink: 1000;
 }
 
-/* um fio separa o que roda nos outros projetos do endereço desta aba */
+/* um fio separa o que roda nos outros projetos do endereço desta aba.
+   Cede largura logo depois do recado e antes do destino, das abas e da ajuda: sem isso, com o painel recolhido,
+   o destino e os outros projetos somavam mais que a faixa e empurravam a ajuda para fora da janela.
+   O projeto cuja palheta não cabe sai inteiro (fitRunning). */
 #running {
   display: flex;
   align-items: center;
   gap: 14px;
   min-width: 0;
-  flex-shrink: 0;
+  flex-shrink: 100;
   max-width: 40%;
   overflow: hidden;
   padding-left: 12px;
   border-left: 1px solid var(--rule);
 }
 
-#running:empty {
+#running:not(:has(> :not([hidden]))) {
   display: none;
 }
 
