@@ -1,4 +1,4 @@
-/* switch-terminal: painel de partidas.
+/* Hotswap: painel de partidas.
    Noite: painel grafite. Dia: tabela impressa em esmalte branco. Uma cor por estado, nenhuma outra:
    verde de pé, âmbar em movimento (subindo, aguardando, parando), vermelho só quando algo falhou ou foi morto. */
 
@@ -22,8 +22,12 @@
   --primary-ink: #131417;
   --scrim: rgb(10 11 13 / 72%);
   --selection: rgb(236 235 230 / 22%);
+  /* marca: a palheta H do app-icon.svg; o verde da travessa é o da marca nos dois temas */
   --mark-bg: #222428;
-  --mark-prompt: #ecebe6;
+  --mark-bg-hi: #2b2d32;
+  --mark-seam: #0a0b0d;
+  --mark-ink: #ecebe6;
+  --mark-run: #4cc38a;
   --term-bg: var(--board);
   --float-shadow: 0 4px 8px rgb(0 0 0 / 28%);
   /* hover: meio caminho entre o trilho e a palheta, para não se confundir com a linha atual */
@@ -57,7 +61,10 @@
     --scrim: rgb(244 245 243 / 78%);
     --selection: rgb(21 22 26 / 16%);
     --mark-bg: #15161a;
-    --mark-prompt: #f4f5f3;
+    --mark-bg-hi: #2a2b30;
+    --mark-seam: #0a0b0d;
+    --mark-ink: #f4f5f3;
+    --mark-run: #4cc38a;
     --term-bg: var(--board);
     --float-shadow: 0 4px 8px rgb(21 22 26 / 14%);
   }

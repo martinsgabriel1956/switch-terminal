@@ -3,19 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>switch-terminal</title>
+    <title>Hotswap</title>
     <script type="module" src="/src/main.ts"></script>
   </head>
   <body>
     <aside id="sidebar" aria-label="Painel de worktrees">
       <div class="brand">
         <svg class="mark" viewBox="0 0 1024 1024" aria-hidden="true">
-          <rect x="32" y="32" width="960" height="960" rx="216" fill="var(--mark-bg)" />
-          <polyline points="252,332 444,512 252,692" fill="none" stroke="var(--mark-prompt)" stroke-width="96" stroke-linecap="round" stroke-linejoin="round" />
-          <rect x="512" y="604" width="272" height="136" rx="68" fill="var(--run)" />
-          <circle cx="716" cy="672" r="48" fill="var(--mark-bg)" />
+          <clipPath id="mark-tile"><rect x="32" y="32" width="960" height="960" rx="216" /></clipPath>
+          <g clip-path="url(#mark-tile)">
+            <rect x="32" y="32" width="960" height="480" fill="var(--mark-bg-hi)" />
+            <rect x="32" y="512" width="960" height="480" fill="var(--mark-bg)" />
+            <rect x="428" y="430" width="168" height="164" fill="var(--mark-run)" />
+            <rect x="276" y="248" width="160" height="528" rx="12" fill="var(--mark-ink)" />
+            <rect x="588" y="248" width="160" height="528" rx="12" fill="var(--mark-ink)" />
+            <rect x="32" y="505" width="960" height="14" fill="var(--mark-seam)" />
+          </g>
         </svg>
-        <h1>switch-terminal</h1>
+        <h1>Hotswap</h1>
       </div>
       <nav id="board" aria-label="Projetos" aria-description="Setas andam entre as worktrees; Enter troca"></nav>
       <div id="sidebar-foot">

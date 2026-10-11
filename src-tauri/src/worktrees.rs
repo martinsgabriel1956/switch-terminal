@@ -100,7 +100,7 @@ fn expand(p: &str) -> String {
 }
 
 pub fn config_path() -> String {
-    format!("{}/.config/switch-terminal/config.json", home())
+    format!("{}/.config/hotswap/config.json", home())
 }
 
 /// "Abrir o config.json" no projeto com erro: abre no editor padrão do sistema.
@@ -843,7 +843,7 @@ mod tests {
 
     #[test]
     fn install_only_when_node_modules_is_missing() {
-        let dir = std::env::temp_dir().join(format!("switch-terminal-deps-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("hotswap-deps-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.to_string_lossy().to_string();
@@ -897,7 +897,7 @@ mod tests {
 
     #[test]
     fn creates_worktrees_and_lists_branches() {
-        let tmp = std::env::temp_dir().join(format!("switch-terminal-test-{}", std::process::id()));
+        let tmp = std::env::temp_dir().join(format!("hotswap-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
         let sh = |cmd: &str| assert!(Command::new("sh").arg("-c").arg(cmd).current_dir(&tmp).status().unwrap().success(), "{cmd}");
         std::fs::create_dir_all(&tmp).unwrap();
@@ -934,7 +934,7 @@ mod tests {
 
     #[test]
     fn edits_worktree_all_or_nothing() {
-        let tmp = std::env::temp_dir().join(format!("switch-terminal-edit-{}", std::process::id()));
+        let tmp = std::env::temp_dir().join(format!("hotswap-edit-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
         let sh = |cmd: &str| assert!(Command::new("sh").arg("-c").arg(cmd).current_dir(&tmp).status().unwrap().success(), "{cmd}");
         std::fs::create_dir_all(&tmp).unwrap();
@@ -1011,7 +1011,7 @@ mod tests {
 
     #[test]
     fn bare_layout_from_clone() {
-        let tmp = std::env::temp_dir().join(format!("switch-terminal-gh-{}", std::process::id()));
+        let tmp = std::env::temp_dir().join(format!("hotswap-gh-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
         let sh = |cmd: &str| assert!(Command::new("sh").arg("-c").arg(cmd).current_dir(&tmp).status().unwrap().success(), "{cmd}");
         std::fs::create_dir_all(&tmp).unwrap();
@@ -1035,7 +1035,7 @@ mod tests {
 
     #[test]
     fn adds_project_keeping_existing_config() {
-        let tmp = std::env::temp_dir().join(format!("switch-terminal-cfg-{}", std::process::id()));
+        let tmp = std::env::temp_dir().join(format!("hotswap-cfg-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         assert!(Command::new("git").args(["init", "-q"]).arg(tmp.join("repo")).status().unwrap().success());

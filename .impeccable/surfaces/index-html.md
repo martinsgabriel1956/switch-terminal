@@ -5,7 +5,7 @@ primary_target: "index.html"
 related_targets: ["src/main.ts","src/styles.css"]
 ---
 
-# Superfície: janela principal do switch-terminal
+# Superfície: janela principal do Hotswap
 
 Modo: Operate. Público: um dev, o dia todo, em monitor grande, em luz alta e baixa (tema segue o sistema: escuro e claro).
 Tarefa: ver de relance o que está rodando em cada projeto, trocar de worktree pelo teclado ou mouse, acompanhar a troca e voltar ao terminal.

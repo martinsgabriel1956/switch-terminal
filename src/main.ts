@@ -43,7 +43,7 @@ const SPOKEN: Record<LineState, string> = {
   idle: "inativa",
   none: "não aberta",
 };
-const CONFIG_PATH = "~/.config/switch-terminal/config.json";
+const CONFIG_PATH = "~/.config/hotswap/config.json";
 const CONFIG_EXAMPLE = `{
   "projects": [
     {

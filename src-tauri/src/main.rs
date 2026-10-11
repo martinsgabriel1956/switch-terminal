@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    switch_terminal_lib::run()
+    hotswap_lib::run()
 }

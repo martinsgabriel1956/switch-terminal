@@ -1,5 +1,5 @@
 ---
-name: switch-terminal
+name: Hotswap
 description: Painel de partidas para trocar de worktree; cada projeto é uma plataforma, cada worktree uma linha com palheta de estado.
 colors:
   board: "#131417"
@@ -161,7 +161,7 @@ components:
     padding: "0 4px"
 ---
 
-# Design System: switch-terminal
+# Design System: Hotswap
 
 ## Overview
 
@@ -189,7 +189,7 @@ Neutros quentes de grafite (noite) ou esmalte (dia), com três cores de sinal re
 - **Tinta Cheia** (`ink`): texto do que está em serviço (branch da worktree ativa ou rodando, destino, títulos), botão primário (`--primary`), anel de foco, caret e seleção (`--focus`, `--selection` são a mesma tinta). É a voz principal do sistema; não há acento cromático.
 
 ### Secondary
-- **Verde Rodando** (`run`): só o estado RODANDO, o interruptor da marca na barra lateral e a confirmação positiva de formulário (`.side-error.ok`).
+- **Verde Rodando** (`run`): só o estado RODANDO, a travessa do H da marca na barra lateral e a confirmação positiva de formulário (`.side-error.ok`).
 - **Âmbar em Movimento** (`start`, `wait`): estados SUBINDO, AGUARDA e PARANDO, e a prévia ENCERRA; os dois tokens têm o mesmo valor e continuam separados por papel. Parar é a consequência esperada de uma troca, não um alarme.
 - **Vermelho Falha** (`fail`): só o que falhou ou foi morto: PARCIAL (um lado caiu), SIGKILL (não parou a tempo, ou foi forçado), erros de projeto e de formulário. Uma troca de rotina nunca fica vermelha.
 
@@ -203,7 +203,7 @@ Neutros quentes de grafite (noite) ou esmalte (dia), com três cores de sinal re
 - **Tinta Apagada** (`ink-3`): separador `/`, ícone desabilitado, fios da linha atual e do item selecionado, contorno dos campos. Passa 3:1 sobre `board`, `rail`, `flap` e `flap-hi` nos dois temas, então serve de indicador não textual; não serve para texto que precise ser lido.
 - **Véu** (`scrim`): atrás do aviso de troca e dos diálogos modais.
 
-A marca na barra lateral redesenha a geometria da logo com `--mark-bg` / `--mark-prompt` (palheta e tinta à noite; tinta e esmalte de dia) e o interruptor em `run`. O arquivo `app-icon.svg` é compromisso de marca e mantém as próprias cores.
+A marca na barra lateral redesenha a geometria da logo (a palheta H) com `--mark-bg-hi` / `--mark-bg` nas duas metades, `--mark-seam` no corte e `--mark-ink` no H (palheta e tinta à noite; tinta e esmalte de dia). A travessa usa `--mark-run`, o verde da marca nos dois temas: o `run` de dia é escuro demais sobre a palheta escura. O arquivo `app-icon.svg` é compromisso de marca e mantém as próprias cores.
 
 ### Named Rules
 **A Regra de Uma Cor por Estado.** Verde é de pé, âmbar é em movimento (subindo, aguardando, parando), vermelho é falha (parcial, SIGKILL, erro). A contagem até o SIGKILL fica em tinta neutra: esperar é o caminho normal. Nenhuma outra cor entra na interface: foco, caret, seleção, botão primário e checkbox (`accent-color`) são tinta neutra.

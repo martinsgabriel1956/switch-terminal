@@ -1,16 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2a2e37"/>
-      <stop offset="1" stop-color="#14161b"/>
-    </linearGradient>
-  </defs>
-  <!-- Fundo -->
-  <rect x="32" y="32" width="960" height="960" rx="216" fill="url(#bg)"/>
-  <rect x="32" y="32" width="960" height="960" rx="216" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="8"/>
-  <!-- Prompt ">" -->
-  <polyline points="252,332 444,512 252,692" fill="none" stroke="#4fc1ff" stroke-width="96" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Cursor "_" como interruptor ligado -->
-  <rect x="512" y="604" width="272" height="136" rx="68" fill="#89d185"/>
-  <circle cx="716" cy="672" r="48" fill="#14161b"/>
+  <clipPath id="tile"><rect x="32" y="32" width="960" height="960" rx="216"/></clipPath>
+  <g clip-path="url(#tile)">
+    <!-- palheta: metade de cima mais clara, de baixo mais escura -->
+    <rect x="32" y="32" width="960" height="480" fill="#2b2d32"/>
+    <rect x="32" y="512" width="960" height="480" fill="#222428"/>
+    <!-- H: as hastes são API e Front; a travessa verde é o par rodando -->
+    <rect x="428" y="430" width="168" height="164" fill="#4cc38a"/>
+    <rect x="276" y="248" width="160" height="528" rx="12" fill="#ecebe6"/>
+    <rect x="588" y="248" width="160" height="528" rx="12" fill="#ecebe6"/>
+    <!-- corte da palheta atravessando a letra -->
+    <rect x="32" y="505" width="960" height="14" fill="#0a0b0d"/>
+  </g>
 </svg>

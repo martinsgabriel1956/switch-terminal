@@ -27,7 +27,7 @@ Pareia worktrees de dois repositórios diferentes (API + front) pelo nome da bra
 
 ## Capabilities and Constraints
 
-- Projetos configurados em `~/.config/switch-terminal/config.json` (também criáveis pela UI); worktrees lidas com `git worktree list`; pares manuais para branches de nomes diferentes.
+- Projetos configurados em `~/.config/hotswap/config.json` (também criáveis pela UI); worktrees lidas com `git worktree list`; pares manuais para branches de nomes diferentes.
 - Por worktree: abas API e Front, cada uma um PTY real (xterm.js) com o shell do usuário (fish).
 - Troca: Ctrl+C, espera o grupo de processos sair, SIGKILL no timeout; "Forçar agora" e "Voltar para a anterior" durante a espera.
 - Criar worktree (diretório e branch de origem por lado) e criar projeto pela UI, apontando pastas locais ou clonando do GitHub da conta logada no `gh` (layout bare); remover worktree/projeto não é feito pelo app.
@@ -37,8 +37,8 @@ Pareia worktrees de dois repositórios diferentes (API + front) pelo nome da bra
 
 ## Brand Commitments
 
-- Nome: switch-terminal.
-- Logo (`app-icon.svg`): prompt `>_` em que o cursor é um interruptor ligado. É compromisso: a identidade parte dela e ela não muda.
+- Nome: Hotswap (binário, pacote e pastas em `hotswap`). Antes se chamava switch-terminal.
+- Logo (`app-icon.svg`): um H numa palheta split-flap, com o corte do meio atravessando a letra. As hastes são a API e o front; a travessa verde é o par rodando. É compromisso: a identidade parte dela e ela não muda.
 
 ## Evidence on Hand
 

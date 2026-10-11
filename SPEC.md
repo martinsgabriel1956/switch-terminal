@@ -1,4 +1,4 @@
-# switch-terminal — SPEC v1
+# Hotswap — SPEC v1
 
 App desktop para trocar rapidamente entre worktrees de projetos com **API e front em repositórios separados**. Cada worktree pareada tem um terminal da API e um do front.
 
@@ -11,7 +11,7 @@ App desktop para trocar rapidamente entre worktrees de projetos com **API e fron
 
 ## Configuração
 
-Arquivo `~/.config/switch-terminal/config.json`. Projetos novos podem ser criados pela tela (veja abaixo); o resto (`manualPairs`, `baseBranch`, `stopTimeoutMs`, editar ou remover projeto) é à mão:
+Arquivo `~/.config/hotswap/config.json` (o app se chamava switch-terminal: na primeira abertura, `~/.config/switch-terminal/` e os dados do webview em `~/.local/share/dev.gabriel.switch-terminal/` mudam para as pastas do nome novo, se elas ainda não existirem). Projetos novos podem ser criados pela tela (veja abaixo); o resto (`manualPairs`, `baseBranch`, `stopTimeoutMs`, editar ou remover projeto) é à mão:
 
 ```json
 {
