@@ -123,6 +123,10 @@ const paletteList = $("#palette ul");
 const paletteNote = $("#palette .note");
 const urlEl = $<HTMLAnchorElement>("#dev-url");
 const lastStopEl = $("#last-stop");
+const haltTabEl = $<HTMLButtonElement>("#halt-tab");
+const haltAllEl = $<HTMLButtonElement>("#halt-all");
+haltTabEl.addEventListener("click", () => toggleRun(false));
+haltAllEl.addEventListener("click", () => toggleRun(true));
 
 urlEl.addEventListener("click", (e) => {
   e.preventDefault();
@@ -161,6 +165,10 @@ const fresh = new Set<string>();
 // Estado real, vindo do backend: terminais (id do PTY) com processo rodando e o nome dele, e envs cujo start acabou de ser enviado.
 let busy = new Map<number, string>();
 const starting = new Map<string, number>();
+// Parada à mão (botões ■ do cabeçalho): envs parando agora (e se já passou para o SIGKILL), e os terminais parados
+// de propósito, que não contam como queda. O próximo start (Subir ou troca) tira a marca.
+const halting = new Map<string, { forcing: boolean }>();
+const halted = new Set<number>();
 let current: { project: string; wt: Worktree } | null = null;
 let tab: Tab = "api";
 
@@ -227,7 +235,7 @@ const LIVE: LineState[] = ["run", "part", "start", "wait"];
 function sides(k: string) {
   const panes = Object.entries(envs.get(k)?.panes ?? {}) as [Tab, Pane][];
   const up = panes.filter(([, p]) => busy.has(p.ptyId)).map(([t]) => t);
-  const want = panes.filter(([, p]) => p.side.startCommand);
+  const want = panes.filter(([, p]) => p.side.startCommand && !halted.has(p.ptyId));
   return { up, down: (want.length ? want : panes).map(([t]) => t).filter((t) => !up.includes(t)) };
 }
 
@@ -237,6 +245,8 @@ function lineState(project: string, wt: Worktree): LineState {
   // Voltou para a que estava parando: ela espera a si mesma parar para reiniciar.
   if (st && active[project] === wt.id) return "wait";
   if (st?.fromId === wt.id) return st.forcing ? "kill" : "stop";
+  const h = halting.get(k);
+  if (h) return h.forcing ? "kill" : "stop";
   if (starting.has(k)) return "start";
   const { up, down } = sides(k);
   if (up.length) return down.length ? "part" : "run";
@@ -361,6 +371,7 @@ function disposeEnv(k: string, env: Env) {
 }
 
 async function writeStart(k: string, pane: Pane, isFresh: boolean) {
+  halted.delete(pane.ptyId);
   const setup = isFresh ? pane.side.setupCommand : null;
   if (!setup && !pane.side.startCommand) return;
   pane.url = null;
@@ -371,7 +382,41 @@ async function writeStart(k: string, pane: Pane, isFresh: boolean) {
   const cmd = [setup, install, pane.side.startCommand].filter(Boolean).join(" && ");
   invoke("pty_write", { id: pane.ptyId, data: cmd + "\r" });
 }
-const stopPane = (pane: Pane) => invoke("pty_stop", { id: pane.ptyId, timeoutMs: config.stopTimeoutMs });
+/** Ctrl+C → espera → SIGKILL; resolve `true` se precisou forçar. */
+const stopPane = (pane: Pane) => invoke<boolean>("pty_stop", { id: pane.ptyId, timeoutMs: config.stopTimeoutMs });
+
+/** Botões ■ e ■■ do cabeçalho (Ctrl+Shift+X, com Alt os dois): para o que roda nas abas, como na troca, mas o shell fica.
+ *  Parado, sobe de novo. A worktree continua a ativa do projeto. */
+async function toggleRun(all: boolean) {
+  if (!current) return;
+  const { project, wt } = current;
+  const k = key(project, wt.id);
+  const env = envs.get(k);
+  if (!env || stopping.has(project) || halting.has(k)) return;
+  const tabs = TABS.filter((t) => env.panes[t] && (all || t === tab));
+  const panes = tabs.map((t) => env.panes[t]!);
+  if (!(starting.has(k) || panes.some((p) => busy.has(p.ptyId)))) {
+    for (const p of panes) writeStart(k, p, false);
+    return render(true);
+  }
+  const state = { forcing: false };
+  halting.set(k, state);
+  starting.delete(k);
+  for (const p of panes) halted.add(p.ptyId);
+  const t0 = Date.now();
+  const forceTimer = setTimeout(() => {
+    state.forcing = true;
+    render();
+  }, config.stopTimeoutMs);
+  render(true);
+  const forced = (await Promise.all(panes.map(stopPane))).some(Boolean);
+  clearTimeout(forceTimer);
+  halting.delete(k);
+  for (const p of panes) busy.delete(p.ptyId);
+  const secs = ((Date.now() - t0) / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  headerNote(forced, forced ? `Encerrado à força em ${secs} s` : `Parou em ${secs} s`, el("span", { className: "who" }, "· ", tabs.map((t) => TAB_LABEL[t]).join(" e "), " · ", ...labelNodes(wt.label)));
+  render();
+}
 
 /** Uma worktree ativa por projeto: para a anterior (Ctrl+C → espera → SIGKILL) e só então roda o startCommand. */
 function activate(project: string, wt: Worktree, created: boolean) {
@@ -467,6 +512,7 @@ function render(focus = false) {
     destEl.replaceChildren();
     destEl.dataset.sig = "";
     urlEl.hidden = true;
+    haltTabEl.hidden = haltAllEl.hidden = true;
     waitEl.hidden = true;
     renderEmpty();
     fitRunning();
@@ -499,6 +545,8 @@ function render(focus = false) {
     urlEl.title = `Abrir ${url} no navegador`;
     urlEl.setAttribute("aria-label", urlEl.title);
   }
+  renderHalt(haltTabEl, TABS.filter((t) => t === tab));
+  renderHalt(haltAllEl, wt.api && wt.front ? TABS : []);
   const down = state === "part" ? sides(ck!).down : [];
   for (const t of TABS) {
     if (!wt[t]) continue;
@@ -527,6 +575,31 @@ function render(focus = false) {
   if (stopping.has(project)) {
     if (!waitEl.contains(document.activeElement)) waitEl.querySelector<HTMLElement>(".wait-card")?.focus();
   } else pane?.term.focus();
+}
+
+const STOP_ICON = "M4.5 4.5h7v7h-7z";
+const STOP_ALL_ICON = "M2.5 5h4.5v6H2.5zM9 5h4.5v6H9z";
+const START_ICON = "M5.5 3.8v8.4L12 8z";
+const START_ALL_ICON = "M2.5 4.2v7.6L7.5 8zM8.5 4.2v7.6l5-3.8z";
+
+/** ■ / ▶ de `tabs` da worktree atual: Parar se algo roda (ou acabou de subir), Subir se há start; senão some.
+ *  Durante uma troca ou uma parada fica aria-disabled com o motivo. */
+function renderHalt(b: HTMLButtonElement, tabs: Tab[]) {
+  const k = currentKey()!;
+  const panes = tabs.flatMap((t) => envs.get(k)?.panes[t] ?? []);
+  const running = starting.has(k) || panes.some((p) => busy.has(p.ptyId));
+  b.hidden = !running && !panes.some((p) => p.side.startCommand);
+  if (b.hidden) return;
+  const all = tabs.length > 1;
+  const what = tabs.map((t) => TAB_LABEL[t]).join(" e ");
+  const wait = stopping.has(current!.project) || halting.has(k);
+  const label = wait ? "Aguarde: parando processos" : `${running ? "Parar" : "Subir"} ${what} (Ctrl+Shift+${all ? "Alt+" : ""}X)`;
+  if (b.title === label) return;
+  b.title = label;
+  b.setAttribute("aria-label", label);
+  if (wait) b.setAttribute("aria-disabled", "true");
+  else b.removeAttribute("aria-disabled");
+  b.replaceChildren(icon(running ? (all ? STOP_ALL_ICON : STOP_ICON) : all ? START_ALL_ICON : START_ICON));
 }
 
 function renderEmpty() {
@@ -1031,7 +1104,8 @@ function announceDrops() {
       continue;
     }
     const { up } = sides(k);
-    const lost = (wasUp.get(k) ?? []).filter((t) => !up.includes(t));
+    // Parado pelo botão não é queda.
+    const lost = (wasUp.get(k) ?? []).filter((t) => !up.includes(t) && !halted.has(env.panes[t]!.ptyId));
     wasUp.set(k, up);
     const wt = findWt(project, id);
     if (!lost.length || k === currentKey() || !wt) continue;
@@ -2135,7 +2209,8 @@ window.addEventListener(
       else reload();
     } else if (e.code === "KeyJ") {
       if (current?.wt.api && current.wt.front) setTab(tab === "api" ? "front" : "api", true);
-    } else return;
+    } else if (e.code === "KeyX") toggleRun(e.altKey);
+    else return;
     e.preventDefault();
     e.stopPropagation();
   },

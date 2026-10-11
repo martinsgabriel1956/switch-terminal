@@ -37,6 +37,8 @@
         <div id="destination" aria-live="polite"></div>
         <div id="tabs" role="tablist" aria-label="Terminal"></div>
         <a id="dev-url" hidden></a>
+        <button id="halt-tab" type="button" class="icon-btn" hidden></button>
+        <button id="halt-all" type="button" class="icon-btn" hidden></button>
         <span id="last-stop" role="status"></span>
         <div id="running" role="group" aria-label="Rodando em outros projetos"></div>
         <button id="help-btn" type="button" class="icon-btn" popovertarget="help" aria-label="Atalhos e legenda" title="Atalhos e legenda (Ctrl+Shift+H)">
@@ -56,6 +58,7 @@
       <dl class="keys">
         <dt><kbd>K</kbd></dt><dd>Trocar de worktree (abre na anterior)</dd>
         <dt><kbd>J</kbd></dt><dd>Alternar API e Front</dd>
+        <dt><kbd>X</kbd></dt><dd>Parar ou subir o processo da aba (o shell fica); com <kbd>Alt</kbd>, API e Front</dd>
         <dt><kbd>N</kbd></dt><dd>Nova worktree</dd>
         <dt><kbd>E</kbd></dt><dd>Ir para o painel (setas navegam, → chega ao lápis de editar, Esc volta)</dd>
         <dt><kbd>B</kbd></dt><dd>Recolher ou abrir o painel</dd>
@@ -68,7 +71,7 @@
         <dt><span class="flap" data-state="part"><span>PARCIAL</span></span></dt><dd>Um lado caiu; a aba dele fica marcada</dd>
         <dt><span class="flap" data-state="start"><span>SUBINDO</span></span></dt><dd>O comando de start acabou de ser enviado</dd>
         <dt><span class="flap" data-state="wait"><span>AGUARDA</span></span></dt><dd>Esperando a anterior do projeto parar (ou a própria, ao voltar)</dd>
-        <dt><span class="flap" data-state="stop"><span>PARANDO</span></span></dt><dd>Recebeu Ctrl+C para a troca; esperando os processos saírem</dd>
+        <dt><span class="flap" data-state="stop"><span>PARANDO</span></span></dt><dd>Recebeu Ctrl+C (da troca ou do botão de parar); esperando os processos saírem</dd>
         <dt><span class="flap" data-state="kill"><span>SIGKILL</span></span></dt><dd>Não parou a tempo (ou você forçou): encerrada à força</dd>
         <dt><span class="flap" data-state="stop"><span>ENCERRA</span></span></dt><dd>Prévia: trocar para a linha sob o cursor (ou a escolhida na paleta) encerra esta</dd>
         <dt><span class="flap" data-state="idle"><span>INATIVA</span></span></dt><dd>Terminais abertos, nada rodando</dd>
