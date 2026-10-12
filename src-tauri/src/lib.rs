@@ -70,7 +70,10 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
             &MenuItem::with_id(app, "quit", "Sair", true, None::<&str>)?,
         ],
     )?;
-    let mut tray = TrayIconBuilder::with_id("main")
+    // No Linux o id vira o arquivo do ícone ($XDG_RUNTIME_DIR/tray-icon/tray-icon-<id>-0.png) e o id do
+    // AppIndicator: com "main", outro app Tauri com o mesmo id sobrescreve o arquivo e as duas bandejas
+    // mostram o ícone de quem abriu por último.
+    let mut tray = TrayIconBuilder::with_id("hotswap")
         .tooltip("Hotswap")
         .menu(&menu)
         .show_menu_on_left_click(true)
