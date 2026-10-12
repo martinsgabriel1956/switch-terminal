@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-09T18:42:57+00:00",
+  "generatedAt": "2026-10-12T01:20:16+00:00",
   "title": "Design System: Hotswap",
   "extensions": {
     "colorMeta": {
@@ -40,7 +40,7 @@
       },
       "flap": {
         "role": "neutral",
-        "displayName": "Palheta (metade de baixo) (noite)",
+        "displayName": "Palheta (noite)",
         "canonical": "#222428",
         "cssVar": "--flap",
         "mode": "dark",
@@ -143,7 +143,7 @@
       "ink-3": {
         "role": "neutral",
         "displayName": "Tinta Apagada (noite)",
-        "canonical": "#747572",
+        "canonical": "#777875",
         "cssVar": "--ink-3",
         "mode": "dark",
         "tonalRamp": [
@@ -176,7 +176,7 @@
       },
       "start": {
         "role": "secondary",
-        "displayName": "Âmbar Subindo (noite)",
+        "displayName": "Âmbar em Movimento (subindo) (noite)",
         "canonical": "#f2b33d",
         "cssVar": "--start",
         "mode": "dark",
@@ -193,7 +193,7 @@
       },
       "wait": {
         "role": "secondary",
-        "displayName": "Âmbar Aguarda (noite)",
+        "displayName": "Âmbar em Movimento (aguardando, parando) (noite)",
         "canonical": "#f2b33d",
         "cssVar": "--wait",
         "mode": "dark",
@@ -208,11 +208,11 @@
           "oklch(95% 0.147 79)"
         ]
       },
-      "stop": {
+      "fail": {
         "role": "secondary",
-        "displayName": "Vermelho Parando (noite)",
+        "displayName": "Vermelho Falha (noite)",
         "canonical": "#f26d6d",
-        "cssVar": "--stop",
+        "cssVar": "--fail",
         "mode": "dark",
         "tonalRamp": [
           "oklch(15% 0.164 22)",
@@ -230,14 +230,34 @@
         "displayName": "Véu (noite)",
         "canonical": "rgb(10 11 13 / 72%)",
         "cssVar": "--scrim",
-        "mode": "dark"
+        "mode": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.005 264)",
+          "oklch(26% 0.005 264)",
+          "oklch(38% 0.005 264)",
+          "oklch(49% 0.005 264)",
+          "oklch(61% 0.005 264)",
+          "oklch(72% 0.005 264)",
+          "oklch(84% 0.005 264)",
+          "oklch(95% 0.005 264)"
+        ]
       },
       "selection": {
         "role": "neutral",
         "displayName": "Seleção (noite)",
         "canonical": "rgb(236 235 230 / 22%)",
         "cssVar": "--selection",
-        "mode": "dark"
+        "mode": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.007 97)",
+          "oklch(26% 0.007 97)",
+          "oklch(38% 0.007 97)",
+          "oklch(49% 0.007 97)",
+          "oklch(61% 0.007 97)",
+          "oklch(72% 0.007 97)",
+          "oklch(84% 0.007 97)",
+          "oklch(95% 0.007 97)"
+        ]
       },
       "board-day": {
         "role": "neutral",
@@ -275,25 +295,25 @@
       },
       "flap-day": {
         "role": "neutral",
-        "displayName": "Palheta (metade de baixo) (dia)",
-        "canonical": "#dcddd9",
+        "displayName": "Palheta (dia)",
+        "canonical": "#d6d7d3",
         "cssVar": "--flap",
         "mode": "light",
         "tonalRamp": [
-          "oklch(15% 0.005 118)",
-          "oklch(26% 0.005 118)",
-          "oklch(38% 0.005 118)",
-          "oklch(49% 0.005 118)",
-          "oklch(61% 0.005 118)",
-          "oklch(72% 0.005 118)",
-          "oklch(84% 0.005 118)",
-          "oklch(95% 0.005 118)"
+          "oklch(15% 0.006 118)",
+          "oklch(26% 0.006 118)",
+          "oklch(38% 0.006 118)",
+          "oklch(49% 0.006 118)",
+          "oklch(61% 0.006 118)",
+          "oklch(72% 0.006 118)",
+          "oklch(84% 0.006 118)",
+          "oklch(95% 0.006 118)"
         ]
       },
       "flap-hi-day": {
         "role": "neutral",
         "displayName": "Palheta (metade de cima) (dia)",
-        "canonical": "#e4e5e1",
+        "canonical": "#e1e2de",
         "cssVar": "--flap-hi",
         "mode": "light",
         "tonalRamp": [
@@ -382,14 +402,14 @@
         "cssVar": "--ink-3",
         "mode": "light",
         "tonalRamp": [
-          "oklch(15% 0.005 258)",
-          "oklch(26% 0.005 258)",
-          "oklch(38% 0.005 258)",
-          "oklch(49% 0.005 258)",
-          "oklch(61% 0.005 258)",
-          "oklch(72% 0.005 258)",
-          "oklch(84% 0.005 258)",
-          "oklch(95% 0.005 258)"
+          "oklch(15% 0.007 265)",
+          "oklch(26% 0.007 265)",
+          "oklch(38% 0.007 265)",
+          "oklch(49% 0.007 265)",
+          "oklch(61% 0.007 265)",
+          "oklch(72% 0.007 265)",
+          "oklch(84% 0.007 265)",
+          "oklch(95% 0.007 265)"
         ]
       },
       "run-day": {
@@ -411,7 +431,7 @@
       },
       "start-day": {
         "role": "secondary",
-        "displayName": "Âmbar Subindo (dia)",
+        "displayName": "Âmbar em Movimento (subindo) (dia)",
         "canonical": "#855000",
         "cssVar": "--start",
         "mode": "light",
@@ -428,7 +448,7 @@
       },
       "wait-day": {
         "role": "secondary",
-        "displayName": "Âmbar Aguarda (dia)",
+        "displayName": "Âmbar em Movimento (aguardando, parando) (dia)",
         "canonical": "#855000",
         "cssVar": "--wait",
         "mode": "light",
@@ -443,11 +463,11 @@
           "oklch(95% 0.106 67)"
         ]
       },
-      "stop-day": {
+      "fail-day": {
         "role": "secondary",
-        "displayName": "Vermelho Parando (dia)",
+        "displayName": "Vermelho Falha (dia)",
         "canonical": "#b3261e",
-        "cssVar": "--stop",
+        "cssVar": "--fail",
         "mode": "light",
         "tonalRamp": [
           "oklch(15% 0.178 29)",
@@ -465,14 +485,34 @@
         "displayName": "Véu (dia)",
         "canonical": "rgb(244 245 243 / 78%)",
         "cssVar": "--scrim",
-        "mode": "light"
+        "mode": "light",
+        "tonalRamp": [
+          "oklch(15% 0.003 128)",
+          "oklch(26% 0.003 128)",
+          "oklch(38% 0.003 128)",
+          "oklch(49% 0.003 128)",
+          "oklch(61% 0.003 128)",
+          "oklch(72% 0.003 128)",
+          "oklch(84% 0.003 128)",
+          "oklch(95% 0.003 128)"
+        ]
       },
       "selection-day": {
         "role": "neutral",
         "displayName": "Seleção (dia)",
         "canonical": "rgb(21 22 26 / 16%)",
         "cssVar": "--selection",
-        "mode": "light"
+        "mode": "light",
+        "tonalRamp": [
+          "oklch(15% 0.008 275)",
+          "oklch(26% 0.008 275)",
+          "oklch(38% 0.008 275)",
+          "oklch(49% 0.008 275)",
+          "oklch(61% 0.008 275)",
+          "oklch(72% 0.008 275)",
+          "oklch(84% 0.008 275)",
+          "oklch(95% 0.008 275)"
+        ]
       }
     },
     "typographyMeta": {
@@ -482,15 +522,15 @@
       },
       "headline": {
         "displayName": "Headline",
-        "purpose": "Título de diálogo."
+        "purpose": "Título dos diálogos e do aviso de troca; busca da paleta em 17px."
       },
       "title": {
         "displayName": "Title",
-        "purpose": "Faixa de destino."
+        "purpose": "A faixa de destino (plataforma / branch)."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Texto padrão, linhas, campos."
+        "purpose": "Texto padrão, linhas do painel, campos."
       },
       "small": {
         "displayName": "Small",
@@ -498,64 +538,98 @@
       },
       "label": {
         "displayName": "Label",
-        "purpose": "Caixa-alta espaçada: plataforma, abas, projeto, títulos da ajuda."
+        "purpose": "Caixa-alta espaçada: plataforma, abas, projeto, títulos da ajuda, legendas de fieldset."
       },
       "flap": {
         "displayName": "Flap",
-        "purpose": "Texto das palhetas e etiquetas."
+        "purpose": "Texto das palhetas e etiquetas SÓ API / SÓ FRONT."
       },
       "mono": {
         "displayName": "Mono",
-        "purpose": "Erros brutos, prévias de caminho, código."
+        "purpose": "Erros brutos, prévia de caminho, código no estado vazio, porta do dev server."
       },
       "terminal": {
         "displayName": "Terminal",
-        "purpose": "xterm.js."
+        "purpose": "xterm.js (a pilha vem de --mono)."
       }
     },
     "shadows": [
       {
         "name": "floating",
         "value": "0 4px 8px rgb(0 0 0 / 28%)",
-        "purpose": "Paleta, ajuda e diálogos, sempre com borda rule de 1px."
+        "purpose": "Paleta, ajuda, diálogos e o painel aberto por cima do terminal (janela estreita), sempre com borda rule de 1px. À noite."
+      },
+      {
+        "name": "floating-day",
+        "value": "0 4px 8px rgb(21 22 26 / 14%)",
+        "purpose": "A mesma sombra Flutuante de dia: na tinta e mais leve sobre o esmalte."
       },
       {
         "name": "current-row",
-        "value": "inset 0 -1px 0 var(--rule), inset 0 1px 0 var(--rule)",
-        "purpose": "Fios internos da linha atual e do item selecionado da paleta (não é elevação)."
+        "value": "inset 0 -1px 0 var(--ink-3), inset 0 1px 0 var(--ink-3)",
+        "purpose": "Fios internos da linha atual e do item selecionado da paleta (≥3:1; não é elevação)."
+      },
+      {
+        "name": "tab-selected",
+        "value": "inset 0 -2px 0 var(--ink)",
+        "purpose": "Fio de 2px na base da aba selecionada (não é sombra)."
       }
     ],
     "motion": [
       {
         "name": "flap-flip",
         "value": "180ms steps(3, jump-none)",
-        "purpose": "Palheta vira (scaleY 1 → 0.12 → 1) só quando o estado muda; nenhuma com prefers-reduced-motion."
+        "purpose": "A palheta vira (scaleY 1 → 0.12 → 1) só quando o estado daquela palheta muda; seca com prefers-reduced-motion."
+      },
+      {
+        "name": "ends-preview",
+        "value": "0s 120ms forwards",
+        "purpose": "Prévia ENCERRA: troca seca depois de 120ms com o cursor ou o foco em outra linha do projeto (só CSS, :has); não vira."
       },
       {
         "name": "disclosure",
         "value": "90ms steps(2, jump-none)",
-        "purpose": "Chevron dos <details>."
+        "purpose": "Chevron dos <details> e da placa do projeto."
+      },
+      {
+        "name": "reload-spin",
+        "value": "640ms steps(8) infinite",
+        "purpose": "Ícone de reler enquanto lê; desligado com reduzir movimento."
       }
     ],
     "breakpoints": [
       {
+        "name": "narrow",
+        "value": "innerWidth < 640px (CSS, via JS)",
+        "purpose": "Painel e área principal não cabem lado a lado: o painel abre por cima do terminal e começa fechado."
+      },
+      {
+        "name": "header-compact",
+        "value": "@container (max-width: 480px)",
+        "purpose": "Faixa de destino: porta, recado e outros em serviço saem antes do destino e das abas."
+      },
+      {
         "name": "color-scheme-light",
-        "value": "(prefers-color-scheme: light)"
+        "value": "(prefers-color-scheme: light)",
+        "purpose": "Troca para os tokens -day (tabela em esmalte)."
       },
       {
         "name": "reduced-motion",
-        "value": "(prefers-reduced-motion: reduce)"
+        "value": "(prefers-reduced-motion: reduce)",
+        "purpose": "Palheta, chevrons e reler sem animação; a mudança de estado continua."
       }
     ],
     "icons": {
       "style": "SVG traço único, viewBox 16, stroke-width 1.5, round caps/joins, currentColor, sem preenchimento",
       "size": "16px",
-      "inlineSize": "12px"
+      "inlineSize": "12px",
+      "editSize": "14px (no alvo de 24px)"
     },
     "terminalTheme": {
-      "source": "src/main.ts TERM_THEME",
-      "background": "var(--board)",
-      "note": "Fundo, cursor, seleção e red/green/yellow são lidos dos tokens (--term-bg, --ink, --selection, --fail, --run, --start); demais cores ANSI são conteúdo do terminal."
+      "source": "src/main.ts TERM_THEME + termTheme()",
+      "background": "var(--term-bg)",
+      "fontFamily": "var(--mono)",
+      "note": "Fundo, cursor, seleção e red/green/yellow são lidos dos tokens (--term-bg, --ink, --selection, --fail, --run, --start) ao criar o terminal e ao trocar de tema; a fonte vem de --mono. As demais cores ANSI são conteúdo do terminal e passam AA nos dois temas."
     }
   },
   "components": [
@@ -563,73 +637,73 @@
       "name": "Palheta de estado",
       "kind": "custom",
       "refersTo": "flap",
-      "description": "Estado da worktree em 7 caracteres; vira em 3 quadros só quando o estado muda.",
-      "html": "<span class=\"ds-flap\" data-state=\"run\"><span>RODANDO</span></span> <span class=\"ds-flap\" data-state=\"wait\"><span>AGUARDA</span></span> <span class=\"ds-flap\" data-state=\"stop\"><span>PARANDO</span></span> <span class=\"ds-flap\" data-state=\"idle\"><span>PARADA</span></span> <span class=\"ds-flap\" data-state=\"none\"><span></span></span>",
-      "css": ".ds-flap{position:relative;display:inline-grid;place-items:center;width:calc(7ch + 14px);height:22px;border-radius:2px;background:linear-gradient(var(--flap-hi) 50%,var(--flap) 50%);color:var(--ink-2);font:700 12px/1 var(--ui);letter-spacing:.06em;overflow:hidden}.ds-flap::after{content:'';position:absolute;inset:50% 0 auto;height:1px;background:var(--seam)}.ds-flap>span{position:relative;z-index:1}.ds-flap[data-state=run]{color:var(--run)}.ds-flap[data-state=start]{color:var(--start)}.ds-flap[data-state=wait]{color:var(--wait)}.ds-flap[data-state=stop]{color:var(--stop)}.ds-flap.flip>span{animation:ds-flip 180ms steps(3,jump-none)}@keyframes ds-flip{50%{transform:scaleY(.12)}}@media (prefers-reduced-motion:reduce){.ds-flap.flip>span{animation:none}}"
+      "description": "O estado da worktree em 7 caracteres: metades flap-hi/flap, entalhe seam só nas bordas, uma cor por estado. Vira em 3 quadros (steps) só quando o estado muda; aqui, no hover, para mostrar o giro.",
+      "html": "<span class=\"ds-flap\" data-state=\"run\"><span>RODANDO</span></span> <span class=\"ds-flap\" data-state=\"part\"><span>PARCIAL</span></span> <span class=\"ds-flap\" data-state=\"start\"><span>SUBINDO</span></span> <span class=\"ds-flap\" data-state=\"wait\"><span>AGUARDA</span></span> <span class=\"ds-flap\" data-state=\"stop\"><span>PARANDO</span></span> <span class=\"ds-flap\" data-state=\"kill\"><span>SIGKILL</span></span> <span class=\"ds-flap\" data-state=\"stop\"><span>ENCERRA</span></span> <span class=\"ds-flap\" data-state=\"idle\"><span>INATIVA</span></span> <span class=\"ds-flap\" data-state=\"none\"><span></span></span>",
+      "css": ".ds-flap{margin:0 4px 6px 0}.ds-flap{position:relative;display:inline-grid;place-items:center;min-width:calc(7ch + 14px);padding:0 6px;height:22px;border-radius:2px;background:linear-gradient(var(--flap-hi) 50%,var(--flap) 50%);color:var(--ink-2);font:700 12px/1 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.06em;overflow:hidden;flex-shrink:0}.ds-flap::after{content:'';position:absolute;inset:50% 0 auto;height:1px;background:linear-gradient(90deg,var(--seam) 2px,transparent 2px calc(100% - 2px),var(--seam) 0)}.ds-flap>span{position:relative;z-index:1;grid-area:1/1}.ds-flap[data-state=none]{background:none;box-shadow:inset 0 0 0 1px var(--rule)}.ds-flap[data-state=none]::after{content:none}.ds-flap[data-state=run]{color:var(--run)}.ds-flap[data-state=start]{color:var(--start)}.ds-flap[data-state=wait],.ds-flap[data-state=stop]{color:var(--wait)}.ds-flap[data-state=part],.ds-flap[data-state=kill]{color:var(--fail)}.ds-flap.ds-count{min-width:calc(4ch + 14px);color:var(--ink)}.ds-flap:hover>span{animation:ds-flip 180ms steps(3,jump-none)}@keyframes ds-flip{50%{transform:scaleY(.12)}}@media (prefers-reduced-motion:reduce){.ds-flap:hover>span{animation:none}}"
     },
     {
       "name": "Linha do painel",
       "kind": "custom",
       "refersTo": "line",
-      "description": "Worktree no painel: palheta, branch com prefixo em meia-tinta; atual com fundo de palheta e fios internos.",
-      "html": "<button class=\"ds-line\" aria-current=\"true\"><span class=\"ds-flap\" data-state=\"run\"><span>RODANDO</span></span><span class=\"ds-branch\"><span class=\"ds-prefix\">feat/</span>scrap-movement</span></button><button class=\"ds-line\"><span class=\"ds-flap\" data-state=\"idle\"><span>PARADA</span></span><span><span class=\"ds-prefix\">fix/</span>login</span></button>",
-      "css": ".ds-flap{position:relative;display:inline-grid;place-items:center;width:calc(7ch + 14px);height:22px;border-radius:2px;background:linear-gradient(var(--flap-hi) 50%,var(--flap) 50%);color:var(--ink-2);font:700 12px/1 var(--ui);letter-spacing:.06em;overflow:hidden}.ds-flap::after{content:'';position:absolute;inset:50% 0 auto;height:1px;background:var(--seam)}.ds-flap>span{position:relative;z-index:1}.ds-flap[data-state=run]{color:var(--run)}.ds-flap[data-state=start]{color:var(--start)}.ds-flap[data-state=wait]{color:var(--wait)}.ds-flap[data-state=stop]{color:var(--stop)}.ds-flap.flip>span{animation:ds-flip 180ms steps(3,jump-none)}@keyframes ds-flip{50%{transform:scaleY(.12)}}@media (prefers-reduced-motion:reduce){.ds-flap.flip>span{animation:none}}.ds-line{display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:10px;width:280px;padding:5px 10px 5px 14px;border:0;background:none;color:var(--ink-2);font:500 15px/1.35 var(--ui);text-align:left;cursor:pointer}.ds-line:hover{background:var(--flap)}.ds-line[aria-current=true]{background:var(--flap);color:var(--ink);box-shadow:inset 0 -1px 0 var(--rule),inset 0 1px 0 var(--rule)}.ds-prefix{color:var(--ink-2)}.ds-line:focus-visible{outline:2px solid var(--focus);outline-offset:2px}"
+      "description": "Worktree no painel: nome à esquerda (prefixo em meia-tinta, nome em tinta cheia quando em serviço), palheta na coluna de situação à direita, lápis de 24px que aparece com o cursor ou o foco; a atual com fundo flap e fios internos ink-3.",
+      "html": "<ul class=\"ds-lines\"><li class=\"ds-row\"><button class=\"ds-line ds-live\" aria-current=\"true\"><span class=\"ds-name\"><span class=\"ds-branch\"><span class=\"ds-prefix\">feat/</span>scrap-movement</span></span><span class=\"ds-flap\" data-state=\"run\"><span>RODANDO</span></span></button><button class=\"ds-edit\" aria-label=\"Editar\" aria-disabled=\"true\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M11 2.5 13.5 5 6 12.5H3.5V10ZM9.5 4 12 6.5\"/></svg></button></li><li class=\"ds-row\"><button class=\"ds-line\"><span class=\"ds-name\"><span class=\"ds-branch\"><span class=\"ds-prefix\"></span>main</span></span><span class=\"ds-flap\" data-state=\"idle\"><span>INATIVA</span></span></button><button class=\"ds-edit\" aria-label=\"Editar\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M11 2.5 13.5 5 6 12.5H3.5V10ZM9.5 4 12 6.5\"/></svg></button></li><li class=\"ds-row\"><button class=\"ds-line\"><span class=\"ds-name\"><span class=\"ds-branch\"><span class=\"ds-prefix\"></span>motor-x</span><span class=\"ds-pair\">feature-api/<svg class=\"ds-inline\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M3 5.5h10M10.5 3 13 5.5 10.5 8M13 10.5H3M5.5 8 3 10.5 5.5 13\"/></svg>feature-app/</span></span><span class=\"ds-flap\" data-state=\"none\"><span></span></span></button><button class=\"ds-edit\" aria-label=\"Editar\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M11 2.5 13.5 5 6 12.5H3.5V10ZM9.5 4 12 6.5\"/></svg></button></li><li class=\"ds-row\"><button class=\"ds-line\"><span class=\"ds-name\"><span class=\"ds-branch\"><span class=\"ds-prefix\">fix/</span>login</span><span class=\"ds-tag\">SÓ API</span></span><span class=\"ds-flap\" data-state=\"none\"><span></span></span></button><button class=\"ds-edit\" aria-label=\"Editar\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M11 2.5 13.5 5 6 12.5H3.5V10ZM9.5 4 12 6.5\"/></svg></button></li></ul>",
+      "css": ".ds-flap{position:relative;display:inline-grid;place-items:center;min-width:calc(7ch + 14px);padding:0 6px;height:22px;border-radius:2px;background:linear-gradient(var(--flap-hi) 50%,var(--flap) 50%);color:var(--ink-2);font:700 12px/1 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.06em;overflow:hidden;flex-shrink:0}.ds-flap::after{content:'';position:absolute;inset:50% 0 auto;height:1px;background:linear-gradient(90deg,var(--seam) 2px,transparent 2px calc(100% - 2px),var(--seam) 0)}.ds-flap>span{position:relative;z-index:1;grid-area:1/1}.ds-flap[data-state=none]{background:none;box-shadow:inset 0 0 0 1px var(--rule)}.ds-flap[data-state=none]::after{content:none}.ds-flap[data-state=run]{color:var(--run)}.ds-flap[data-state=start]{color:var(--start)}.ds-flap[data-state=wait],.ds-flap[data-state=stop]{color:var(--wait)}.ds-flap[data-state=part],.ds-flap[data-state=kill]{color:var(--fail)}.ds-flap.ds-count{min-width:calc(4ch + 14px);color:var(--ink)}.ds-flap:hover>span{animation:ds-flip 180ms steps(3,jump-none)}@keyframes ds-flip{50%{transform:scaleY(.12)}}@media (prefers-reduced-motion:reduce){.ds-flap:hover>span{animation:none}}.ds-lines{width:280px;margin:0;padding:0;list-style:none;background:var(--rail);font:500 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums}.ds-row{display:flex;align-items:start}.ds-row:hover{background:color-mix(in srgb,var(--flap) 50%,var(--rail))}.ds-row:has(>.ds-line[aria-current=true]){background:var(--flap);box-shadow:inset 0 -1px 0 var(--ink-3),inset 0 1px 0 var(--ink-3)}.ds-line{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;flex:1;min-width:0;padding:5px 2px 5px 14px;border:0;background:none;color:var(--ink-2);font:inherit;text-align:left;cursor:pointer}.ds-line:focus-visible{outline:2px solid var(--focus);outline-offset:2px;outline-offset:-2px}.ds-line .ds-flap{margin:1px 0 0 10px}.ds-name{min-width:0;padding-top:2px}.ds-branch{display:flex;white-space:nowrap}.ds-prefix{color:var(--ink-2)}.ds-live .ds-branch,.ds-line[aria-current=true] .ds-branch{color:var(--ink)}.ds-pair{display:flex;align-items:center;white-space:nowrap;color:var(--ink-2);font-size:13px}.ds-inline{width:12px;height:12px;margin:0 4px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}.ds-tag{display:inline-block;margin:3px 0 1px;padding:0 4px;border:1px solid var(--rule);border-radius:2px;color:var(--ink-2);font:700 12px/16px 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.06em}.ds-edit{display:inline-grid;place-items:center;width:24px;height:24px;margin:5px 4px 0 0;padding:0;border:0;border-radius:4px;background:none;color:var(--ink-2);opacity:0;cursor:pointer}.ds-row:is(:hover,:focus-within)>.ds-edit{opacity:1}.ds-edit:not([aria-disabled=true]):hover{background:var(--flap-hi);color:var(--ink)}.ds-edit[aria-disabled=true]{color:var(--ink-3);cursor:not-allowed}.ds-edit:focus-visible{outline:2px solid var(--focus);outline-offset:2px;outline-offset:-2px}.ds-edit svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}"
     },
     {
       "name": "Abas API | FRONT",
       "kind": "nav",
       "refersTo": "tab",
-      "description": "A aba selecionada vira palheta; as outras são contorno em meia-tinta.",
-      "html": "<div class=\"ds-tabs\"><button class=\"ds-tab\" aria-selected=\"true\"><span>API</span></button><button class=\"ds-tab\"><span>FRONT</span></button></div>",
-      "css": ".ds-tabs{display:flex;gap:4px}.ds-tab{position:relative;height:26px;padding:0 12px;border:1px solid var(--rule);border-radius:2px;background:none;color:var(--ink-2);font:700 12px/1 var(--ui);letter-spacing:.08em;text-transform:uppercase;cursor:pointer}.ds-tab>span{position:relative;z-index:1}.ds-tab[aria-selected=true]{border-color:transparent;background:linear-gradient(var(--flap-hi) 50%,var(--flap) 50%);color:var(--ink)}.ds-tab[aria-selected=true]::after{content:'';position:absolute;inset:50% 0 auto;height:1px;background:var(--seam)}.ds-tab:focus-visible{outline:2px solid var(--focus);outline-offset:2px}"
+      "description": "Selecionada: fundo flap liso e fio de 2px em ink na base (o fundo sozinho não distingue). Lado caído (PARCIAL): texto fail com um quadrado de 6px.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\">API</button><button class=\"ds-tab ds-down\" role=\"tab\" aria-selected=\"false\">FRONT</button></div>",
+      "css": ".ds-tabs{display:flex;gap:4px;padding:9px 8px;background:var(--board)}.ds-tab{height:26px;padding:0 12px;border:1px solid var(--rule);border-radius:2px;background:none;color:var(--ink-2);font:700 12px/1 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}.ds-tab[aria-selected=true]{border-color:transparent;background:var(--flap);box-shadow:inset 0 -2px 0 var(--ink);color:var(--ink)}.ds-tab:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-tab.ds-down{color:var(--fail)}.ds-tab.ds-down::before{content:'';display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:2px;background:currentColor;vertical-align:1px}"
     },
     {
       "name": "Botão primário",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Ação principal de aviso e diálogo, em tinta neutra.",
+      "description": "Ação principal dos diálogos, em tinta neutra (nunca acento). Vem primeiro no DOM e aparece à direita.",
       "html": "<button class=\"ds-btn ds-btn-primary\">Criar worktree</button>",
-      "css": ".ds-btn{height:32px;padding:0 14px;border:1px solid var(--rule);border-radius:4px;background:none;color:var(--ink);font:600 15px var(--ui);cursor:pointer}.ds-btn:hover{background:var(--flap)}.ds-btn-primary{border-color:transparent;background:var(--primary);color:var(--primary-ink)}.ds-btn-primary:hover{background:var(--ink-2)}.ds-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}"
+      "css": ".ds-btn{height:32px;padding:0 14px;border:1px solid var(--rule);border-radius:4px;background:none;color:var(--ink);font:500 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums;font-weight:600;cursor:pointer}.ds-btn-primary{border-color:transparent;background:var(--primary);color:var(--primary-ink)}.ds-btn-primary:hover{background:var(--ink-2)}.ds-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-btn[aria-disabled=true]{opacity:.5;cursor:progress}"
     },
     {
       "name": "Botão secundário",
       "kind": "button",
       "refersTo": "button",
-      "description": "Cancelar, Voltar, Escolher: contorno de fio, hover de palheta.",
+      "description": "Cancelar, Voltar, Forçar agora, Escolher…: contorno de fio, hover de palheta.",
       "html": "<button class=\"ds-btn\">Cancelar</button>",
-      "css": ".ds-btn{height:32px;padding:0 14px;border:1px solid var(--rule);border-radius:4px;background:none;color:var(--ink);font:600 15px var(--ui);cursor:pointer}.ds-btn:hover{background:var(--flap)}.ds-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}"
+      "css": ".ds-btn{height:32px;padding:0 14px;border:1px solid var(--rule);border-radius:4px;background:none;color:var(--ink);font:500 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums;font-weight:600;cursor:pointer}.ds-btn:hover{background:var(--flap)}.ds-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-btn:disabled{opacity:.5;cursor:default}"
     },
     {
       "name": "Botão de ícone",
       "kind": "button",
       "refersTo": "icon-button",
-      "description": "28px, ícone SVG de traço 1.5 em meia-tinta.",
-      "html": "<button class=\"ds-icon-btn\" aria-label=\"Nova worktree\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M8 3v10M3 8h10\"/></svg></button>",
-      "css": ".ds-icon-btn{display:inline-grid;place-items:center;width:28px;height:28px;padding:0;border:0;border-radius:4px;background:none;color:var(--ink-2);cursor:pointer}.ds-icon-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}.ds-icon-btn:hover{background:var(--flap);color:var(--ink)}.ds-icon-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}"
+      "description": "28×28, ícone SVG de traço 1.5 em meia-tinta; hover fundo flap e ícone ink; indisponível (aria-disabled) em ink-3, ainda focável com o motivo no nome.",
+      "html": "<button class=\"ds-icon-btn\" aria-label=\"Nova worktree\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M8 3v10M3 8h10\"/></svg></button><button class=\"ds-icon-btn\" aria-label=\"Reler worktrees\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3\"/></svg></button><button class=\"ds-icon-btn\" aria-label=\"Nova worktree: indisponível\" aria-disabled=\"true\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M8 3v10M3 8h10\"/></svg></button>",
+      "css": ".ds-icon-btn{display:inline-grid;place-items:center;width:28px;height:28px;padding:0;border:0;border-radius:4px;background:none;color:var(--ink-2);cursor:pointer}.ds-icon-btn:hover{background:var(--flap);color:var(--ink)}.ds-icon-btn[aria-disabled=true]{color:var(--ink-3);background:none;cursor:not-allowed}.ds-icon-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-icon-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}"
     },
     {
       "name": "Campo de texto",
       "kind": "input",
       "refersTo": "input",
-      "description": "Campo de diálogo sobre o fundo do painel; foco é anel neutro.",
-      "html": "<label class=\"ds-label\">Branch<input class=\"ds-input\" placeholder=\"feat/minha-feature\"></label>",
-      "css": ".ds-label{display:block;color:var(--ink-2);font:600 13px var(--ui);letter-spacing:.02em}.ds-input{display:block;width:100%;height:34px;margin-top:4px;padding:0 10px;border:1px solid var(--rule);border-radius:4px;background:var(--board);color:var(--ink);font:500 15px var(--ui)}.ds-input::placeholder{color:var(--ink-2)}.ds-input:focus-visible{outline:2px solid var(--focus);outline-offset:2px}"
+      "description": "34px sobre o fundo do painel, contorno ink-3 (≥3:1), placeholder com \"ex.:\"; foco é anel neutro; inválido ganha contorno fail e a mensagem logo abaixo.",
+      "html": "<label class=\"ds-label\">Branch<input class=\"ds-input\" placeholder=\"ex.: feat/minha-feature\"></label><label class=\"ds-label\">Repositório<input class=\"ds-input\" aria-invalid=\"true\" value=\"~/dev/meu-api\"></label><p class=\"ds-error\">Essa pasta não é um repositório git.</p>",
+      "css": ".ds-label{display:block;margin-bottom:12px;color:var(--ink-2);font:600 13px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.02em}.ds-input{display:block;width:100%;height:34px;margin-top:4px;padding:0 10px;border:1px solid var(--ink-3);border-radius:4px;background:var(--board);color:var(--ink);font:500 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums}.ds-input::placeholder{color:var(--ink-2)}.ds-input:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-input[aria-invalid=true]{border-color:var(--fail)}.ds-error{margin:-4px 0 12px;color:var(--fail);font:500 13px/1.35 'Barlow Semi Condensed',system-ui,sans-serif}"
     },
     {
-      "name": "Etiqueta",
+      "name": "Etiqueta e tecla",
       "kind": "chip",
       "refersTo": "tag",
-      "description": "SÓ API / SÓ FRONT ao lado da branch solo.",
-      "html": "<span class=\"ds-tag\">SÓ API</span>",
-      "css": ".ds-tag{padding:0 4px;border:1px solid var(--rule);border-radius:2px;color:var(--ink-2);font:700 12px/16px var(--ui);letter-spacing:.06em}"
+      "description": "Etiqueta SÓ API / SÓ FRONT / ATUAL: contorno rule, caixa-alta 12px/700. Tecla (kbd): fundo flap, base de 2px.",
+      "html": "<span class=\"ds-tag\">SÓ API</span> <span class=\"ds-tag\">ATUAL</span> <kbd class=\"ds-kbd\">Ctrl</kbd><kbd class=\"ds-kbd\">Shift</kbd><kbd class=\"ds-kbd\">K</kbd>",
+      "css": ".ds-tag{display:inline-block;padding:0 4px;border:1px solid var(--rule);border-radius:2px;color:var(--ink-2);font:700 12px/16px 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.06em}.ds-kbd{display:inline-block;min-width:1.6em;padding:1px 5px;margin-right:3px;border:1px solid var(--rule);border-bottom-width:2px;border-radius:2px;background:var(--flap);color:var(--ink);font:600 12px/1.4 'Barlow Semi Condensed',system-ui,sans-serif;text-align:center}"
     },
     {
-      "name": "Superfície flutuante",
+      "name": "Aviso de troca",
       "kind": "card",
       "refersTo": "floating-surface",
-      "description": "Aviso de troca, paleta, ajuda e diálogos: trilho, fio de 1px, raio 6px, sombra curta.",
-      "html": "<div class=\"ds-float\"><strong>Trocando para feat/x</strong><p>Esperando a anterior parar.</p><div class=\"ds-actions\"><button class=\"ds-btn ds-btn-primary\">Forçar agora</button><button class=\"ds-btn\">Voltar para a anterior</button></div></div>",
-      "css": ".ds-float{display:grid;gap:10px;width:min(440px,90%);padding:22px 24px;border:1px solid var(--rule);border-radius:6px;background:var(--rail);color:var(--ink);font:500 15px/1.35 var(--ui);box-shadow:0 4px 8px rgb(0 0 0 / 28%)}.ds-float strong{font-size:18px;font-weight:600}.ds-float p{margin:0;color:var(--ink-2)}.ds-actions{display:flex;gap:8px}.ds-btn{height:32px;padding:0 14px;border:1px solid var(--rule);border-radius:4px;background:none;color:var(--ink);font:600 15px var(--ui);cursor:pointer}.ds-btn:hover{background:var(--flap)}.ds-btn-primary{border-color:transparent;background:var(--primary);color:var(--primary-ink)}.ds-btn-primary:hover{background:var(--ink-2)}"
+      "description": "Superfície flutuante (trilho, fio de 1px, raio 6px) sobre o véu, sem sombra. Nenhum botão é primário: esperar é a ação padrão; Voltar primeiro, Forçar afastado à direita. A contagem até o SIGKILL é uma palheta estreita em tinta neutra.",
+      "html": "<div class=\"ds-scrim\"><div class=\"ds-float\" role=\"group\" aria-label=\"Troca em andamento\"><div class=\"ds-head\"><span class=\"ds-flap\" data-state=\"stop\"><span>PARANDO</span></span><strong>Encerrando feat/scrap-movement</strong><span class=\"ds-flap ds-count\" data-state=\"idle\"><span>4 s</span></span></div><p>Ctrl+C enviado a <code>npm run dev</code>. Esperando saírem e liberarem as portas para iniciar main.</p><p class=\"ds-fine\">Se não saírem até a contagem zerar, recebem SIGKILL.</p><div class=\"ds-actions\"><button class=\"ds-btn\">Voltar para feat/scrap-movement</button><button class=\"ds-btn ds-force\">Forçar agora</button></div></div></div>",
+      "css": ".ds-flap{position:relative;display:inline-grid;place-items:center;min-width:calc(7ch + 14px);padding:0 6px;height:22px;border-radius:2px;background:linear-gradient(var(--flap-hi) 50%,var(--flap) 50%);color:var(--ink-2);font:700 12px/1 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.06em;overflow:hidden;flex-shrink:0}.ds-flap::after{content:'';position:absolute;inset:50% 0 auto;height:1px;background:linear-gradient(90deg,var(--seam) 2px,transparent 2px calc(100% - 2px),var(--seam) 0)}.ds-flap>span{position:relative;z-index:1;grid-area:1/1}.ds-flap[data-state=none]{background:none;box-shadow:inset 0 0 0 1px var(--rule)}.ds-flap[data-state=none]::after{content:none}.ds-flap[data-state=run]{color:var(--run)}.ds-flap[data-state=start]{color:var(--start)}.ds-flap[data-state=wait],.ds-flap[data-state=stop]{color:var(--wait)}.ds-flap[data-state=part],.ds-flap[data-state=kill]{color:var(--fail)}.ds-flap.ds-count{min-width:calc(4ch + 14px);color:var(--ink)}.ds-flap:hover>span{animation:ds-flip 180ms steps(3,jump-none)}@keyframes ds-flip{50%{transform:scaleY(.12)}}@media (prefers-reduced-motion:reduce){.ds-flap:hover>span{animation:none}}.ds-scrim{display:grid;place-items:center;padding:24px;background:var(--scrim)}.ds-float{display:grid;gap:10px;width:min(440px,100%);padding:22px 24px;border:1px solid var(--rule);border-radius:6px;background:var(--rail);color:var(--ink);font:500 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums}.ds-head{display:flex;align-items:first baseline;gap:10px}.ds-head .ds-count{margin-left:auto}.ds-float strong{font-size:19px;font-weight:600;line-height:1.25}.ds-float p{margin:0;color:var(--ink-2)}.ds-float code{font:12px 'JetBrainsMono Nerd Font','Hack Nerd Font Mono',monospace}.ds-fine{margin-top:-4px!important;font-size:13px}.ds-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}.ds-force{margin-left:auto}.ds-btn{height:32px;padding:0 14px;border:1px solid var(--rule);border-radius:4px;background:none;color:var(--ink);font:500 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums;font-weight:600;cursor:pointer}.ds-btn:hover{background:var(--flap)}.ds-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}"
     }
   ],
   "narrative": {
@@ -646,7 +720,7 @@
     "rules": [
       {
         "name": "A Regra de Uma Cor por Estado",
-        "body": "Verde é rodando, âmbar é subindo ou aguardando, vermelho é parando ou erro. Nenhuma outra cor entra na interface: foco, caret, seleção, botão primário e checkbox (`accent-color`) são tinta neutra.",
+        "body": "Verde é de pé, âmbar é em movimento (subindo, aguardando, parando), vermelho é falha (parcial, SIGKILL, erro). A contagem até o SIGKILL fica em tinta neutra: esperar é o caminho normal. Nenhuma outra cor entra na interface: foco, caret, seleção, botão primário e checkbox (`accent-color`) são tinta neutra.",
         "section": "colors"
       },
       {
@@ -656,7 +730,7 @@
       },
       {
         "name": "A Regra do Terminal sem Moldura",
-        "body": "O terminal fica sobre `board`, o mesmo fundo do painel, sem borda nem cartão. O tema ANSI do xterm (`TERM_THEME`) lê dos tokens o fundo, o cursor, a seleção e o vermelho/verde/amarelo dos estados; as outras cores ANSI pertencem ao conteúdo do terminal, não à interface.",
+        "body": "O terminal fica sobre `board`, o mesmo fundo do painel, sem borda nem cartão. Fundo, cursor e seleção do xterm são lidos dos tokens (`--term-bg`, `--ink`, `--selection`) ao criar o terminal e ao trocar de tema; vermelho, verde e amarelo do ANSI também (`--fail`, `--run`, `--start`), então seguem os estados sem cópia; as outras cores ANSI pertencem ao conteúdo do terminal, não à interface, mas todas passam AA (≥4,5:1) sobre o fundo do terminal nos dois temas.",
         "section": "colors"
       },
       {
@@ -671,22 +745,22 @@
       }
     ],
     "dos": [
-      "Do mostrar estado só pela palheta e pelas três cores de estado (`run`, `start`/`wait`, `stop`).",
-      "Do usar tinta cheia (`ink`) apenas no que está em serviço; o resto em `ink-2`.",
-      "Do desenhar ícones como SVG de traço 1.5 em viewBox 16 (16px, inline 12px), em `currentColor`.",
-      "Do animar só em degraus (`steps`), só na mudança de estado, e desligar com `prefers-reduced-motion`.",
-      "Do dar a toda superfície flutuante borda `rule` de 1px, raio 6px, fundo `rail` e a sombra `0 4px 8px`.",
-      "Do manter o terminal sobre `board`, sem moldura.",
-      "Do definir todo valor novo nas duas paletas (noite e dia) com contraste AA."
+      "**Do** mostrar estado só pela palheta e pelas três cores de estado (`run` de pé, `start`/`wait` em movimento, `fail` falha).",
+      "**Do** usar tinta cheia (`ink`) apenas no que está em serviço; o resto em `ink-2`.",
+      "**Do** desenhar ícones como SVG de traço 1.5 em viewBox 16 (16px, inline 12px), em `currentColor`.",
+      "**Do** animar só em degraus (`steps`), só na mudança de estado (ou enquanto um estado dura, como o reler lendo), e desligar com `prefers-reduced-motion`.",
+      "**Do** dar a toda superfície flutuante borda `rule` de 1px, raio 6px, fundo `rail` e a sombra `0 4px 8px`.",
+      "**Do** manter o terminal sobre `board`, sem moldura.",
+      "**Do** definir todo valor novo nas duas paletas (noite e dia) com contraste AA."
     ],
     "donts": [
-      "Don't introduzir cor de acento na interface: foco, seleção e botão primário são tinta neutra.",
-      "Don't pôr cartões ou sombras no painel; linhas são linhas, separadas por respiro e fio.",
-      "Don't usar easing em curva nem transições contínuas.",
-      "Don't usar caracteres ou glifos como ícone; setas e chevrons são desenhados.",
-      "Don't usar `ink-3` para texto que precise ser lido.",
-      "Don't recolorir `app-icon.svg`; a logo é compromisso de marca.",
-      "Don't voltar à árvore de arquivos estilo IDE (Explorer + quick-open em cinza VS Code)."
+      "**Don't** introduzir cor de acento na interface: foco, seleção e botão primário são tinta neutra.",
+      "**Don't** pôr cartões ou sombras no painel; linhas são linhas, separadas por respiro e fio.",
+      "**Don't** usar easing em curva nem transições contínuas.",
+      "**Don't** usar caracteres ou glifos como ícone; setas e chevrons são desenhados.",
+      "**Don't** usar `ink-3` para texto que precise ser lido.",
+      "**Don't** recolorir `app-icon.svg`; a logo é compromisso de marca.",
+      "**Don't** voltar à árvore de arquivos estilo IDE (Explorer + quick-open em cinza VS Code)."
     ]
   }
 }

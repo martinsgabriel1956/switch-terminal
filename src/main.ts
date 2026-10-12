@@ -303,7 +303,8 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
   paneEl.setAttribute("aria-labelledby", `tab-${t}`);
   parent.append(paneEl);
   const term = new Terminal({
-    fontFamily: "'JetBrainsMono Nerd Font', 'Hack Nerd Font Mono', monospace",
+    // a mesma pilha do --mono do CSS: muda num lugar só
+    fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--mono").trim(),
     fontSize: 14,
     lineHeight: 1.15,
     theme: termTheme(),
@@ -503,7 +504,6 @@ function render(focus = false) {
   const ck = currentKey();
   for (const [k, env] of envs) env.root.classList.toggle("off", k !== ck);
   emptyEl.hidden = !!current;
-  tabsEl.replaceChildren();
 
   // Durante a troca o terminal novo não aceita digitação: ela entraria antes do startCommand.
   for (const e of envs.values()) for (const p of Object.values(e.panes)) p.term.options.disableStdin = stopping.has(e.project);
@@ -511,6 +511,8 @@ function render(focus = false) {
   if (!current) {
     destEl.replaceChildren();
     destEl.dataset.sig = "";
+    tabsEl.replaceChildren();
+    tabsEl.dataset.sig = "";
     urlEl.hidden = true;
     haltTabEl.hidden = haltAllEl.hidden = true;
     waitEl.hidden = true;
@@ -548,21 +550,30 @@ function render(focus = false) {
   renderHalt(haltTabEl, TABS.filter((t) => t === tab));
   renderHalt(haltAllEl, wt.api && wt.front ? TABS : []);
   const down = state === "part" ? sides(ck!).down : [];
-  for (const t of TABS) {
-    if (!wt[t]) continue;
-    const b = el(
-      "button",
-      { type: "button", id: `tab-${t}`, tabIndex: t === tab ? 0 : -1, onclick: () => setTab(t, true) },
-      el("span", { textContent: TAB_LABEL[t] }),
-      down.includes(t) ? el("span", { className: "sr", textContent: " (parado)" }) : null,
-    );
-    b.classList.toggle("down", down.includes(t));
-    if (down.includes(t)) b.title = `Nada rodando no ${TAB_LABEL[t]}`;
-    b.setAttribute("role", "tab");
-    b.setAttribute("aria-selected", String(t === tab));
-    const pane = env?.panes[t];
-    if (pane) b.setAttribute("aria-controls", pane.el.id);
-    tabsEl.append(b);
+  // Só recria as abas quando elas mudam: recriar com o foco numa delas (a janela voltando, uma palheta virando)
+  // jogava o foco do teclado no body. Se mudar com o foco nelas, ele volta para a mesma aba (ou para a selecionada).
+  const tabsSig = [ck, tab, down.join(), ...TABS.map((t) => (wt[t] ? (env?.panes[t]?.el.id ?? "-") : ""))].join("\u0000");
+  if (tabsEl.dataset.sig !== tabsSig) {
+    tabsEl.dataset.sig = tabsSig;
+    const focusedTab = tabsEl.contains(document.activeElement) ? document.activeElement!.id : null;
+    tabsEl.replaceChildren();
+    for (const t of TABS) {
+      if (!wt[t]) continue;
+      const b = el(
+        "button",
+        { type: "button", id: `tab-${t}`, tabIndex: t === tab ? 0 : -1, onclick: () => setTab(t, true) },
+        el("span", { textContent: TAB_LABEL[t] }),
+        down.includes(t) ? el("span", { className: "sr", textContent: " (parado)" }) : null,
+      );
+      b.classList.toggle("down", down.includes(t));
+      if (down.includes(t)) b.title = `Nada rodando no ${TAB_LABEL[t]}`;
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", String(t === tab));
+      const pane = env?.panes[t];
+      if (pane) b.setAttribute("aria-controls", pane.el.id);
+      tabsEl.append(b);
+    }
+    if (focusedTab) (document.getElementById(focusedTab) ?? document.getElementById(`tab-${tab}`))?.focus();
   }
   // Mede só com o cabeçalho completo (destino, abas, porta): antes disso a faixa parece ter espaço que não tem.
   fitRunning();
@@ -949,38 +960,46 @@ function fitBranches() {
 }
 new ResizeObserver(fitBranches).observe(board);
 
+// Último conteúdo de #running: igual, não troca os nós (o foco ficaria no body, como nas abas).
+let runningHtml = "";
+
 /** Com o painel recolhido, o cabeçalho mostra o que roda nos outros projetos. */
 function renderRunning() {
-  runningEl.replaceChildren(
-    ...config.projects
-      .filter((p) => p.name !== current?.project && active[p.name])
-      .flatMap((p) => {
-        const wt = p.worktrees.find((w) => w.id === active[p.name]);
-        if (!wt) return [];
-        const state = lineState(p.name, wt);
-        const spoken = say(p.name, wt, state);
-        return [
-          el(
-            "button",
-            {
-              type: "button",
-              className: "other",
-              title: `Ir para ${p.name} / ${wt.label} (${spoken})`,
-              // Já está em serviço: selecionar não troca nada, só leva o terminal até ela.
-              onclick: () => {
-                const fresh = findWt(p.name, wt.id);
-                if (fresh) select(p.name, fresh);
-              },
-            },
-            el("span", { className: "project", textContent: p.name }),
-            el("span", { className: "sep", textContent: "/", ariaHidden: "true" }),
-            el("span", { className: "label" }, ...labelNodes(wt.label)),
-            el("span", { className: "sr", textContent: `: ${spoken}` }),
-            flap(state, `run:${p.name}`),
-          ),
-        ];
-      }),
-  );
+  const buttons = config.projects
+    .filter((p) => p.name !== current?.project && active[p.name])
+    .flatMap((p) => {
+      const wt = p.worktrees.find((w) => w.id === active[p.name]);
+      if (!wt) return [];
+      const state = lineState(p.name, wt);
+      const spoken = say(p.name, wt, state);
+      const b = el(
+        "button",
+        {
+          type: "button",
+          className: "other",
+          title: `Ir para ${p.name} / ${wt.label} (${spoken})`,
+          // Já está em serviço: selecionar não troca nada, só leva o terminal até ela.
+          onclick: () => {
+            const fresh = findWt(p.name, wt.id);
+            if (fresh) select(p.name, fresh);
+          },
+        },
+        el("span", { className: "project", textContent: p.name }),
+        el("span", { className: "sep", textContent: "/", ariaHidden: "true" }),
+        el("span", { className: "label" }, ...labelNodes(wt.label)),
+        el("span", { className: "sr", textContent: `: ${spoken}` }),
+        flap(state, `run:${p.name}`),
+      );
+      b.dataset.key = p.name;
+      return [b];
+    });
+  const html = buttons.map((b) => b.outerHTML).join("");
+  if (html === runningHtml) return;
+  runningHtml = html;
+  // Mudou com o foco num deles: o foco volta para o mesmo projeto, se ele ainda estiver lá.
+  const focused = runningEl.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.key : undefined;
+  runningEl.replaceChildren(...buttons);
+  if (focused) buttons.find((b) => b.dataset.key === focused)?.focus();
 }
 
 /** Sem espaço no cabeçalho, o outro projeto cuja palheta não caberia sai inteiro: o estado nunca aparece cortado.
@@ -2147,10 +2166,11 @@ function applySidebarWidth() {
   handle.setAttribute("aria-valuenow", String(px));
 }
 
-function setSidebarWidth(w: number) {
+/** `persist`: grava a pedida. O arraste passa false a cada movimento e grava uma vez ao soltar. */
+function setSidebarWidth(w: number, persist = true) {
   sidebarWanted = Math.round(Math.min(sidebarMax(), Math.max(SIDEBAR_W.min, w)));
   applySidebarWidth();
-  save("sidebarWidth", sidebarWanted);
+  if (persist) save("sidebarWidth", sidebarWanted);
 }
 window.addEventListener("resize", applySidebarWidth);
 
@@ -2167,10 +2187,11 @@ window.addEventListener("blur", () => {
   if (dragPointer !== null && handle.hasPointerCapture(dragPointer)) handle.releasePointerCapture(dragPointer);
 });
 handle.addEventListener("pointermove", (e) => {
-  if (handle.hasPointerCapture(e.pointerId)) setSidebarWidth(e.clientX - sidebarEl.getBoundingClientRect().left);
+  if (handle.hasPointerCapture(e.pointerId)) setSidebarWidth(e.clientX - sidebarEl.getBoundingClientRect().left, false);
 });
 handle.addEventListener("lostpointercapture", () => {
   dragPointer = null;
+  save("sidebarWidth", sidebarWanted);
   document.body.classList.remove("resizing");
   render(true);
 });
@@ -2219,10 +2240,20 @@ window.addEventListener(
 
 const helpEl = $("#help");
 // Aberta, a ajuda recebe o foco: o leitor de tela a anuncia e o Esc chega nela (no xterm, o Esc iria para o shell).
+const helpBtn = $("#help-btn");
+// Aberta pelo botão ?, o foco volta para ele ao fechar; pelo atalho (Ctrl+Shift+H), volta para o terminal.
+let helpFromBtn = false;
 helpEl.addEventListener("toggle", (e) => {
-  if ((e as ToggleEvent).newState !== "open") return render(true);
-  srToggle.checked = config.screenReader;
-  helpEl.focus();
+  if ((e as ToggleEvent).newState === "open") {
+    helpFromBtn = document.activeElement === helpBtn;
+    srToggle.checked = config.screenReader;
+    helpEl.focus();
+    return;
+  }
+  // Fechada por um clique fora (foco já em outro lugar), segue para o terminal.
+  const at = document.activeElement;
+  if (helpFromBtn && (at === document.body || at === helpBtn || helpEl.contains(at))) helpBtn.focus();
+  else render(true);
 });
 
 // Modo leitor de tela do xterm: grava no config e relê, que aplica nos terminais abertos.

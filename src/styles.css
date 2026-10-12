@@ -121,8 +121,9 @@ select {
   height: 10px;
 }
 
+/* polegar em ink-3 (≥3:1 sobre board, rail e flap): é o único sinal de que o painel, a paleta ou a lista têm mais */
 ::-webkit-scrollbar-thumb {
-  background: var(--rule);
+  background: var(--ink-3);
   border: 3px solid transparent;
   border-radius: 6px;
   background-clip: padding-box;
@@ -504,10 +505,11 @@ kbd {
 
 /* Coluna reservada em todas as linhas (a palheta não pula); o lápis aparece com o cursor ou o foco na linha.
    Opacidade e não visibility: escondido, ele ainda recebe o foco pelas setas. */
+/* 24px (WCAG 2.5.8): colado no botão da linha, não tem a folga que dispensaria o mínimo. A coluna continua com 28px. */
 .row > .edit {
-  width: 22px;
-  height: 22px;
-  margin: 6px 6px 0 0;
+  width: 24px;
+  height: 24px;
+  margin: 5px 4px 0 0;
   opacity: 0;
 }
 
@@ -515,7 +517,8 @@ kbd {
   opacity: 1;
 }
 
-.row > .edit:hover {
+/* desabilitado (rodando) não ganha placa: ela diria que o lápis é clicável */
+.row > .edit:not([aria-disabled="true"]):hover {
   background: var(--flap-hi);
 }
 
