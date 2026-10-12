@@ -1,6 +1,6 @@
 [package]
 name = "hotswap"
-version = "0.2.7"
+version = "0.2.8"
 description = "Troca de terminais entre worktrees"
 authors = ["Gabriel Martins"]
 edition = "2021"
