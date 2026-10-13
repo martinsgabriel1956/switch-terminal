@@ -45,8 +45,10 @@
     --board: #f4f5f3;
     --rail: #ebece9;
     --flap: #d6d7d3;
+    /* de dia o entalhe (#b9bbb6) sumia sobre as metades: escurece até se ver, sem chegar à tinta. Mais escuro, ou com
+       a metade de cima clareada até o trilho, as pontas da palheta liam como hífens ("-SUBINDO-") */
     --flap-hi: #e1e2de;
-    --seam: #b9bbb6;
+    --seam: #a3a5a0;
     --rule: #cfd1cc;
     --ink: #15161a;
     --ink-2: #4f5156;
@@ -58,7 +60,8 @@
     --focus: #15161a;
     --primary: #15161a;
     --primary-ink: #f4f5f3;
-    --scrim: rgb(244 245 243 / 78%);
+    /* véu de tinta, não de esmalte: claro sobre claro, o aviso e os diálogos não se destacavam do terminal */
+    --scrim: rgb(21 22 26 / 24%);
     --selection: rgb(21 22 26 / 16%);
     --mark-bg: #15161a;
     --mark-bg-hi: #2a2b30;
@@ -222,14 +225,21 @@ kbd {
   grid-area: 1 / 1;
 }
 
-/* Nunca aberta: só o encaixe, um fio sem palheta. O bloco cheio fica para os estados que dizem alguma coisa,
-   e a coluna de situação continua alinhada. */
+/* Nunca aberta: só os entalhes do meio, onde a palheta vai encaixar. O bloco cheio fica para os estados que dizem
+   alguma coisa; um contorno inteiro repetido em quase toda linha lia como campo vazio de formulário.
+   A coluna de situação continua alinhada (o encaixe tem a largura da palheta). */
 .flap[data-state="none"] {
   background: none;
-  box-shadow: inset 0 0 0 1px var(--rule);
 }
 
 .flap[data-state="none"]::after {
+  background: linear-gradient(90deg, var(--ink-3) 4px, transparent 4px calc(100% - 4px), var(--ink-3) 0);
+}
+
+/* No painel e na paleta o encaixe não desenha nada: os entalhes liam como hífens ("–  –", "INTERNO –") e competiam
+   com os estados. Ele continua ocupando a coluna, que fica alinhada; os entalhes ficam só na legenda da ajuda. */
+.row .flap[data-state="none"]::after,
+#palette .flap[data-state="none"]::after {
   content: none;
 }
 
@@ -270,9 +280,26 @@ kbd {
   animation: ends-on 0s 120ms forwards;
 }
 
+/* ENCERRA é prévia, não estado: a forma da palheta (metades e entalhes) fica para o que é verdade agora.
+   Só o contorno, na cor de quem está em movimento. */
+.flap.preview {
+  background: none;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.flap.preview::after {
+  content: none;
+}
+
+.platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap::after {
+  animation: ends-off 0s 120ms forwards;
+}
+
 @keyframes ends-ink {
   to {
     color: var(--wait);
+    background: none;
+    box-shadow: inset 0 0 0 1px var(--wait);
   }
 }
 
@@ -439,9 +466,10 @@ kbd {
   color: var(--ink);
 }
 
+/* desabilitado: a mesma meia opacidade dos botões de texto; em ink-3 ele ficava perto demais do ícone habilitado (ink-2) */
 .icon-btn:disabled,
 .icon-btn[aria-disabled="true"] {
-  color: var(--ink-3);
+  opacity: 0.5;
   background: none;
   cursor: not-allowed;
 }
@@ -517,6 +545,10 @@ kbd {
   opacity: 1;
 }
 
+.row:is(:hover, :focus-within) > .edit[aria-disabled="true"] {
+  opacity: 0.5;
+}
+
 /* desabilitado (rodando) não ganha placa: ela diria que o lápis é clicável */
 .row > .edit:not([aria-disabled="true"]):hover {
   background: var(--flap-hi);
@@ -546,8 +578,14 @@ kbd {
   cursor: pointer;
 }
 
-/* a linha ocupa a largura toda e o painel corta o overflow: o anel fica por dentro */
+/* O anel fica na linha inteira, coluna do lápis incluída, e por dentro (o painel corta o overflow).
+   No botão de trocar ele parava 3px antes do lápis e o encaixe aparecia na borda. */
 .line:focus-visible {
+  outline: none;
+}
+
+.row:has(> .line:focus-visible) {
+  outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
 
@@ -701,17 +739,7 @@ kbd {
   }
 }
 
-/* sem projeto: uma plataforma em branco, a palheta vazia esperando virar */
-.ghost-line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 0;
-  padding: 5px 10px 5px 14px;
-  color: var(--ink-2);
-}
-
+/* sem projeto: só a placa em branco */
 .ghost .tile {
   color: var(--ink-2);
 }
@@ -842,7 +870,8 @@ header {
   min-width: 2.5em;
 }
 
-/* até 3 letras o nome é mais curto que o piso: não trunca, e o piso não abre um buraco antes da "/" */
+/* Até 8 letras (interno, leilao) o nome não trunca: com dois projetos que têm "main", é ele que diz qual é,
+   e cortado em "LEI…" deixava a branch com 20 caracteres. Também não abre buraco antes da "/" com nome curto. */
 #destination .where > .project.short {
   flex-shrink: 0;
   min-width: auto;
@@ -892,7 +921,7 @@ header {
   color: var(--ink);
 }
 
-/* lado caído (PARCIAL): a aba leva a cor de parado */
+/* lado caído (1 LADO): a aba leva a cor de parado */
 #tabs button.down {
   color: var(--fail);
 }
@@ -906,6 +935,45 @@ header {
   border-radius: 2px;
   background: currentColor;
   vertical-align: 1px;
+}
+
+/* "Parar API", "Parar tudo", "Subir Front": verbo e objeto escritos, quietos ao lado das abas (não são abas: sem contorno) */
+.halt {
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink-2);
+  font: 600 13px/1 var(--ui);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.halt:hover {
+  background: var(--flap);
+  color: var(--ink);
+}
+
+.halt[aria-disabled="true"] {
+  opacity: 0.5;
+  background: none;
+  cursor: not-allowed;
+}
+
+/* As ações ficam num grupo à parte, depois de um fio: abas e porta dizem o que está aberto, o grupo diz o que fazer.
+   Sem nenhuma ação à mostra (numa troca, ou cedidas por espaço), o grupo some com o fio. */
+#actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--rule);
+}
+
+#actions:not(:has(> .halt:not([hidden], .ceded))) {
+  display: none;
 }
 
 /* "Parou em 1,8 s · feat/x": o fechamento da troca, logo depois das abas; some sozinho (falha fica até a próxima troca).
@@ -940,6 +1008,24 @@ header {
 /* o verbo e o tempo ("Encerrada à força em 5,0 s") nunca cortam; o piso do recado é medido em headerNote */
 #last-stop > span:first-child {
   flex-shrink: 0;
+}
+
+/* falha (fica até a próxima troca) fala na cor de falha, como a palheta 1 LADO ou SIGKILL que ela explica */
+#last-stop[data-stay] > span:first-child {
+  color: var(--fail);
+}
+
+/* A branch em serviço mostraria menos que o piso (fitHeader): os acessórios saem da faixa, um a um.
+   O recado fica com largura zero em vez de sumir: é região viva e continua falando. */
+#last-stop.ceded {
+  flex: 0 0 0;
+  min-width: 0 !important; /* vence o piso medido em headerNote (style inline) */
+  margin-left: -12px;
+}
+
+#dev-url.ceded,
+.halt.ceded {
+  display: none;
 }
 
 /* um fio separa o que roda nos outros projetos do endereço desta aba.
@@ -1031,6 +1117,27 @@ header {
   }
 }
 
+#toggle-sidebar {
+  position: relative;
+}
+
+/* falha em outro projeto que a faixa não mostra (fitHeader): quadrado de 6px, como o da aba de um lado caído */
+#toggle-sidebar::after {
+  content: "";
+  display: none;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--fail);
+}
+
+#toggle-sidebar.alert::after {
+  display: block;
+}
+
 /* com o painel aberto, os outros projetos já aparecem nele: some, sem reservar espaço */
 body:not(.sidebar-off) #running {
   display: none;
@@ -1067,9 +1174,10 @@ body:not(.sidebar-off) #running {
   background-color: var(--term-bg) !important;
 }
 
+/* ancorado no topo, como o texto do terminal que ocupa este lugar: centrado, flutuava num vão de mil pixels */
 #empty {
   display: grid;
-  align-content: center;
+  align-content: start;
   justify-items: start;
   gap: 14px;
   height: 100%;
@@ -1167,10 +1275,12 @@ body:not(.sidebar-off) #running {
 }
 
 /* contagem até o SIGKILL: vira a cada segundo, em tinta neutra (esperar é o caminho normal) */
+/* 14px e não 12: é o número que se lê de longe enquanto espera ("58 s" quase sumia a 1x) */
 .flap.count {
   width: calc(4ch + 14px);
   margin-left: auto;
   color: var(--ink);
+  font-size: 14px;
 }
 
 /* "Voltar para feature-api/…": o nome trunca, o verbo fica */
@@ -1250,7 +1360,7 @@ dialog.form .pick[aria-disabled="true"] {
   position: fixed;
   inset: 52px 12px auto auto;
   margin: 0;
-  width: min(360px, calc(100vw - 24px));
+  width: min(680px, calc(100vw - 24px));
   max-height: calc(100vh - 64px);
   overflow-y: auto;
   padding: 16px 18px;
@@ -1274,8 +1384,23 @@ dialog.form .pick[aria-disabled="true"] {
   text-transform: uppercase;
 }
 
-#help h2:not(:first-child) {
-  margin-top: 18px;
+/* atalhos e estados lado a lado: empilhados, a ajuda enchia uma janela de 900px e o leitor de tela ficava no rodapé */
+#help:popover-open {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 28px;
+}
+
+#help .sr-col {
+  grid-column: 1 / -1;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+@media (max-width: 560px) {
+  #help:popover-open {
+    grid-template-columns: 1fr;
+  }
 }
 
 #help .chord {
@@ -1389,6 +1514,7 @@ dialog.form .pick[aria-disabled="true"] {
 
 #palette li .label {
   min-width: 0;
+  color: var(--ink-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1405,6 +1531,10 @@ dialog.form .pick[aria-disabled="true"] {
 #palette li[aria-selected="true"] {
   background: var(--flap);
   box-shadow: inset 0 -1px 0 var(--ink-3), inset 0 1px 0 var(--ink-3);
+}
+
+#palette li:is(.live, [aria-selected="true"]) .label {
+  color: var(--ink);
 }
 
 #palette .foot {
@@ -1488,6 +1618,12 @@ dialog.form .open-hint strong {
 /* o que vai morrer, como o comando aparece no terminal */
 #palette .note .procs,
 dialog.form .open-hint .procs,
+/* a worktree que sobe, no meio da frase: tinta cheia, ela é o destino */
+.wait-card .next {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .wait-card .procs {
   font: 12px var(--mono);
 }
@@ -1618,14 +1754,16 @@ dialog.form label.check {
   cursor: pointer;
 }
 
+/* p.preview: o caminho que vai ser criado. Só o <p>: a palheta ENCERRA (.flap.preview) do "Abrir ao criar" também
+   tem a classe e saía cinza e mono, com a margem a tirando da linha. */
 dialog.form .hint,
-dialog.form .preview {
+dialog.form p.preview {
   margin: 0 0 12px;
   color: var(--ink-2);
   font-size: 13px;
 }
 
-dialog.form .preview {
+dialog.form p.preview {
   font: 12px/1.5 var(--mono);
   word-break: break-all;
 }
@@ -1648,18 +1786,22 @@ dialog.form fieldset:disabled > :not(legend, .side-error) {
   opacity: 0.45;
 }
 
+/* o lado (API, FRONT) numa placa lisa, como o nome da plataforma no painel: o diálogo fala a língua do painel */
 dialog.form legend {
-  padding: 0 4px;
+  padding: 5px 8px;
+  border-radius: 2px;
+  background: var(--flap);
   color: var(--ink);
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font: 700 12px/1 var(--ui);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  font-size: 13px;
 }
 
 dialog.form legend label {
   margin: 0;
   color: var(--ink);
+  font: inherit;
+  letter-spacing: inherit;
   cursor: pointer;
 }
 
@@ -1730,8 +1872,19 @@ dialog.form .cmd-box input:not([type="checkbox"]) {
   outline: none;
 }
 
+/* Vazio, o prefixo sai e o placeholder diz o comando inteiro ("padrão do projeto: npm run dev", "Sem comando: abre só o shell"):
+   com o prefixo na frente, lia "npm run padrão do projeto: dev". Volta ao digitar. */
+dialog.form .cmd-box:has(input:placeholder-shown) .prefix {
+  display: none;
+}
+
 dialog.form .cmd-box .prefix:not([hidden]) + input {
   padding-left: 6px;
+}
+
+/* sem o prefixo à mostra, o placeholder volta ao respiro normal do campo */
+dialog.form .cmd-box .prefix + input:placeholder-shown {
+  padding-left: 10px;
 }
 
 dialog.form .pick {
@@ -1836,14 +1989,68 @@ dialog.form .open-hint {
   align-items: center;
 }
 
-/* O botão principal vem primeiro no DOM (Enter envia por ele); visualmente fica à direita. */
+/* O botão principal vem primeiro no DOM (Enter envia por ele); visualmente fica à direita.
+   Preso ao pé do diálogo: com os dois lados abertos, o "Criar projeto" ficava abaixo da dobra do rolamento. */
 dialog.form menu {
+  position: sticky;
+  bottom: 0;
   display: flex;
   flex-direction: row-reverse;
   justify-content: flex-start;
   gap: 8px;
-  margin: 4px 0 0;
-  padding: 0;
+  margin: 8px -22px -20px;
+  padding: 12px 22px 20px;
+  border-top: 1px solid var(--rule);
+  background: var(--rail);
+}
+
+/* Pasta local | Clonar do GitHub: a mesma forma das abas API | FRONT; só o caminho escolhido aparece */
+dialog.form .source {
+  display: flex;
+  gap: 4px;
+  margin: 4px 0 12px;
+}
+
+dialog.form .source label {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+dialog.form .source label:hover {
+  color: var(--ink);
+}
+
+dialog.form .source label:has(:checked) {
+  border-color: transparent;
+  background: var(--flap);
+  box-shadow: inset 0 -2px 0 var(--ink);
+  color: var(--ink);
+}
+
+dialog.form .source label:has(:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* o rádio some, o rótulo é o controle (continua no teclado: setas trocam, como num radiogroup) */
+dialog.form .source input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+}
+
+dialog.form fieldset:has(.source:not([hidden]) [value="gh"]:checked) :is(.local-src, .found),
+dialog.form fieldset:has([value="local"]:checked) .gh-row {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -25,7 +25,7 @@ const TABS: Tab[] = ["api", "front"];
 const TAB_LABEL: Record<Tab, string> = { api: "API", front: "Front" };
 const FLAP: Record<LineState, string> = {
   run: "RODANDO",
-  part: "PARCIAL",
+  part: "1 LADO",
   start: "SUBINDO",
   wait: "AGUARDA",
   stop: "PARANDO",
@@ -134,23 +134,48 @@ urlEl.addEventListener("click", (e) => {
 });
 
 let lastStopTimer = 0;
+// Quando o recado atual apareceu e de que projeto ele é, e o de outro projeto que espera ele ser lido.
+let noteAt = 0;
+let noteProject: string | null = null;
+let queuedTimer = 0;
+const NOTE_MS = 8000;
 function clearNote() {
   lastStopEl.replaceChildren();
   lastStopEl.style.minWidth = "";
   delete lastStopEl.dataset.stay;
+  noteProject = null;
+  fitHeader();
 }
 /** Recado curto no cabeçalho ("Parou em 1,8 s · feat/x", "Worktrees relidas: nada mudou."), por alguns segundos.
- *  `stay`: falha ("não subiu", "à força", "caiu") fica até a próxima troca, em vez de sumir antes de ser lida. */
-function headerNote(stay: boolean, ...nodes: (Node | string)[]) {
+ *  `stay`: falha ("não subiu", "à força", "caiu") fica até a próxima troca, em vez de sumir antes de ser lida.
+ *  `about`: o projeto do recado. O de outro projeto espera o atual completar 8 s: uma queda no LEILAO não apaga
+ *  o "Parou em" da troca que acabou de acontecer no INTERNO. */
+function headerNote(stay: boolean, about: string | null, ...nodes: (Node | string)[]) {
+  const wait = noteAt + NOTE_MS - Date.now();
+  if (about && about !== current?.project && lastStopEl.childElementCount && wait > 0) {
+    // ponytail: só o último recado em espera aparece; uma fila de verdade se dois projetos caírem juntos importar
+    clearTimeout(queuedTimer);
+    queuedTimer = setTimeout(() => headerNote(stay, about, ...nodes), wait);
+    return;
+  }
+  clearTimeout(queuedTimer);
   lastStopEl.replaceChildren(...nodes.map((n) => (typeof n === "string" ? el("span", { textContent: n }) : n)));
   // O piso do recado é o verbo e o tempo inteiros: sem espaço, o destino cede antes de virar "Encerr…".
   lastStopEl.style.minWidth = `${(lastStopEl.firstElementChild as HTMLElement).scrollWidth}px`;
+  noteAt = Date.now();
+  noteProject = about;
   clearTimeout(lastStopTimer);
   if (stay) lastStopEl.dataset.stay = "";
   else {
     delete lastStopEl.dataset.stay;
-    lastStopTimer = setTimeout(clearNote, 8000);
+    lastStopTimer = setTimeout(clearNote, NOTE_MS);
   }
+  fitHeader();
+}
+/** "· INTERNO / feat/x": o projeto entra quando não é o atual, onde outra worktree pode ter o mesmo nome ("main"). */
+function noteWho(project: string, label: string, ...before: (Node | string)[]) {
+  const where = project === current?.project ? [] : [el("span", { className: "project", textContent: project }), " / "];
+  return el("span", { className: "who" }, "· ", ...before, ...where, ...labelNodes(label));
 }
 
 let config: Config = { stopTimeoutMs: 5000, screenReader: false, projects: [] };
@@ -165,7 +190,7 @@ const fresh = new Set<string>();
 // Estado real, vindo do backend: terminais (id do PTY) com processo rodando e o nome dele, e envs cujo start acabou de ser enviado.
 let busy = new Map<number, string>();
 const starting = new Map<string, number>();
-// Parada à mão (botões ■ do cabeçalho): envs parando agora (e se já passou para o SIGKILL), e os terminais parados
+// Parada à mão (botões Parar do cabeçalho): envs parando agora (e se já passou para o SIGKILL), e os terminais parados
 // de propósito, que não contam como queda. O próximo start (Subir ou troca) tira a marca.
 const halting = new Map<string, { forcing: boolean }>();
 const halted = new Set<number>();
@@ -280,6 +305,11 @@ function labelNodes(label: string): (Node | string)[] {
   const same = samePairName(a, f);
   return same ? [same[2], el("span", { className: "pair-pre" }, ` ${same[0]}`, ...arrow, same[1])] : [a, ...arrow, f];
 }
+/** Só o nome, para frases: "auth-refresh" (par de prefixos diferentes) ou o lado da API. Prefixos do par no meio da prosa liam como ruído. */
+function proseName(label: string) {
+  const [a, f] = label.split(" ↔ ");
+  return f === undefined ? label : (samePairName(a, f)?.[2] ?? a);
+}
 /** O mesmo rótulo para atributos (aria-label), onde não cabe nó. */
 const spokenLabel = (label: string) => label.replace(" ↔ ", " pareada com ");
 
@@ -386,7 +416,7 @@ async function writeStart(k: string, pane: Pane, isFresh: boolean) {
 /** Ctrl+C → espera → SIGKILL; resolve `true` se precisou forçar. */
 const stopPane = (pane: Pane) => invoke<boolean>("pty_stop", { id: pane.ptyId, timeoutMs: config.stopTimeoutMs });
 
-/** Botões ■ e ■■ do cabeçalho (Ctrl+Shift+X, com Alt os dois): para o que roda nas abas, como na troca, mas o shell fica.
+/** Botões "Parar API" e "Parar tudo" do cabeçalho (Ctrl+Shift+X, com Alt os dois): para o que roda nas abas, como na troca, mas o shell fica.
  *  Parado, sobe de novo. A worktree continua a ativa do projeto. */
 async function toggleRun(all: boolean) {
   if (!current) return;
@@ -415,7 +445,7 @@ async function toggleRun(all: boolean) {
   halting.delete(k);
   for (const p of panes) busy.delete(p.ptyId);
   const secs = ((Date.now() - t0) / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  headerNote(forced, forced ? `Encerrado à força em ${secs} s` : `Parou em ${secs} s`, el("span", { className: "who" }, "· ", tabs.map((t) => TAB_LABEL[t]).join(" e "), " · ", ...labelNodes(wt.label)));
+  headerNote(forced, project, forced ? `Encerrado à força em ${secs} s` : `Parou em ${secs} s`, noteWho(project, wt.label, tabs.map((t) => TAB_LABEL[t]).join(" e "), " · "));
   render();
 }
 
@@ -440,6 +470,8 @@ function activate(project: string, wt: Worktree, created: boolean) {
         deadline: Date.now() + config.stopTimeoutMs,
       };
       stopping.set(project, state);
+      // O "Parou em" da troca anterior deste projeto sai: ao lado de PARANDO/AGUARDA, dizia que esta já tinha acabado.
+      if (noteProject === project) clearNote();
       // O backend manda SIGKILL ao estourar o prazo; aqui só avisa que chegou nessa fase.
       const forceTimer = setTimeout(() => {
         state.forcing ??= "timeout";
@@ -459,7 +491,7 @@ function activate(project: string, wt: Worktree, created: boolean) {
       if (hadProcs) {
         const secs = ((Date.now() - state.deadline + config.stopTimeoutMs) / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
         // O tempo primeiro: sem espaço, quem trunca é o nome, nunca o "parou em".
-        headerNote(!!state.forcing, state.forcing ? `Encerrada à força em ${secs} s` : `Parou em ${secs} s`, el("span", { className: "who" }, "· ", ...labelNodes(state.from)));
+        headerNote(!!state.forcing, project, state.forcing ? `Encerrada à força em ${secs} s` : `Parou em ${secs} s`, noteWho(project, state.from));
       }
     }
     const k = key(project, wt.id);
@@ -517,7 +549,7 @@ function render(focus = false) {
     haltTabEl.hidden = haltAllEl.hidden = true;
     waitEl.hidden = true;
     renderEmpty();
-    fitRunning();
+    fitHeader();
     return;
   }
 
@@ -532,7 +564,7 @@ function render(focus = false) {
   if (destEl.dataset.sig !== sig) {
     destEl.dataset.sig = sig;
     destEl.replaceChildren(
-      el("span", { className: "where" }, el("span", { className: project.length <= 3 ? "project short" : "project", textContent: project }), el("span", { className: "sep", textContent: "/", ariaHidden: "true" }), el("span", { className: "branch-name" }, ...labelNodes(wt.label))),
+      el("span", { className: "where" }, el("span", { className: project.length <= 8 ? "project short" : "project", textContent: project }), el("span", { className: "sep", textContent: "/", ariaHidden: "true" }), el("span", { className: "branch-name" }, ...labelNodes(wt.label))),
       flap(state, `head:${ck}`),
       el("span", { className: "sr", textContent: `: ${say(project, wt, state)}` }),
     );
@@ -576,7 +608,7 @@ function render(focus = false) {
     if (focusedTab) (document.getElementById(focusedTab) ?? document.getElementById(`tab-${tab}`))?.focus();
   }
   // Mede só com o cabeçalho completo (destino, abas, porta): antes disso a faixa parece ter espaço que não tem.
-  fitRunning();
+  fitHeader();
   renderWait(project, wt);
 
   for (const t of TABS) env?.panes[t]?.el.classList.toggle("off", t !== tab);
@@ -588,29 +620,31 @@ function render(focus = false) {
   } else pane?.term.focus();
 }
 
-const STOP_ICON = "M4.5 4.5h7v7h-7z";
-const STOP_ALL_ICON = "M2.5 5h4.5v6H2.5zM9 5h4.5v6H9z";
-const START_ICON = "M5.5 3.8v8.4L12 8z";
-const START_ALL_ICON = "M2.5 4.2v7.6L7.5 8zM8.5 4.2v7.6l5-3.8z";
-
-/** ■ / ▶ de `tabs` da worktree atual: Parar se algo roda (ou acabou de subir), Subir se há start; senão some.
- *  Durante uma troca ou uma parada fica aria-disabled com o motivo. */
+/** "Parar API" / "Subir tudo" de `tabs` da worktree atual: Parar se algo roda (ou acabou de subir), Subir se há start;
+ *  senão some. Verbo e objeto escritos: um quadrado desenhado lia como maximizar ou checkbox, ao lado das abas.
+ *  Numa troca do projeto some: a nova sobe sozinha, e "Subir" ali dizia o contrário. Numa parada à mão fica aria-disabled com o motivo. */
 function renderHalt(b: HTMLButtonElement, tabs: Tab[]) {
   const k = currentKey()!;
   const panes = tabs.flatMap((t) => envs.get(k)?.panes[t] ?? []);
   const running = starting.has(k) || panes.some((p) => busy.has(p.ptyId));
-  b.hidden = !running && !panes.some((p) => p.side.startCommand);
+  b.hidden = stopping.has(current!.project) || (!running && !panes.some((p) => p.side.startCommand));
   if (b.hidden) return;
   const all = tabs.length > 1;
-  const what = tabs.map((t) => TAB_LABEL[t]).join(" e ");
-  const wait = stopping.has(current!.project) || halting.has(k);
-  const label = wait ? "Aguarde: parando processos" : `${running ? "Parar" : "Subir"} ${what} (Ctrl+Shift+${all ? "Alt+" : ""}X)`;
-  if (b.title === label) return;
-  b.title = label;
-  b.setAttribute("aria-label", label);
-  if (wait) b.setAttribute("aria-disabled", "true");
-  else b.removeAttribute("aria-disabled");
-  b.replaceChildren(icon(running ? (all ? STOP_ALL_ICON : STOP_ICON) : all ? START_ALL_ICON : START_ICON));
+  const verb = running ? "Parar" : "Subir";
+  const text = `${verb} ${all ? "tudo" : TAB_LABEL[tabs[0]]}`;
+  const wait = halting.has(k);
+  const title = wait ? "Aguarde: parando processos" : `${verb} ${tabs.map((t) => TAB_LABEL[t]).join(" e ")} (Ctrl+Shift+${all ? "Alt+" : ""}X)`;
+  if (b.title === title && b.textContent === text) return;
+  b.title = title;
+  b.textContent = text;
+  b.setAttribute("aria-keyshortcuts", `Control+Shift+${all ? "Alt+" : ""}X`);
+  if (wait) {
+    b.setAttribute("aria-disabled", "true");
+    b.setAttribute("aria-description", title);
+  } else {
+    b.removeAttribute("aria-disabled");
+    b.removeAttribute("aria-description");
+  }
 }
 
 function renderEmpty() {
@@ -639,12 +673,19 @@ function renderEmpty() {
   if (hadFocus) emptyEl.querySelector<HTMLButtonElement>(".btn.primary")?.focus();
 }
 
-/** Aviso sobre os terminais enquanto a worktree anterior do projeto é encerrada. */
+/** Tempo de parada até o aviso aparecer. A maioria das trocas sai em ~1 s: antes disso o card era um clarão
+ *  ilegível no gesto mais repetido do dia. As palhetas contam o primeiro segundo e o "Parou em" fecha a troca. */
+const WAIT_DELAY = 750;
+
+/** Aviso sobre os terminais enquanto a worktree anterior do projeto é encerrada (depois de WAIT_DELAY). */
 function renderWait(project: string, wt: Worktree) {
   const st = stopping.get(project);
-  waitEl.hidden = !st;
-  if (!st) {
+  const show = !!st && Date.now() - (st.deadline - config.stopTimeoutMs) >= WAIT_DELAY;
+  const appearing = show && waitEl.hidden;
+  waitEl.hidden = !show;
+  if (!st || !show) {
     waitEl.dataset.sig = "";
+    waitEl.replaceChildren();
     waitSay.textContent = "";
     return;
   }
@@ -665,14 +706,17 @@ function renderWait(project: string, wt: Worktree) {
   waitEl.dataset.sig = sig;
   const verb = goingBack ? "Voltando para" : st.forcing ? "Forçando o encerramento de" : "Encerrando";
   const names = st.fromWt ? procs(project, st.fromWt) : [];
-  const what = names.length ? el("span", { className: "procs", textContent: names.join(", ") }) : "os processos";
+  // "a npm run dev", ou "aos processos" sem nome (não "a os processos").
+  const what = names.length ? ["a ", el("span", { className: "procs", textContent: names.join(", ") })] : ["aos processos"];
+  // A frase leva só o nome (o rótulo inteiro está no título do card): "… sobe auth-refresh.", sem prefixos de par na prosa.
+  const next = el("span", { className: "next", textContent: proseName(wt.label), title: wt.label });
   const detail = goingBack
-    ? [...labelNodes(st.from), " recebeu Ctrl+C e reinicia assim que os processos saírem."]
+    ? ["Ctrl+C já enviado; reinicia assim que os processos saírem."]
     : st.forcing === "user"
-      ? ["Encerrando à força (SIGKILL), como pedido. ", ...labelNodes(wt.label), " sobe em seguida."]
+      ? ["Encerrando à força (SIGKILL), como pedido. Depois sobe ", next, "."]
       : st.forcing
         ? ["Não parou com Ctrl+C a tempo; os processos estão sendo encerrados à força (SIGKILL)."]
-        : ["Ctrl+C enviado a ", what, ". Esperando saírem e liberarem as portas para iniciar ", ...labelNodes(wt.label), "."];
+        : ["Ctrl+C enviado ", ...what, ". Quando as portas liberarem, sobe ", next, "."];
   // Nenhum botão é o padrão: esperar é a ação certa, e forçar mata sem o Ctrl+C.
   // No SIGKILL não há botão: o backend espera no máximo 1 s depois dele e a troca segue sozinha.
   const force = st.forcing
@@ -728,6 +772,8 @@ function renderWait(project: string, wt: Worktree) {
   waitEl.replaceChildren(card);
   waitSay.textContent = `${card.querySelector("strong")!.textContent}. ${[...card.querySelectorAll("p")].map((p) => p.textContent).join(" ")}`;
   if (had) (waitEl.querySelector<HTMLButtonElement>(`[data-act="${had}"]:not(:disabled)`) ?? card).focus();
+  // Ao aparecer, o card recebe o foco (esperar é a ação padrão), a não ser que outra superfície esteja aberta por cima.
+  else if (appearing && palette.hidden && !document.querySelector("dialog[open]") && !helpEl.matches(":popover-open")) card.focus();
 }
 
 /** Erro de git do projeto em uma linha legível; o texto cru fica no detalhe. */
@@ -909,14 +955,14 @@ function renderBoard() {
       ),
     );
   if (configError && config.projects.length && current) keyFocusables(sections[0], "problem:config");
-  // Sem projeto: uma plataforma em branco, com a palheta esperando virar. A ação fica no centro da janela.
+  // Sem projeto: só a placa em branco. A explicação e a ação ficam no centro da janela; uma linha
+  // "Nenhuma worktree ainda" aqui repetia o que o centro já diz.
   if (!config.projects.length)
     sections.push(
       el(
         "section",
         { className: "platform ghost" },
         el("div", { className: "platform-head" }, el("h2", {}, el("span", { className: "tile", textContent: "Sem projeto" }))),
-        el("p", { className: "ghost-line" }, el("span", { textContent: "Nenhuma worktree ainda" }), flap("none", "ghost")),
       ),
     );
   $("#sidebar-foot").hidden = !config.projects.length;
@@ -942,21 +988,17 @@ function keyFocusables(root: HTMLElement, prefix: string) {
 }
 
 /** Nome que não cabe perde o prefixo inteiro ("feat/"), em vez de virar "f." com cara de abreviação.
- *  Decide por plataforma, todas ou nenhuma: na mesma coluna, um nome sem prefixo não pode parecer não ter prefixo. */
+ *  Decide por linha: por plataforma, uma branch longa tirava o hotfix/ ou feat/ das vizinhas que cabiam,
+ *  e o tipo da branch costuma ser o que mais importa nela. Mede todas antes de escrever: um reflow só. */
 function fitBranches() {
-  const platforms = [...board.querySelectorAll(".platform")].map(p => [...p.querySelectorAll<HTMLElement>(".line .branch")]);
-  for (const branches of platforms) for (const b of branches) b.classList.remove("tight");
-  // Mede todas as plataformas antes de escrever: um reflow só, não um por plataforma.
-  const tight = platforms.map(branches =>
-    branches.some(b => {
-      // O nome em si foi cortado (mesmo elemento, sem somar larguras arredondadas de partes diferentes).
-      const rest = b.lastElementChild as HTMLElement;
-      return rest.scrollWidth > rest.clientWidth;
-    })
-  );
-  platforms.forEach((branches, i) => {
-    for (const b of branches) b.classList.toggle("tight", tight[i]);
+  const branches = [...board.querySelectorAll<HTMLElement>(".line .branch")];
+  for (const b of branches) b.classList.remove("tight");
+  // O nome em si foi cortado (mesmo elemento, sem somar larguras arredondadas de partes diferentes).
+  const tight = branches.filter((b) => {
+    const rest = b.lastElementChild as HTMLElement;
+    return rest.scrollWidth > rest.clientWidth;
   });
+  for (const b of tight) b.classList.add("tight");
 }
 new ResizeObserver(fitBranches).observe(board);
 
@@ -993,6 +1035,15 @@ function renderRunning() {
       b.dataset.key = p.name;
       return [b];
     });
+  // Outros projetos com falha (1 LADO, SIGKILL): os que não couberem na faixa marcam o botão do painel (fitHeader).
+  toggleBtn.dataset.failing = config.projects
+    .filter((p) => p.name !== current?.project && active[p.name])
+    .filter((p) => {
+      const wt = p.worktrees.find((w) => w.id === active[p.name]);
+      return wt && ["part", "kill"].includes(lineState(p.name, wt));
+    })
+    .map((p) => p.name)
+    .join("\u0000");
   const html = buttons.map((b) => b.outerHTML).join("");
   if (html === runningHtml) return;
   runningHtml = html;
@@ -1002,20 +1053,41 @@ function renderRunning() {
   if (focused) buttons.find((b) => b.dataset.key === focused)?.focus();
 }
 
-/** Sem espaço no cabeçalho, o outro projeto cuja palheta não caberia sai inteiro: o estado nunca aparece cortado.
- *  Mede com todos à mostra e esconde de uma vez; o painel e a paleta continuam mostrando o que roda. */
-function fitRunning() {
-  if (!document.body.classList.contains("sidebar-off")) return; // com o painel aberto, #running nem aparece
+/** Piso da branch em serviço na faixa: o nome inteiro ou, se for longo, uns 17 caracteres. */
+const BRANCH_FLOOR = 160;
+
+/** A branch em serviço vem antes dos acessórios da faixa: enquanto ela mostrar menos que o piso, eles saem um a um,
+ *  o recado primeiro, depois a porta, "Parar tudo" e "Parar API" (os atalhos continuam). Classe e não hidden: o recado
+ *  é região viva e continua falando, e render controla o hidden dos outros. Mede com todos à mostra, senão a branch sempre caberia.
+ *  Depois, sem espaço, o outro projeto cuja palheta não caberia sai inteiro: o estado nunca aparece cortado.
+ *  O painel e a paleta continuam mostrando o que roda. */
+function fitHeader() {
+  const accessories = [lastStopEl, urlEl, haltAllEl, haltTabEl];
+  for (const a of accessories) a.classList.remove("ceded");
+  const branch = destEl.querySelector<HTMLElement>(".branch-name");
+  for (const a of accessories) {
+    if (!branch || branch.clientWidth >= Math.min(branch.scrollWidth, BRANCH_FLOOR)) break;
+    a.classList.add("ceded");
+  }
+  const open = !document.body.classList.contains("sidebar-off");
   const items = [...runningEl.children] as HTMLElement[];
-  for (const b of items) b.hidden = false;
-  const edge = runningEl.getBoundingClientRect().right + 0.5;
-  const cut = items.filter((b) => b.querySelector(".flap")!.getBoundingClientRect().right > edge);
-  for (const b of cut) b.hidden = true;
+  if (!open) {
+    for (const b of items) b.hidden = false;
+    const edge = runningEl.getBoundingClientRect().right + 0.5;
+    const cut = items.filter((b) => b.querySelector(".flap")!.getBoundingClientRect().right > edge);
+    for (const b of cut) b.hidden = true;
+  }
+  // Falha em outro projeto que a faixa não mostra (cortada, faixa estreita, painel fechado): o botão do painel leva
+  // um quadrado vermelho e "falha em PROJETO" no nome. Com o painel aberto ao lado, o painel já mostra.
+  const shown = items.filter((b) => !b.hidden && b.offsetParent).map((b) => b.dataset.key);
+  const failing = toggleBtn.dataset.failing ? toggleBtn.dataset.failing.split("\u0000") : [];
+  toggleBtn.dataset.alert = open ? "" : failing.filter((p) => !shown.includes(p)).map((p) => p.toUpperCase()).join(", ");
+  labelToggle();
 }
 // A faixa (não o #running, que some e reaparece ao medir) muda de largura com a janela, o zoom e o painel.
-new ResizeObserver(fitRunning).observe($("header"));
+new ResizeObserver(fitHeader).observe($("header"));
 // A Barlow chega depois do primeiro render e alarga os nomes sem mudar a largura da faixa.
-document.fonts.addEventListener("loadingdone", fitRunning);
+document.fonts.addEventListener("loadingdone", fitHeader);
 
 function icon(d: string, extra = "") {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -1128,7 +1200,7 @@ function announceDrops() {
     wasUp.set(k, up);
     const wt = findWt(project, id);
     if (!lost.length || k === currentKey() || !wt) continue;
-    headerNote(true, `${lost.map((t) => TAB_LABEL[t]).join(" e ")} ${lost.length > 1 ? "pararam" : "parou"}`, el("span", { className: "who" }, "· ", el("span", { className: "project", textContent: env.project }), " / ", ...labelNodes(wt.label)));
+    headerNote(true, project, `${lost.map((t) => TAB_LABEL[t]).join(" e ")} ${lost.length > 1 ? "pararam" : "parou"}`, noteWho(project, wt.label));
   }
 }
 
@@ -1151,7 +1223,7 @@ async function pollStatus() {
       changed = true;
       const [project, id] = k.split("\u0000");
       const wt = down.length && findWt(project, id);
-      if (wt) headerNote(true, `${down.map((t) => TAB_LABEL[t]).join(" e ")} ${down.length > 1 ? "não subiram" : "não subiu"} em 15 s`, el("span", { className: "who" }, "· ", ...labelNodes(wt.label)));
+      if (wt) headerNote(true, project, `${down.map((t) => TAB_LABEL[t]).join(" e ")} ${down.length > 1 ? "não subiram" : "não subiu"} em 15 s`, noteWho(project, wt.label));
     }
   }
   if (changed) render();
@@ -1200,6 +1272,8 @@ function renderPalette() {
             el("span", { className: "sr", textContent: `: ${say(it.project, it.wt, state)}` }),
             flap(state, `pal:${key(it.project, it.wt.id)}`),
           );
+          // Tinta cheia só no que está em serviço (rodando, em movimento, a atual), como no painel.
+          if (LIVE.includes(state) || currentKey() === key(it.project, it.wt.id)) li.classList.add("live");
           li.setAttribute("role", "option");
           li.setAttribute("aria-selected", String(i === sel));
           return li;
@@ -1221,8 +1295,10 @@ function renderPalette() {
 function endsNote(wt: Worktree, project: string, inPalette = true): (Node | string)[] {
   const names = procs(project, wt);
   // O texto num span só: solto no flex, cada pedaço viraria um item e os espaços sumiriam.
+  const preview = flap("stop", "ends", "ENCERRA");
+  preview.classList.add("preview");
   return [
-    flap("stop", "ends", "ENCERRA"),
+    preview,
     el(
       "span",
       { className: "ends-text" },
@@ -1565,7 +1641,8 @@ function openEditDialog(project: string, wt: Worktree) {
       const project = splitStart(side.projectStart ?? "");
       const own = splitStart(side.startCommand !== side.projectStart ? (side.startCommand ?? "") : "");
       const cmd = editField<HTMLInputElement>(`${t}-cmd`);
-      cmd.placeholder = side.projectStart ? `${project.script} (padrão do projeto)` : "Sem comando: abre só o shell";
+      // "padrão do projeto: npm run dev": começando pelo script, parecia valor digitado. Vazio, o prefixo sai (CSS) e o placeholder diz o comando inteiro.
+      cmd.placeholder = side.projectStart ? `padrão do projeto: ${side.projectStart}` : "Sem comando: abre só o shell";
       cmd.value = own.script;
       setPm(ePm(t), own.script ? own.pm : project.pm);
       // Até o git responder, a pasta fica onde está.
@@ -1826,7 +1903,7 @@ async function afterEdit(ed: NonNullable<typeof editing>, pair: PairChange) {
     current = { project, wt: newWt };
     ensureEnv(project, newWt);
   }
-  headerNote(false, newWt && newWt.label !== wt.label ? `Editada: ${wt.label} → ${newWt.label}` : `Editada: ${wt.label}`);
+  headerNote(false, null, newWt && newWt.label !== wt.label ? `Editada: ${wt.label} → ${newWt.label}` : `Editada: ${wt.label}`);
   render();
   byKey(`edit:${newKey}`)?.focus();
 }
@@ -1879,7 +1956,8 @@ const ghList = $("#gh-repos");
 // Lista da sessão: o gh leva alguns segundos para paginar. Falha não fica guardada, para o próximo abrir tentar de novo.
 let ghRepos: Promise<GithubRepos> | null = null;
 
-/** Repositórios da conta logada no gh viram as sugestões do campo "Ou clone do GitHub"; sem gh, uma linha diz o próximo passo. */
+/** Repositórios da conta logada no gh viram as sugestões do campo do GitHub; sem gh, uma linha diz o próximo passo.
+ *  Com gh, cada lado ganha a escolha "Pasta local | Clonar do GitHub" e mostra um caminho só (o CSS esconde o outro). */
 async function loadGithubRepos() {
   ghRepos ??= invoke<GithubRepos>("github_repos");
   try {
@@ -1887,11 +1965,13 @@ async function loadGithubRepos() {
     ghList.replaceChildren(...repos.map(full => el("option", { value: full })));
     for (const row of projectForm.querySelectorAll<HTMLElement>(".gh-row")) {
       row.hidden = false;
-      row.querySelector(".gh-label")!.textContent = `Ou clone do GitHub de ${login}`;
+      row.querySelector(".gh-label")!.textContent = `Repositório no GitHub de ${login}`;
     }
+    for (const src of projectForm.querySelectorAll<HTMLElement>(".source")) src.hidden = false;
     ghHint.hidden = true;
   } catch (err) {
     ghRepos = null;
+    for (const src of projectForm.querySelectorAll<HTMLElement>(".source")) src.hidden = true;
     ghHint.textContent = `Clonar do GitHub não está disponível: ${String(err)}`;
     ghHint.hidden = false;
   }
@@ -1927,6 +2007,8 @@ async function cloneFromGithub(t: Tab, button: HTMLButtonElement) {
     const repo = pfield(`${t}-repo`);
     repo.value = path;
     input.value = "";
+    // Clonado, o lado volta para a pasta local: o caminho e as worktrees lidas ficam à vista.
+    setSource(t, "local");
     if (!pfield("name").value.trim()) pfield("name").value = projectNameFrom(name);
     readWorktrees(t);
     repo.focus();
@@ -1960,6 +2042,11 @@ function showRepoError(t: Tab, message: string, focus: boolean) {
 }
 
 const readReq: Record<Tab, number> = { api: 0, front: 0 };
+
+/** Pasta local ou GitHub, no lado `t`. */
+function setSource(t: Tab, src: "local" | "gh") {
+  projectForm.querySelector<HTMLInputElement>(`input[name="${t}-source"][value="${src}"]`)!.checked = true;
+}
 
 /** Ao escolher ou colar a pasta: as worktrees que o painel vai mostrar, antes de salvar o projeto. */
 async function readWorktrees(t: Tab) {
@@ -2033,6 +2120,8 @@ projectForm.addEventListener("submit", async (e) => {
   projectError.textContent = "";
   clearInvalid(projectForm);
   for (const t of TABS) pSideMsg(t).textContent = "";
+  // Repositório vazio com o GitHub escolhido: o erro aparece no campo da pasta, que precisa estar à vista.
+  for (const t of TABS) if (!pfield(`${t}-repo`).value.trim()) setSource(t, "local");
   if (missingField(projectForm, projectError)) return;
   const submit = e.submitter as HTMLButtonElement;
   setBusy(submit, "Criando…");
@@ -2079,16 +2168,16 @@ async function reload() {
     reloadBtn.removeAttribute("aria-disabled");
     reloadBtn.removeAttribute("aria-busy");
   }
-  if (configError) return headerNote(false, "Não consegui reler: o config tem um problema.");
+  if (configError) return headerNote(false, null, "Não consegui reler: o config tem um problema.");
   const after = worktreeNames();
   const added = [...after].filter(([k]) => !before.has(k)).map(([, name]) => name);
   const removed = [...before].filter(([k]) => !after.has(k)).map(([, name]) => name);
-  if (!added.length && !removed.length) return headerNote(false, "Worktrees relidas: nada mudou.");
+  if (!added.length && !removed.length) return headerNote(false, null, "Worktrees relidas: nada mudou.");
   const parts = [
     added.length === 1 ? `nova: ${added[0]}` : added.length ? `${added.length} novas` : "",
     removed.length === 1 ? `saiu: ${removed[0]}` : removed.length ? `${removed.length} saíram` : "",
   ].filter(Boolean);
-  headerNote(false, `Worktrees relidas: ${parts.join(" · ")}.`);
+  headerNote(false, null, `Worktrees relidas: ${parts.join(" · ")}.`);
 }
 
 reloadBtn.addEventListener("click", () => reload());
@@ -2097,11 +2186,20 @@ reloadBtn.addEventListener("click", () => reload());
 
 const toggleBtn = $("#toggle-sidebar");
 
-function setSidebar(open: boolean) {
-  document.body.classList.toggle("sidebar-off", !open);
-  const label = open ? "Recolher o painel" : "Abrir o painel";
+/** Nome do botão do painel, com a falha de outro projeto quando houver ("Abrir o painel · falha em LEILAO"). */
+function labelToggle() {
+  const alert = toggleBtn.dataset.alert;
+  const label = `${toggleBtn.dataset.label}${alert ? ` · falha em ${alert}` : ""}`;
+  toggleBtn.classList.toggle("alert", !!alert);
+  if (toggleBtn.getAttribute("aria-label") === label) return;
   toggleBtn.title = `${label} (Ctrl+Shift+B)`;
   toggleBtn.setAttribute("aria-label", label);
+}
+
+function setSidebar(open: boolean) {
+  document.body.classList.toggle("sidebar-off", !open);
+  toggleBtn.dataset.label = open ? "Recolher o painel" : "Abrir o painel";
+  labelToggle();
   toggleBtn.setAttribute("aria-expanded", String(open));
   // Na janela estreita o painel abre por cima e fecha sozinho: isso não muda a preferência salva.
   if (!document.body.classList.contains("narrow")) save("sidebar", open ? "open" : "off");
@@ -2224,7 +2322,7 @@ window.addEventListener(
     else if (e.code === "KeyH") helpEl.togglePopover();
     else if (e.code === "KeyN" || e.code === "KeyL") {
       if (!config.projects.length) {
-        headerNote(false, "Sem projeto ainda: crie um primeiro.");
+        headerNote(false, null, "Sem projeto ainda: crie um primeiro.");
         emptyEl.querySelector<HTMLButtonElement>(".btn.primary")?.focus();
       } else if (e.code === "KeyN") openAddDialog(current?.project);
       else reload();

@@ -42,8 +42,10 @@
         <div id="destination" aria-live="polite"></div>
         <div id="tabs" role="tablist" aria-label="Terminal"></div>
         <a id="dev-url" hidden></a>
-        <button id="halt-tab" type="button" class="icon-btn" hidden></button>
-        <button id="halt-all" type="button" class="icon-btn" hidden></button>
+        <div id="actions">
+          <button id="halt-tab" type="button" class="halt" hidden></button>
+          <button id="halt-all" type="button" class="halt" hidden></button>
+        </div>
         <span id="last-stop" role="status"></span>
         <div id="running" role="group" aria-label="Rodando em outros projetos"></div>
         <button id="help-btn" type="button" class="icon-btn" popovertarget="help" aria-label="Atalhos e legenda" title="Atalhos e legenda (Ctrl+Shift+H)">
@@ -58,6 +60,7 @@
     </main>
 
     <div id="help" popover tabindex="-1" role="dialog" aria-label="Atalhos e legenda">
+      <section class="keys-col">
       <h2>Atalhos</h2>
       <p class="chord">Todos com <kbd>Ctrl</kbd><kbd>Shift</kbd> e mais a tecla:</p>
       <dl class="keys">
@@ -70,21 +73,26 @@
         <dt><kbd>L</kbd></dt><dd>Reler as worktrees (o painel também relê ao voltar para a janela)</dd>
         <dt><kbd>H</kbd></dt><dd>Abrir ou fechar esta ajuda (Esc fecha)</dd>
       </dl>
+      </section>
+      <section class="states-col">
       <h2>Estados</h2>
       <dl class="legend">
         <dt><span class="flap" data-state="run"><span>RODANDO</span></span></dt><dd>API e Front de pé</dd>
-        <dt><span class="flap" data-state="part"><span>PARCIAL</span></span></dt><dd>Um lado caiu; a aba dele fica marcada</dd>
+        <dt><span class="flap" data-state="part"><span>1 LADO</span></span></dt><dd>Um lado caiu; a aba dele fica marcada</dd>
         <dt><span class="flap" data-state="start"><span>SUBINDO</span></span></dt><dd>O comando de start acabou de ser enviado</dd>
         <dt><span class="flap" data-state="wait"><span>AGUARDA</span></span></dt><dd>Esperando a anterior do projeto parar (ou a própria, ao voltar)</dd>
         <dt><span class="flap" data-state="stop"><span>PARANDO</span></span></dt><dd>Recebeu Ctrl+C (da troca ou do botão de parar); esperando os processos saírem</dd>
         <dt><span class="flap" data-state="kill"><span>SIGKILL</span></span></dt><dd>Não parou a tempo (ou você forçou): encerrada à força</dd>
-        <dt><span class="flap" data-state="stop"><span>ENCERRA</span></span></dt><dd>Prévia: trocar para a linha sob o cursor (ou a escolhida na paleta) encerra esta</dd>
+        <dt><span class="flap preview" data-state="stop"><span>ENCERRA</span></span></dt><dd>Prévia, não estado: trocar para a linha sob o cursor (ou a escolhida na paleta) encerra esta</dd>
         <dt><span class="flap" data-state="idle"><span>INATIVA</span></span></dt><dd>Terminais abertos, nada rodando</dd>
-        <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Encaixe vazio: ainda não aberta nesta sessão</dd>
+        <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Ainda não aberta nesta sessão</dd>
       </dl>
+      </section>
+      <section class="sr-col">
       <h2>Leitor de tela</h2>
       <label class="check"><input type="checkbox" id="sr-toggle" /> Saída dos terminais acessível ao leitor de tela</label>
       <p class="fine" id="sr-note">Custa desempenho nos terminais. Fica gravado no config.</p>
+      </section>
     </div>
 
     <dialog id="add-dialog" class="form" aria-labelledby="add-title">
@@ -154,6 +162,7 @@
       <form method="dialog" novalidate>
         <h2 id="edit-title">Editar worktree</h2>
         <p class="hint where"></p>
+        <p class="hint">Os terminais dela fecham ao salvar.</p>
         <label class="shared-branch">
           Branch
           <input name="branch" required aria-errormessage="edit-branch-error" spellcheck="false" autocomplete="off" />
@@ -273,7 +282,6 @@
           </div>
           <p class="side-error" id="edit-front-error" role="alert"></p>
         </fieldset>
-        <p class="hint">Os terminais dela fecham ao salvar.</p>
         <p class="error" id="edit-error" role="alert"></p>
         <menu>
           <button value="ok" class="primary">Salvar</button>
@@ -294,16 +302,22 @@
         <datalist id="gh-repos"></datalist>
         <fieldset data-side="api">
           <legend>API</legend>
-          <label>
-            <span id="api-repo-label">Repositório</span>
-            <span class="dir-row">
-              <input name="api-repo" aria-labelledby="api-repo-label" required spellcheck="false" autocomplete="off" />
-              <button type="button" class="pick">Escolher…</button>
-            </span>
-          </label>
-          <p class="hint">Repositório bare: escolha a pasta que contém o <code>.bare</code>.</p>
+          <div class="source" role="radiogroup" aria-label="Origem do repositório (API)" hidden>
+            <label><input type="radio" name="api-source" value="local" checked /> Pasta local</label>
+            <label><input type="radio" name="api-source" value="gh" /> Clonar do GitHub</label>
+          </div>
+          <div class="local-src">
+            <label>
+              <span id="api-repo-label">Repositório</span>
+              <span class="dir-row">
+                <input name="api-repo" aria-labelledby="api-repo-label" required spellcheck="false" autocomplete="off" />
+                <button type="button" class="pick">Escolher…</button>
+              </span>
+            </label>
+            <p class="hint">Repositório bare: escolha a pasta que contém o <code>.bare</code>.</p>
+          </div>
           <label class="gh-row" hidden>
-            <span class="gh-label" id="api-gh-label">Ou clone do GitHub</span>
+            <span class="gh-label" id="api-gh-label">Repositório no GitHub</span>
             <span class="dir-row">
               <input name="api-gh" aria-labelledby="api-gh-label" list="gh-repos" placeholder="ex.: dono/repositório" spellcheck="false" autocomplete="off" />
               <button type="button" class="pick clone">Clonar…</button>
@@ -337,16 +351,22 @@
         </fieldset>
         <fieldset data-side="front">
           <legend>Front</legend>
-          <label>
-            <span id="front-repo-label">Repositório</span>
-            <span class="dir-row">
-              <input name="front-repo" aria-labelledby="front-repo-label" required spellcheck="false" autocomplete="off" />
-              <button type="button" class="pick">Escolher…</button>
-            </span>
-          </label>
-          <p class="hint">Repositório bare: escolha a pasta que contém o <code>.bare</code>.</p>
+          <div class="source" role="radiogroup" aria-label="Origem do repositório (Front)" hidden>
+            <label><input type="radio" name="front-source" value="local" checked /> Pasta local</label>
+            <label><input type="radio" name="front-source" value="gh" /> Clonar do GitHub</label>
+          </div>
+          <div class="local-src">
+            <label>
+              <span id="front-repo-label">Repositório</span>
+              <span class="dir-row">
+                <input name="front-repo" aria-labelledby="front-repo-label" required spellcheck="false" autocomplete="off" />
+                <button type="button" class="pick">Escolher…</button>
+              </span>
+            </label>
+            <p class="hint">Repositório bare: escolha a pasta que contém o <code>.bare</code>.</p>
+          </div>
           <label class="gh-row" hidden>
-            <span class="gh-label" id="front-gh-label">Ou clone do GitHub</span>
+            <span class="gh-label" id="front-gh-label">Repositório no GitHub</span>
             <span class="dir-row">
               <input name="front-gh" aria-labelledby="front-gh-label" list="gh-repos" placeholder="ex.: dono/repositório" spellcheck="false" autocomplete="off" />
               <button type="button" class="pick clone">Clonar…</button>
