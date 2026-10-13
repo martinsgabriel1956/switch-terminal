@@ -37,7 +37,8 @@
   --term-bg: var(--board);
   --float-shadow: 0 4px 8px rgb(0 0 0 / 28%);
   /* o painel sobre o terminal (janela estreita): a borda que importa é a direita, então a sombra vai para o lado */
-  --side-shadow: 6px 0 16px rgb(0 0 0 / 45%);
+  /* preto sobre grafite quase não se via: mais longa e mais densa */
+  --side-shadow: 8px 0 24px rgb(0 0 0 / 70%);
   /* hover: meio caminho entre o trilho e a palheta, para não se confundir com a linha atual */
   --hover: color-mix(in srgb, var(--flap) 50%, var(--rail));
   --ui: "Barlow Semi Condensed", system-ui, sans-serif;
@@ -55,15 +56,17 @@
     --flap: #d6d7d3;
     /* A de cima clareia até o degrau entre as metades se ver; a de baixo fica, para o âmbar manter 4,5:1 sobre ela. */
     --flap-hi: #e7e8e4;
-    /* Palheta diurna: metades mais escuras que o esmalte e que a linha atual (degrau de 1,16:1), para ler como a peça
-       mecânica e não como etiqueta; as tintas de estado escurecem só nela, para 5:1 ou mais nas duas metades.
+    /* Palheta diurna: de dia o estado mora no corpo, não na tinta. Tintas escuras de estado sobre metades cinza tinham a
+       mesma luminância (1,00–1,04:1 entre si): ao lado do editor, RODANDO, PARANDO e INATIVA só se separavam lendo.
+       Agora as metades de estado são verdes, âmbar ou vermelhas (abaixo, em .flap[data-state]), com tinta cheia a 7:1
+       ou mais; INATIVA fica nas metades neutras, mais escuras que o esmalte e que a linha atual (degrau de 1,16:1).
        O terminal (ANSI) e o resto da interface ficam com run/start/fail. */
     --flap-top: #d2d3ce;
     --flap-bot: #c3c5bf;
     --flap-ink: #45474c;
-    --flap-run: #0a5232;
-    --flap-start: #6b4000;
-    --flap-fail: #8c1c15;
+    --flap-run: #15161a;
+    --flap-start: #15161a;
+    --flap-fail: #15161a;
     --rule: #cfd1cc;
     --ink: #15161a;
     --ink-2: #4f5156;
@@ -84,8 +87,11 @@
     --mark-ink: #f4f5f3;
     --mark-run: #4cc38a;
     --term-bg: var(--board);
-    --float-shadow: 0 4px 8px rgb(21 22 26 / 14%);
+    /* de dia o trilho sobre o esmalte fica a 1,08:1: a sombra separa a superfície flutuante */
+    --float-shadow: 0 4px 8px rgb(21 22 26 / 14%), 0 12px 28px rgb(21 22 26 / 14%);
     --side-shadow: 6px 0 16px rgb(21 22 26 / 16%);
+    /* de dia, a meio caminho ficava a 1,1:1 da linha atual (flap): mais perto do trilho */
+    --hover: color-mix(in srgb, var(--flap) 35%, var(--rail));
   }
 }
 
@@ -100,6 +106,8 @@
 /* só para leitor de tela */
 .sr {
   position: absolute;
+  /* sem a margem do <p>: o #wait-say empurrava 16px de rolagem fantasma no #panes */
+  margin: 0;
   width: 1px;
   height: 1px;
   overflow: hidden;
@@ -214,10 +222,11 @@ kbd {
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: calc(7ch + 14px);
+  width: calc(7ch + 20px);
   height: 22px;
   border-radius: 2px;
-  background: linear-gradient(var(--flap-top) 50%, var(--flap-bot) 50%);
+  /* --state-*: o corpo de estado (só de dia); sem ele, as metades neutras da palheta */
+  background: linear-gradient(var(--state-top, var(--flap-top)) 50%, var(--state-bot, var(--flap-bot)) 50%);
   color: var(--flap-ink);
   font: 700 12px/1 var(--ui);
   letter-spacing: 0.06em;
@@ -238,14 +247,15 @@ kbd {
 /* Na linha atual (e no item selecionado da paleta) o fundo é --flap, o mesmo da metade de baixo: a palheta sumia na
    linha e sobrava só a metade de cima, uma aba cinza. Ali a de baixo desce para o fundo do painel e o degrau volta. */
 :is(.line[aria-current="true"], #palette li[aria-selected="true"]) .flap {
-  background: linear-gradient(var(--flap-hi) 50%, var(--board) 50%);
+  --flap-bot: var(--board);
 }
 
 /* De dia a de cima (#d2d3ce) sumiria na linha (#d6d7d3): ali ela clareia até flap-hi e a de baixo fica a da palheta,
-   mais escura que a linha. Luz de cima, o corte no meio, e as tintas a 5:1 ou mais. */
+   mais escura que a linha. Luz de cima e o corte no meio. Os corpos de estado não mudam na linha atual. */
 @media (prefers-color-scheme: light) {
   :is(.line[aria-current="true"], #palette li[aria-selected="true"]) .flap {
-    background: linear-gradient(var(--flap-hi) 50%, var(--flap-bot) 50%);
+    --flap-top: var(--flap-hi);
+    --flap-bot: #c3c5bf;
   }
 }
 
@@ -282,21 +292,46 @@ kbd {
   color: var(--flap-start);
 }
 
-/* Parar é a consequência esperada de uma troca: âmbar, como tudo que está em movimento. */
+/* Parar é a consequência esperada de uma troca: âmbar, como tudo que está em movimento. O SIGKILL também:
+   parar à força é rotina (o alvo sobe, a anterior sai como pedido); o vermelho fica para o que ficou de pé errado. */
 .flap[data-state="wait"],
-.flap[data-state="stop"] {
+.flap[data-state="stop"],
+.flap[data-state="kill"] {
   color: var(--flap-start);
 }
 
-.flap[data-state="part"],
-.flap[data-state="kill"] {
+.flap[data-state="part"] {
   color: var(--flap-fail);
+}
+
+/* De dia, o corpo diz o estado: verde de pé, âmbar em movimento, vermelho falha, com a tinta cheia por cima
+   (7,4:1 ou mais nas duas metades). A luz vem de cima, como nas neutras (degrau de 1,16–1,22:1). */
+@media (prefers-color-scheme: light) {
+  .flap[data-state="run"] {
+    --state-top: #6ccf9c;
+    --state-bot: #55c08a;
+  }
+
+  .flap:is([data-state="start"], [data-state="wait"], [data-state="stop"], [data-state="kill"]) {
+    --state-top: #f6c45f;
+    --state-bot: #f0b33f;
+  }
+
+  .flap[data-state="part"] {
+    --state-top: #f4a29b;
+    --state-bot: #ee8a82;
+  }
+}
+
+/* ENCERRA é prévia: só o contorno, na cor de quem está em movimento, nunca a tinta do corpo */
+.flap.preview {
+  color: var(--wait);
 }
 
 /* "SEM FRONT" passa dos 7 caracteres: só esta palheta alarga, e a falha se destaca na coluna */
 .flap[data-state="part"] {
   width: auto;
-  min-width: calc(7ch + 14px);
+  min-width: calc(7ch + 20px);
   padding: 0 7px;
 }
 
@@ -580,6 +615,12 @@ kbd {
   opacity: 0.5;
 }
 
+/* O foco que ficou na linha depois do clique (a troca) não acende o lápis desabilitado: ao lado do AGUARDA era ruído.
+   Com o cursor na linha, ou o foco no próprio lápis, ele aparece com o motivo. */
+.row:focus-within:not(:hover) > .edit[aria-disabled="true"]:not(:focus-visible) {
+  opacity: 0;
+}
+
 /* desabilitado (rodando) não ganha placa: ela diria que o lápis é clicável */
 .row > .edit:not([aria-disabled="true"]):hover {
   background: var(--flap-hi);
@@ -681,6 +722,11 @@ kbd {
   margin-left: 0;
 }
 
+/* entre os dois prefixos, a seta respira dos dois lados ("feature-api ⇄ feature-app"), como na paleta */
+.line .pair .pre + .icon.inline {
+  margin-left: 4px;
+}
+
 .line .pair .branch {
   color: inherit;
 }
@@ -773,8 +819,11 @@ kbd {
   }
 }
 
-/* sem projeto: só a placa em branco */
+/* sem projeto: o encaixe vazio da placa, tracejado como o da palheta nunca aberta; cheia, parecia um botão desabilitado */
 .ghost .tile {
+  outline: 1px dashed var(--ink-3);
+  outline-offset: -1px;
+  background: none;
   color: var(--ink-2);
 }
 
@@ -888,24 +937,24 @@ header {
 
 /* Prévia da parada à mão: com o cursor ou o foco em Parar, o que ela encerra ganha o contorno âmbar,
    como ENCERRA nas linhas. "Parar API" marca a aba; o que para a worktree inteira marca as abas e o destino. */
-header:has(#halt-tab[data-ends]:is(:hover, :focus-visible)) #tabs [aria-selected="true"],
-header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #tabs button {
+header:has(:is(#halt-tab, .more-item)[data-ends="tab"]:is(:hover, :focus-visible)) #tabs [aria-selected="true"],
+header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #tabs button {
   border-color: var(--wait);
   color: var(--wait);
 }
 
-header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap {
+header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap {
   color: var(--wait);
   background: none;
   box-shadow: inset 0 0 0 1px var(--wait);
   clip-path: none;
 }
 
-header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap > span:first-child {
+header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap > span:first-child {
   visibility: hidden;
 }
 
-header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap .ends {
+header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap .ends {
   visibility: visible;
 }
 
@@ -915,7 +964,8 @@ header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap
   flex-shrink: 0;
   white-space: nowrap;
   color: var(--ink-2);
-  font: 12px/1 var(--mono);
+  /* 24px de altura: o alvo mínimo, sem mudar o desenho */
+  font: 12px/24px var(--mono);
   text-decoration: none;
   text-underline-offset: 3px;
 }
@@ -939,6 +989,11 @@ header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap
   white-space: nowrap;
   font-size: 17px;
   font-weight: 600;
+}
+
+/* sem nem o piso mínimo da branch (fitHeader): o projeto sai, a placa do painel já diz qual é */
+#destination.no-project .where > :is(.project, .sep) {
+  display: none;
 }
 
 #destination .where > .project,
@@ -1107,30 +1162,33 @@ header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap
 #switching .btn.back {
   flex-shrink: 1;
   min-width: 0;
-  max-width: 280px;
+  max-width: 420px;
   overflow: hidden;
 }
 
-/* faixa estreita (a meia tela, ~960px de janela): o verbo sai; "Voltar para X" fica, com o nome truncado no meio
-   (cutBack): no momento destrutivo, a saída diz para onde leva */
+/* faixa estreita (a meia tela, ~960px de janela): com botões, o verbo sai; "Voltar para X" fica, com o nome truncado no
+   meio (cutBack): no momento destrutivo, a saída diz para onde leva. No SIGKILL não há botão, e o verbo fica:
+   sem ele, a faixa era só a palheta, muda no momento mais tenso. */
 @container (max-width: 720px) {
-  #switching .what {
+  #switching:has(.btn) .what {
     display: none;
   }
 }
 
-/* apertada (fitHeader): a branch de destino ficaria abaixo do piso; o verbo, o "para" e a contagem saem.
-   O Voltar fica com o nome (truncado no meio) e o Forçar fica */
-#switching.tight :is(.what, .para, .count) {
+/* apertada (fitHeader, data-tight 1 a 4): a branch de destino ficaria abaixo do piso. Cede um de cada vez: o "para",
+   o nome do Voltar até a cauda (cutBack), o verbo e, por último, a contagem até o SIGKILL, que só a faixa mostra. O Voltar fica com o nome (truncado no meio) e o Forçar fica */
+#switching[data-tight] .para,
+#switching:is([data-tight="3"], [data-tight="4"]) .what,
+#switching[data-tight="4"] .count {
   display: none;
 }
 
 /* e os botões perdem 2px de respiro de cada lado: a meia tela, é o que faltava para "login-timeout" não truncar */
-#switching.tight {
+#switching[data-tight] {
   gap: 6px;
 }
 
-#switching.tight .btn {
+#switching[data-tight] .btn {
   padding: 0 8px;
 }
 
@@ -1327,6 +1385,7 @@ header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap
 /* nome de projeto: sempre em caixa-alta espaçada, como nas placas */
 #running .project,
 #last-stop .project,
+#term-note .project,
 #palette .note .project {
   font-size: 12px;
   font-weight: 700;
@@ -1340,6 +1399,59 @@ header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap
 
 #help-btn {
   margin-left: 4px;
+}
+
+#more .dot {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* ⋯: superfície flutuante como a paleta, um item por linha, o atalho em meia-tinta à direita */
+#more-menu {
+  position: fixed;
+  inset: auto;
+  min-width: 220px;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--rail);
+  color: var(--ink);
+  box-shadow: var(--float-shadow);
+}
+
+.more-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.more-item:hover {
+  background: var(--flap);
+}
+
+.more-item:focus-visible {
+  outline-offset: -2px;
+}
+
+.more-item[aria-disabled="true"] {
+  color: var(--ink-2);
+  cursor: default;
+}
+
+.more-item .keys {
+  margin-left: auto;
+  color: var(--ink-2);
+  font-size: 13px;
 }
 
 /* Faixa estreita (janela pequena ou zoom alto): o acessório sai antes do destino e das abas.
@@ -1405,23 +1517,42 @@ body:not(.sidebar-off) #running {
   translate: -200vw 0;
 }
 
-/* Troca em andamento: o terminal novo não aceita digitação até subir. Sem o cursor e com o aviso no canto,
-   em meia-tinta e sem moldura: diz por que as teclas não entram sem cobrir a saída. */
+/* Troca em andamento: o terminal novo não aceita digitação até subir. Sem o cursor, e o recado (renderTermNote) diz por quê. */
 .env.locked .xterm-cursor {
   visibility: hidden;
 }
 
-.env.locked::after {
-  content: "Digitação liberada quando a anterior parar";
+/* Recado no terminal, em meia-tinta e sem moldura. No canto: o "Parou em" que a faixa estreita cedeu.
+   Na troca (.lock): na linha abaixo do cursor, alinhado à coluna do texto (12px do .pane menos os 6px de respiro). */
+#term-note {
   position: absolute;
   top: 8px;
   right: 16px;
+  z-index: 1;
+  max-width: calc(100% - 28px);
+  margin: 0;
   padding: 2px 6px;
   border-radius: 2px;
+  overflow: hidden;
   background: var(--term-bg);
   color: var(--ink-2);
   font: 500 13px/1.35 var(--ui);
+  white-space: nowrap;
+  text-overflow: ellipsis;
   pointer-events: none;
+}
+
+#term-note.lock {
+  right: auto;
+  left: 6px;
+}
+
+#term-note > span + span {
+  margin-left: 0.3em;
+}
+
+#term-note .forced {
+  color: var(--fail);
 }
 
 /* O xterm.css pinta o viewport de preto; a borda vazava 1px ao redor do terminal. */
@@ -1616,7 +1747,8 @@ dialog.form .pick[aria-disabled="true"] {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 8px 12px;
-  align-items: center;
+  /* pela primeira linha: um texto de duas linhas (o X) centrava a tecla e quebrava a coluna */
+  align-items: baseline;
   margin: 0;
 }
 

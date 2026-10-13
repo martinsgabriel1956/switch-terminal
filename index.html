@@ -46,6 +46,10 @@
           <button id="halt-tab" type="button" class="halt" hidden></button>
           <button id="halt-all" type="button" class="halt" hidden></button>
         </div>
+        <button id="more" type="button" class="icon-btn" popovertarget="more-menu" aria-label="Mais ações" title="Mais ações (o que não coube na faixa)" hidden>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.25" class="dot" /><circle cx="8" cy="8" r="1.25" class="dot" /><circle cx="12.5" cy="8" r="1.25" class="dot" /></svg>
+        </button>
+        <div id="more-menu" popover role="group" aria-label="Mais ações"></div>
         <div id="switching" role="group" aria-label="Troca em andamento" tabindex="-1" hidden></div>
         <span id="last-stop" role="status"></span>
         <div id="running" role="group" aria-label="Rodando em outros projetos"></div>
@@ -56,6 +60,7 @@
       <div id="panes">
         <div id="empty"></div>
         <p id="wait-say" class="sr" role="status"></p>
+        <p id="term-note" aria-hidden="true" hidden></p>
       </div>
     </main>
 
@@ -83,7 +88,7 @@
         <dt><span class="flap" data-state="start"><span>SUBINDO</span></span></dt><dd>O comando de start acabou de ser enviado</dd>
         <dt><span class="flap" data-state="wait"><span>AGUARDA</span></span></dt><dd>Esperando o que roda no projeto parar, para subir</dd>
         <dt><span class="flap" data-state="stop"><span>PARANDO</span></span></dt><dd>Ctrl+C enviado; esperando os processos saírem</dd>
-        <dt><span class="flap" data-state="kill"><span>SIGKILL</span></span></dt><dd>Não parou a tempo (ou você forçou): encerrada à força</dd>
+        <dt><span class="flap" data-state="kill"><span>SIGKILL</span></span></dt><dd>Não parou a tempo (ou você forçou): parando à força</dd>
         <dt><span class="flap preview" data-state="stop"><span>ENCERRA</span></span></dt><dd>Prévia, não estado: trocar para a linha sob o cursor encerra esta</dd>
         <dt><span class="flap" data-state="idle"><span>INATIVA</span></span></dt><dd>Terminais abertos, nada rodando</dd>
         <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Sem palheta na linha: ainda não aberta nesta sessão</dd>
