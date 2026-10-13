@@ -29,6 +29,8 @@
   --mark-run: #4cc38a;
   --term-bg: var(--board);
   --float-shadow: 0 4px 8px rgb(0 0 0 / 28%);
+  /* o painel sobre o terminal (janela estreita): a borda que importa é a direita, então a sombra vai para o lado */
+  --side-shadow: 6px 0 16px rgb(0 0 0 / 45%);
   /* hover: meio caminho entre o trilho e a palheta, para não se confundir com a linha atual */
   --hover: color-mix(in srgb, var(--flap) 50%, var(--rail));
   --ui: "Barlow Semi Condensed", system-ui, sans-serif;
@@ -67,6 +69,7 @@
     --mark-run: #4cc38a;
     --term-bg: var(--board);
     --float-shadow: 0 4px 8px rgb(21 22 26 / 14%);
+    --side-shadow: 6px 0 16px rgb(21 22 26 / 16%);
   }
 }
 
@@ -220,6 +223,15 @@ kbd {
    uma aba cinza. Ali a de baixo desce para o fundo do painel e o degrau do corte volta a aparecer. */
 .line[aria-current="true"] .flap {
   background: linear-gradient(var(--flap-hi) 50%, var(--board) 50%);
+}
+
+/* De dia o esmalte é mais claro que as duas metades: a de baixo em board ficava mais clara que a de cima, a luz
+   invertia e a palheta lia como um chip claro. Ali a de cima é board e a de baixo flap-hi: luz de cima, degrau de
+   1,13:1 como à noite, e o âmbar a 5,4:1. */
+@media (prefers-color-scheme: light) {
+  .line[aria-current="true"] .flap {
+    background: linear-gradient(var(--board) 50%, var(--flap-hi) 50%);
+  }
 }
 
 .flap > span {
@@ -797,7 +809,7 @@ body.narrow #sidebar {
   inset: 0 auto 0 0;
   z-index: 2;
   width: min(280px, calc(100vw - 48px));
-  box-shadow: var(--float-shadow);
+  box-shadow: var(--side-shadow);
 }
 
 body.narrow #sidebar-handle {
@@ -896,6 +908,11 @@ header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap
 #dev-url:hover {
   color: var(--ink);
   text-decoration: underline;
+}
+
+/* sem espaço, o sufixo do par sai primeiro (fitHeader): o nome em comum é o que diz a worktree */
+#destination.bare .pair-pre {
+  display: none;
 }
 
 /* sem espaço, o nome do projeto trunca primeiro: a branch é o que está em serviço */
@@ -1079,12 +1096,27 @@ header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap
   overflow: hidden;
 }
 
-/* faixa estreita: o verbo e o nome do Voltar saem (o nome fica no title); a contagem e "Voltar" dizem o que está
-   acontecendo, e a branch que sobe fica com a largura */
+/* faixa estreita (a meia tela, ~960px de janela): o verbo sai; "Voltar para X" fica, com o nome truncado no meio
+   (cutBack): no momento destrutivo, a saída diz para onde leva */
 @container (max-width: 720px) {
-  #switching :is(.what, .para, .to) {
+  #switching .what {
     display: none;
   }
+}
+
+/* apertada (fitHeader): a branch de destino ficaria abaixo do piso; o verbo, o "para" e a contagem saem.
+   O Voltar fica com o nome (truncado no meio) e o Forçar fica */
+#switching.tight :is(.what, .para, .count) {
+  display: none;
+}
+
+/* e os botões perdem 2px de respiro de cada lado: a meia tela, é o que faltava para "login-timeout" não truncar */
+#switching.tight {
+  gap: 6px;
+}
+
+#switching.tight .btn {
+  padding: 0 8px;
 }
 
 /* Forçar mata sem o Ctrl+C: entra depois de FORCE_DELAY, depois do Voltar na ordem do Tab, e afastado dele por um fio */
@@ -1195,6 +1227,11 @@ header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap
 
 /* falha (fica até a próxima troca) fala na cor de falha, como a palheta SEM FRONT ou SIGKILL que ela explica */
 #last-stop[data-stay] > span:first-child {
+  color: var(--fail);
+}
+
+/* "Encerrada à força em 5,0 s": rotina, em meia-tinta; só "à força" na cor do SIGKILL que ela explica */
+#last-stop .forced {
   color: var(--fail);
 }
 
@@ -1351,6 +1388,25 @@ body:not(.sidebar-off) #running {
 .off {
   visibility: hidden;
   translate: -200vw 0;
+}
+
+/* Troca em andamento: o terminal novo não aceita digitação até subir. Sem o cursor e com o aviso no canto,
+   em meia-tinta e sem moldura: diz por que as teclas não entram sem cobrir a saída. */
+.env.locked .xterm-cursor {
+  visibility: hidden;
+}
+
+.env.locked::after {
+  content: "Digitação liberada quando a anterior parar";
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: var(--term-bg);
+  color: var(--ink-2);
+  font: 500 13px/1.35 var(--ui);
+  pointer-events: none;
 }
 
 /* O xterm.css pinta o viewport de preto; a borda vazava 1px ao redor do terminal. */
@@ -1663,6 +1719,12 @@ dialog.form .pick[aria-disabled="true"] {
   text-transform: uppercase;
 }
 
+/* onde a busca casou: tinta cheia e peso, sem cor nova (no rótulo em serviço, que já é tinta cheia, o peso diz) */
+#palette .hit {
+  color: var(--ink);
+  font-weight: 700;
+}
+
 #palette li[aria-selected="true"] {
   background: var(--flap);
   box-shadow: inset 0 -1px 0 var(--ink-3), inset 0 1px 0 var(--ink-3);
@@ -1951,7 +2013,16 @@ dialog.form legend {
   text-transform: uppercase;
 }
 
+/* com a caixa (Nova worktree), o alvo é a placa inteira: 24px de altura (WCAG 2.5.8), não os 15px da caixa */
+dialog.form legend:has(label) {
+  padding: 0;
+}
+
 dialog.form legend label {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
   margin: 0;
   color: var(--ink);
   font: inherit;
@@ -1963,7 +2034,11 @@ dialog.form details.more {
   margin: 0 0 12px;
 }
 
+/* 24px de alvo (WCAG 2.5.8): com 18px, "Alterar diretório ou origem" era o menor clique do diálogo */
 dialog.form details.more summary {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
   width: fit-content;
   color: var(--ink-2);
   font-size: 13px;

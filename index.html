@@ -66,7 +66,7 @@
       <dl class="keys">
         <dt><kbd>K</kbd></dt><dd>Trocar de worktree (abre na anterior)</dd>
         <dt><kbd>J</kbd></dt><dd>Alternar API e Front</dd>
-        <dt><kbd>X</kbd></dt><dd>Parar ou subir a aba (o lado caído, se houver); com <kbd>Alt</kbd>, os dois</dd>
+        <dt><kbd>X</kbd></dt><dd>Parar ou subir a aba; com <kbd>Alt</kbd>, os dois lados</dd>
         <dt><kbd>N</kbd></dt><dd>Nova worktree</dd>
         <dt><kbd>E</kbd></dt><dd>Ir para o painel (setas andam, → edita, Esc volta)</dd>
         <dt><kbd>B</kbd></dt><dd>Recolher ou abrir o painel</dd>
@@ -190,21 +190,24 @@
                 </span>
               </label>
             </details>
-            <label>
-              <span id="edit-api-cmd-label">Comando de start</span>
-              <span class="dir-row">
-                <span class="cmd-box">
-                  <span class="prefix" id="edit-api-cmd-prefix">npm run</span>
-                  <input name="api-cmd" aria-labelledby="edit-api-cmd-label edit-api-cmd-prefix" spellcheck="false" autocomplete="off" />
+            <details class="more cmd">
+              <summary>Comando de start</summary>
+              <label>
+                <span id="edit-api-cmd-label">Comando de start</span>
+                <span class="dir-row">
+                  <span class="cmd-box">
+                    <span class="prefix" id="edit-api-cmd-prefix">npm run</span>
+                    <input name="api-cmd" aria-labelledby="edit-api-cmd-label edit-api-cmd-prefix" spellcheck="false" autocomplete="off" />
+                  </span>
+                  <select name="api-pm" aria-label="Gerenciador de pacotes">
+                    <option value="npm">npm</option>
+                    <option value="yarn">yarn</option>
+                    <option value="pnpm">pnpm</option>
+                    <option value="">Outro</option>
+                  </select>
                 </span>
-                <select name="api-pm" aria-label="Gerenciador de pacotes">
-                  <option value="npm">npm</option>
-                  <option value="yarn">yarn</option>
-                  <option value="pnpm">pnpm</option>
-                  <option value="">Outro</option>
-                </select>
-              </span>
-            </label>
+              </label>
+            </details>
           </div>
           <label class="pair-row">
             Par
@@ -247,21 +250,24 @@
                 </span>
               </label>
             </details>
-            <label>
-              <span id="edit-front-cmd-label">Comando de start</span>
-              <span class="dir-row">
-                <span class="cmd-box">
-                  <span class="prefix" id="edit-front-cmd-prefix">npm run</span>
-                  <input name="front-cmd" aria-labelledby="edit-front-cmd-label edit-front-cmd-prefix" spellcheck="false" autocomplete="off" />
+            <details class="more cmd">
+              <summary>Comando de start</summary>
+              <label>
+                <span id="edit-front-cmd-label">Comando de start</span>
+                <span class="dir-row">
+                  <span class="cmd-box">
+                    <span class="prefix" id="edit-front-cmd-prefix">npm run</span>
+                    <input name="front-cmd" aria-labelledby="edit-front-cmd-label edit-front-cmd-prefix" spellcheck="false" autocomplete="off" />
+                  </span>
+                  <select name="front-pm" aria-label="Gerenciador de pacotes">
+                    <option value="npm">npm</option>
+                    <option value="yarn">yarn</option>
+                    <option value="pnpm">pnpm</option>
+                    <option value="">Outro</option>
+                  </select>
                 </span>
-                <select name="front-pm" aria-label="Gerenciador de pacotes">
-                  <option value="npm">npm</option>
-                  <option value="yarn">yarn</option>
-                  <option value="pnpm">pnpm</option>
-                  <option value="">Outro</option>
-                </select>
-              </span>
-            </label>
+              </label>
+            </details>
           </div>
           <label class="pair-row">
             Par
@@ -415,7 +421,7 @@
       <ul id="palette-list" role="listbox" aria-label="Worktrees"></ul>
       <div class="foot">
         <p class="note" aria-live="polite" hidden></p>
-        <p class="keys" aria-hidden="true"><kbd>Enter</kbd> trocar <kbd>Esc</kbd> fechar</p>
+        <p class="keys" aria-hidden="true"><kbd>Enter</kbd> <span id="palette-enter">trocar</span> <kbd>Esc</kbd> fechar</p>
       </div>
     </div>
   </body>
