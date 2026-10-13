@@ -45,10 +45,9 @@
     --board: #f4f5f3;
     --rail: #ebece9;
     --flap: #d6d7d3;
-    /* de dia o entalhe (#b9bbb6) sumia sobre as metades: escurece até se ver, sem chegar à tinta. Mais escuro, ou com
-       a metade de cima clareada até o trilho, as pontas da palheta liam como hífens ("-SUBINDO-") */
-    --flap-hi: #e1e2de;
-    --seam: #a3a5a0;
+    /* De dia o corte é o degrau entre as metades, sem entalhe: claro, ele sumia; escuro, as pontas liam como
+       hífens ("·RODANDO·"). A de cima clareia até se ver; a de baixo fica, para o âmbar manter 4,5:1 sobre ela. */
+    --flap-hi: #e7e8e4;
     --rule: #cfd1cc;
     --ink: #15161a;
     --ink-2: #4f5156;
@@ -219,28 +218,40 @@ kbd {
   background: linear-gradient(90deg, var(--seam) 2px, transparent 2px calc(100% - 2px), var(--seam) 0);
 }
 
+/* de dia, sem entalhe (ver --flap-hi) */
+@media (prefers-color-scheme: light) {
+  .flap::after {
+    content: none;
+  }
+}
+
 .flap > span {
   position: relative;
   z-index: 1;
   grid-area: 1 / 1;
 }
 
-/* Nunca aberta: só os entalhes do meio, onde a palheta vai encaixar. O bloco cheio fica para os estados que dizem
-   alguma coisa; um contorno inteiro repetido em quase toda linha lia como campo vazio de formulário.
-   A coluna de situação continua alinhada (o encaixe tem a largura da palheta). */
+/* Nunca aberta: o encaixe vazio, um contorno tracejado da largura da palheta. Só a legenda da ajuda o desenha:
+   os entalhes que ele tinha liam como hífens ("–  –"). */
 .flap[data-state="none"] {
   background: none;
+  outline: 1px dashed var(--ink-3);
+  outline-offset: -1px;
 }
 
 .flap[data-state="none"]::after {
-  background: linear-gradient(90deg, var(--ink-3) 4px, transparent 4px calc(100% - 4px), var(--ink-3) 0);
+  content: none;
 }
 
-/* No painel e na paleta o encaixe não desenha nada: os entalhes liam como hífens ("–  –", "INTERNO –") e competiam
-   com os estados. Ele continua ocupando a coluna, que fica alinhada; os entalhes ficam só na legenda da ajuda. */
-.row .flap[data-state="none"]::after,
-#palette .flap[data-state="none"]::after {
-  content: none;
+/* Na paleta o encaixe não desenha nada e ocupa a coluna, que fica alinhada. */
+#palette .flap[data-state="none"] {
+  outline: none;
+}
+
+/* No painel a linha nunca aberta não reserva a coluna: são ~80px a mais para o nome justo onde ainda não há estado.
+   Os nomes alinham pela esquerda; a palheta entra quando a linha abre (e vira). */
+.line .flap[data-state="none"] {
+  display: none;
 }
 
 .flap[data-state="run"] {
@@ -260,6 +271,13 @@ kbd {
 .flap[data-state="part"],
 .flap[data-state="kill"] {
   color: var(--fail);
+}
+
+/* "SEM FRONT" passa dos 7 caracteres: só esta palheta alarga, e a falha se destaca na coluna */
+.flap[data-state="part"] {
+  width: auto;
+  min-width: calc(7ch + 14px);
+  padding: 0 7px;
 }
 
 /* Prévia da troca: com o cursor (ou o foco) em outra linha do projeto, a que está em serviço mostra ENCERRA.
@@ -610,18 +628,18 @@ kbd {
   white-space: nowrap;
 }
 
-/* ponytail: truncagem em duas etapas (prefixo, depois o fim do nome); o title tem o nome inteiro */
-.line .branch > span {
+/* Truncagem em etapas (fitBranches); o title tem o nome inteiro. Primeiro o meio do nome ("calculo-de-comis…agrupados"):
+   o tipo e o fim ficam. Se o começo ficar com menos de 3em, o prefixo sai inteiro. O ellipsis do CSS é só a rede. */
+.line .branch .prefix {
+  flex-shrink: 0;
+}
+
+.line .branch > .rest {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.line .branch .prefix {
-  flex-shrink: 0;
-}
-
-/* não cabe: o prefixo sai inteiro (fitBranches) e só o fim do nome trunca */
 .line .branch .prefix:empty,
 .line .branch.tight .prefix {
   display: none;
@@ -671,10 +689,13 @@ kbd {
   text-transform: none;
 }
 
-/* SÓ API / SÓ FRONT na segunda linha, como o par: a primeira fica inteira para o nome */
+/* SÓ API / SÓ FRONT na segunda linha, como o par: a primeira fica inteira para o nome.
+   Na altura da linha do par: as linhas de duas alturas são só duas (uma linha e duas), não três. */
 .line .name > .tag {
-  display: inline-block;
-  margin: 3px 0 1px;
+  display: block;
+  width: max-content;
+  margin: 2px 0 0;
+  line-height: 14px;
 }
 
 .tag {
@@ -830,6 +851,51 @@ header {
   flex-shrink: 1;
 }
 
+/* A palheta do destino é a verdade de relance da janela: 14px (a da linha tem 12) e o sentido desenhado
+   (↑ subindo, ↓ parando). A largura cresce com o texto, então o estado nunca trunca. */
+#destination .flap {
+  width: auto;
+  min-width: calc(7ch + 16px);
+  height: 26px;
+  padding: 0 8px;
+  font-size: 14px;
+}
+
+#destination .flap > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#destination .flap .dir {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+}
+
+/* Prévia da parada à mão: com o cursor ou o foco em Parar, o que ela encerra ganha o contorno âmbar,
+   como ENCERRA nas linhas. "Parar API" marca a aba; o que para a worktree inteira marca as abas e o destino. */
+header:has(#halt-tab[data-ends]:is(:hover, :focus-visible)) #tabs [aria-selected="true"],
+header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #tabs button {
+  border-color: var(--wait);
+  color: var(--wait);
+}
+
+header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap {
+  color: var(--wait);
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--wait);
+}
+
+header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap > span:first-child,
+header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap::after {
+  visibility: hidden;
+}
+
+header:has(.halt[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap .ends {
+  visibility: visible;
+}
+
 /* Logo depois das abas, junto da aba a que pertence: aparecer ou trocar de porta não empurra as abas.
    Só a porta (":3333"): curta o bastante para nunca truncar; o title tem o endereço inteiro. */
 #dev-url {
@@ -889,9 +955,10 @@ header {
   text-transform: uppercase;
 }
 
+/* ink-2: em ink-3 o "/" dava 4,15:1 no escuro */
 #destination .where .sep {
   margin: 0 6px;
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 
 #tabs {
@@ -900,10 +967,11 @@ header {
   gap: 4px;
 }
 
+/* Abas sem contorno: o contorno é dos botões (Parar, Subir). Com contorno, as abas pareciam as ações e as ações, texto solto. */
 #tabs button {
   height: 26px;
   padding: 0 12px;
-  border: 1px solid var(--rule);
+  border: 1px solid transparent;
   border-radius: 2px;
   background: none;
   color: var(--ink-2);
@@ -914,14 +982,18 @@ header {
   cursor: pointer;
 }
 
+#tabs button:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
 #tabs button[aria-selected="true"] {
-  border-color: transparent;
   background: var(--flap);
   box-shadow: inset 0 -2px 0 var(--ink);
   color: var(--ink);
 }
 
-/* lado caído (1 LADO): a aba leva a cor de parado */
+/* lado caído (SEM FRONT): a aba leva a cor de parado */
 #tabs button.down {
   color: var(--fail);
 }
@@ -937,15 +1009,15 @@ header {
   vertical-align: 1px;
 }
 
-/* "Parar API", "Parar tudo", "Subir Front": verbo e objeto escritos, quietos ao lado das abas (não são abas: sem contorno) */
+/* "Parar API", "Parar tudo", "Subir Front": verbo e objeto escritos, com o contorno dos botões (.btn), em 26px */
 .halt {
   flex-shrink: 0;
   height: 26px;
-  padding: 0 8px;
-  border: 0;
+  padding: 0 10px;
+  border: 1px solid var(--rule);
   border-radius: 4px;
   background: none;
-  color: var(--ink-2);
+  color: var(--ink);
   font: 600 13px/1 var(--ui);
   white-space: nowrap;
   cursor: pointer;
@@ -976,14 +1048,53 @@ header {
   display: none;
 }
 
+/* Troca curta no cabeçalho (antes de CARD_DELAY), no lugar das ações, que somem numa troca:
+   "Encerrando [4 s] Voltar para X". O nome do Voltar trunca, o verbo e a contagem ficam. */
+#switching {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 8px;
+  border-left: 1px solid var(--rule);
+  color: var(--ink-2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+#switching:focus {
+  outline: none;
+}
+
+#switching:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+#switching .flap.count {
+  flex-shrink: 0;
+  margin: 0;
+  font-size: 12px;
+}
+
+#switching .btn.back {
+  min-width: 0;
+  max-width: 280px;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
 /* "Parou em 1,8 s · feat/x": o fechamento da troca, logo depois das abas; some sozinho (falha fica até a próxima troca).
    É o primeiro a ceder largura, até o verbo e o tempo; dentro dele só o nome trunca. */
 #last-stop {
   display: flex;
+  align-items: center;
   gap: 0.3em;
   margin-right: auto;
   flex-shrink: 1000;
-  min-width: 0;
+  /* piso medido em headerNote */
+  min-width: var(--floor, 0);
   overflow: hidden;
   white-space: nowrap;
   color: var(--ink-2);
@@ -1010,7 +1121,38 @@ header {
   flex-shrink: 0;
 }
 
-/* falha (fica até a próxima troca) fala na cor de falha, como a palheta 1 LADO ou SIGKILL que ela explica */
+/* falha apertada (fitHeader): só o verbo e o tempo garantidos; a ação sai, quem caiu trunca */
+#last-stop.tight {
+  min-width: var(--floor-tight, 0);
+}
+
+#last-stop.tight > .note-act {
+  display: none;
+}
+
+/* "Ver o terminal": a saída da falha, com o contorno dos botões; por dentro, o #last-stop corta o overflow */
+#last-stop > .note-act {
+  flex-shrink: 0;
+  height: 22px;
+  margin-left: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: none;
+  color: var(--ink);
+  font: 600 12px/1 var(--ui);
+  cursor: pointer;
+}
+
+#last-stop > .note-act:hover {
+  background: var(--flap);
+}
+
+#last-stop > .note-act:focus-visible {
+  outline-offset: -2px;
+}
+
+/* falha (fica até a próxima troca) fala na cor de falha, como a palheta SEM FRONT ou SIGKILL que ela explica */
 #last-stop[data-stay] > span:first-child {
   color: var(--fail);
 }
@@ -1019,7 +1161,7 @@ header {
    O recado fica com largura zero em vez de sumir: é região viva e continua falando. */
 #last-stop.ceded {
   flex: 0 0 0;
-  min-width: 0 !important; /* vence o piso medido em headerNote (style inline) */
+  min-width: 0;
   margin-left: -12px;
 }
 
@@ -1100,7 +1242,7 @@ header {
 }
 
 #running .sep {
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 
 #help-btn {
@@ -1108,10 +1250,9 @@ header {
 }
 
 /* Faixa estreita (janela pequena ou zoom alto): o acessório sai antes do destino e das abas.
-   Primeiro a porta e o recado; depois os outros projetos em serviço. */
+   O recado e os outros projetos em serviço; a porta e a falha ficam a cargo de fitHeader. */
 @container (max-width: 480px) {
-  #dev-url,
-  #last-stop,
+  #last-stop:not([data-stay]),
   #running {
     display: none;
   }
@@ -1298,16 +1439,21 @@ body:not(.sidebar-off) #running {
   text-overflow: ellipsis;
 }
 
+/* uma fileira só: com nome longo, o nome do Voltar trunca e o Forçar fica na linha (antes ele descia) */
 .actions {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
   width: 100%;
   margin-top: 6px;
 }
 
+.actions .btn.back {
+  min-width: 0;
+}
+
 /* Forçar mata sem o Ctrl+C: depois do Voltar na ordem do Tab, e afastado dele */
 .actions [data-act="force"] {
+  flex-shrink: 0;
   margin-left: auto;
 }
 
@@ -1409,6 +1555,10 @@ dialog.form .pick[aria-disabled="true"] {
   font-size: 13px;
 }
 
+#help .chord.zoom {
+  margin: 12px 0 0;
+}
+
 #help .chord kbd {
   margin: 0 0 0 3px;
 }
@@ -1477,6 +1627,11 @@ dialog.form .pick[aria-disabled="true"] {
   padding: 0 14px;
   border-bottom: 1px solid var(--rule);
   color: var(--ink-2);
+}
+
+/* o campo não tem anel (ele é a paleta inteira): o fio de baixo vira tinta enquanto ele tem o foco, além do caret */
+#palette .search:focus-within {
+  border-bottom-color: var(--focus);
 }
 
 #palette input {
