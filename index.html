@@ -55,7 +55,6 @@
       </header>
       <div id="panes">
         <div id="empty"></div>
-        <div id="wait" hidden></div>
         <p id="wait-say" class="sr" role="status"></p>
       </div>
     </main>
@@ -67,11 +66,11 @@
       <dl class="keys">
         <dt><kbd>K</kbd></dt><dd>Trocar de worktree (abre na anterior)</dd>
         <dt><kbd>J</kbd></dt><dd>Alternar API e Front</dd>
-        <dt><kbd>X</kbd></dt><dd>Parar ou subir o processo da aba, ou subir o lado que caiu (o shell fica); com <kbd>Alt</kbd>, API e Front</dd>
+        <dt><kbd>X</kbd></dt><dd>Parar ou subir a aba (o lado caído, se houver); com <kbd>Alt</kbd>, os dois</dd>
         <dt><kbd>N</kbd></dt><dd>Nova worktree</dd>
-        <dt><kbd>E</kbd></dt><dd>Ir para o painel (setas navegam, → chega ao lápis de editar, Esc volta)</dd>
+        <dt><kbd>E</kbd></dt><dd>Ir para o painel (setas andam, → edita, Esc volta)</dd>
         <dt><kbd>B</kbd></dt><dd>Recolher ou abrir o painel</dd>
-        <dt><kbd>L</kbd></dt><dd>Reler as worktrees (o painel também relê ao voltar para a janela)</dd>
+        <dt><kbd>L</kbd></dt><dd>Reler as worktrees (também ao voltar para a janela)</dd>
         <dt><kbd>H</kbd></dt><dd>Abrir ou fechar esta ajuda (Esc fecha)</dd>
       </dl>
       <p class="chord zoom">Zoom: <kbd>Ctrl</kbd><kbd>=</kbd> aumenta, <kbd>Ctrl</kbd><kbd>-</kbd> diminui.</p>
@@ -80,12 +79,12 @@
       <h2>Estados</h2>
       <dl class="legend">
         <dt><span class="flap" data-state="run"><span>RODANDO</span></span></dt><dd>API e Front de pé</dd>
-        <dt><span class="flap" data-state="part"><span>SEM FRONT</span></span></dt><dd>Um lado caiu (aqui, o Front); a aba dele fica marcada e o botão Subir o sobe de novo</dd>
+        <dt><span class="flap" data-state="part"><span>SEM FRONT</span></span></dt><dd>Um lado caiu (aqui, o Front); Subir Front o sobe de novo</dd>
         <dt><span class="flap" data-state="start"><span>SUBINDO</span></span></dt><dd>O comando de start acabou de ser enviado</dd>
-        <dt><span class="flap" data-state="wait"><span>AGUARDA</span></span></dt><dd>Esperando a anterior do projeto parar (ou a própria, ao voltar)</dd>
-        <dt><span class="flap" data-state="stop"><span>PARANDO</span></span></dt><dd>Recebeu Ctrl+C (da troca ou do botão de parar); esperando os processos saírem</dd>
+        <dt><span class="flap" data-state="wait"><span>AGUARDA</span></span></dt><dd>Esperando o que roda no projeto parar, para subir</dd>
+        <dt><span class="flap" data-state="stop"><span>PARANDO</span></span></dt><dd>Ctrl+C enviado; esperando os processos saírem</dd>
         <dt><span class="flap" data-state="kill"><span>SIGKILL</span></span></dt><dd>Não parou a tempo (ou você forçou): encerrada à força</dd>
-        <dt><span class="flap preview" data-state="stop"><span>ENCERRA</span></span></dt><dd>Prévia, não estado: trocar para a linha sob o cursor (ou a escolhida na paleta) encerra esta</dd>
+        <dt><span class="flap preview" data-state="stop"><span>ENCERRA</span></span></dt><dd>Prévia, não estado: trocar para a linha sob o cursor encerra esta</dd>
         <dt><span class="flap" data-state="idle"><span>INATIVA</span></span></dt><dd>Terminais abertos, nada rodando</dd>
         <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Sem palheta na linha: ainda não aberta nesta sessão</dd>
       </dl>
@@ -164,7 +163,7 @@
       <form method="dialog" novalidate>
         <h2 id="edit-title">Editar worktree</h2>
         <p class="hint where"></p>
-        <p class="hint">Os terminais dela fecham ao salvar.</p>
+        <p class="hint closes">Os terminais dela fecham ao salvar.</p>
         <label class="shared-branch">
           Branch
           <input name="branch" required aria-errormessage="edit-branch-error" spellcheck="false" autocomplete="off" />
@@ -300,7 +299,7 @@
           <input name="name" required placeholder="ex.: meu-projeto" aria-errormessage="project-name-error" spellcheck="false" autocomplete="off" />
         </label>
         <p class="side-error" id="project-name-error" role="alert"></p>
-        <p class="hint" id="gh-hint" hidden></p>
+        <div class="hint" id="gh-hint" hidden></div>
         <datalist id="gh-repos"></datalist>
         <fieldset data-side="api">
           <legend>API</legend>

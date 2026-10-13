@@ -115,8 +115,7 @@ const destEl = $("#destination");
 const runningEl = $("#running");
 const panesEl = $("#panes");
 const emptyEl = $("#empty");
-const waitEl = $("#wait");
-// Fala do aviso de troca numa região viva só de texto: no card, os botões eram relidos a cada mudança.
+// Fala da troca numa região viva só de texto: na faixa, os botões seriam relidos a cada mudança.
 const waitSay = $("#wait-say");
 const switchingEl = $("#switching");
 const palette = $("#palette");
@@ -162,14 +161,31 @@ function headerNote(stay: boolean, about: string | null, ...nodes: (Node | strin
     return;
   }
   clearTimeout(queuedTimer);
-  lastStopEl.replaceChildren(...nodes.map((n) => (typeof n === "string" ? el("span", { textContent: n }) : n)));
-  // O piso do recado é o verbo e o tempo inteiros, o começo de quem (até ~90px) e a ação: sem espaço, o destino cede
-  // antes de virar "Encerr…". Apertado (fitHeader), só o verbo e o tempo.
+  // A falha fica até a próxima troca; o × a tira antes, para quem já leu (um servidor que sempre vai ao SIGKILL).
+  const dismiss = stay
+    ? el(
+        "button",
+        {
+          type: "button",
+          className: "note-x",
+          title: "Dispensar o recado",
+          ariaLabel: "Dispensar o recado",
+          onclick: () => {
+            clearNote();
+            render(true);
+          },
+        },
+        icon(X_ICON),
+      )
+    : null;
+  lastStopEl.replaceChildren(...nodes.map((n) => (typeof n === "string" ? el("span", { textContent: n }) : n)), ...(dismiss ? [dismiss] : []));
+  // O piso do recado é o verbo e o tempo inteiros, o começo de quem (até ~90px), a ação e o ×: sem espaço, o destino cede
+  // antes de virar "Encerr…". Apertado (fitHeader), só o verbo, o tempo e o ×.
   const gap = parseFloat(getComputedStyle(lastStopEl).columnGap) || 0;
   const parts = [...lastStopEl.children] as HTMLElement[];
   const floor = parts.reduce((w, p) => w + (p.classList.contains("who") ? Math.min(p.scrollWidth, 90) : p.offsetWidth + (parseFloat(getComputedStyle(p).marginLeft) || 0)), gap * (parts.length - 1));
   lastStopEl.style.setProperty("--floor", `${Math.ceil(floor)}px`);
-  lastStopEl.style.setProperty("--floor-tight", `${parts[0].scrollWidth}px`);
+  lastStopEl.style.setProperty("--floor-tight", `${Math.ceil(parts[0].scrollWidth + (dismiss ? dismiss.offsetWidth + gap : 0))}px`);
   noteAt = Date.now();
   noteProject = about;
   clearTimeout(lastStopTimer);
@@ -195,10 +211,13 @@ function seeTerminal(project: string, id: string, side: Tab) {
     },
   });
 }
-/** "· INTERNO / feat/x": o projeto entra quando não é o atual, onde outra worktree pode ter o mesmo nome ("main"). */
-function noteWho(project: string, label: string, ...before: (Node | string)[]) {
+/** "· INTERNO / feat/x": o projeto entra quando não é o atual, onde outra worktree pode ter o mesmo nome ("main").
+ *  A chave diz a fitHeader se o recado é da worktree em serviço ou de outra (a anterior, outro projeto). */
+function noteWho(project: string, id: string, label: string, ...before: (Node | string)[]) {
   const where = project === current?.project ? [] : [el("span", { className: "project", textContent: project }), " / "];
-  return el("span", { className: "who" }, "· ", ...before, ...where, ...labelNodes(label));
+  const who = el("span", { className: "who" }, "· ", ...before, ...where, ...labelNodes(label));
+  who.dataset.key = key(project, id);
+  return who;
 }
 
 let config: Config = { stopTimeoutMs: 5000, screenReader: false, projects: [] };
@@ -314,16 +333,18 @@ function say(project: string, wt: Worktree, state: LineState) {
   return `só ${up.map((t) => TAB_LABEL[t]).join(" e ")} rodando, ${down.map((t) => TAB_LABEL[t]).join(" e ")} parado`;
 }
 
+const X_ICON = "M4.5 4.5l7 7M11.5 4.5l-7 7";
 const PAIR_ICON = "M3 5.5h10M10.5 3 13 5.5 10.5 8M13 10.5H3M5.5 8 3 10.5 5.5 13";
 /** Sentido do movimento na palheta do destino: subindo ↑, parando ↓ (desenhados). */
 const DIR: Partial<Record<LineState, string>> = { start: "M8 13V3M4 7l4-4 4 4", stop: "M8 3v10M4 9l4 4 4-4" };
 const FROM_ICON = "M13 8H3M6.5 4.5 3 8l3.5 3.5";
 
-/** Par cujos lados só diferem no prefixo ("feature-api/x ↔ feature-app/x"): [prefixo da API, prefixo do front, nome]. */
+/** Par cujos lados só diferem no prefixo ("feature-api/x ↔ feature-app/x"): [prefixo da API, prefixo do front, nome].
+ *  Os prefixos sem a barra final: depois do nome, "feature-api/ ⇄ feature-app/" parecia cortado. */
 function samePairName(api: string, front: string) {
   const [ap, ar] = splitBranch(api);
   const [fp, fr] = splitBranch(front);
-  return ar === fr && ap && fp ? ([ap, fp, ar] as const) : null;
+  return ar === fr && ap && fp ? ([ap.slice(0, -1), fp.slice(0, -1), ar] as const) : null;
 }
 
 /** Rótulo "api ↔ front" com a seta desenhada em SVG, não em caractere; o leitor de tela ouve "pareada com".
@@ -493,7 +514,7 @@ async function toggleRun(all: boolean) {
   halting.delete(k);
   for (const p of panes) busy.delete(p.ptyId);
   const secs = ((Date.now() - t0) / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  headerNote(forced, project, forced ? `Encerrado à força em ${secs} s` : `Parou em ${secs} s`, noteWho(project, wt.label, tabs.map((t) => TAB_LABEL[t]).join(" e "), " · "));
+  headerNote(forced, project, forced ? `Encerrado à força em ${secs} s` : `Parou em ${secs} s`, noteWho(project, wt.id, wt.label, tabs.map((t) => TAB_LABEL[t]).join(" e "), " · "));
   render();
 }
 
@@ -539,7 +560,10 @@ function activate(project: string, wt: Worktree, created: boolean) {
       if (hadProcs) {
         const secs = ((Date.now() - state.deadline + config.stopTimeoutMs) / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
         // O tempo primeiro: sem espaço, quem trunca é o nome, nunca o "parou em".
-        headerNote(!!state.forcing, project, state.forcing ? `Encerrada à força em ${secs} s` : `Parou em ${secs} s`, noteWho(project, state.from));
+        const who = noteWho(project, state.fromId, state.from);
+        // À força, a linha dela no painel fica em SIGKILL enquanto o recado durar: com a faixa estreita o recado sai, e o vermelho fica ali.
+        if (state.forcing) who.dataset.kill = "";
+        headerNote(!!state.forcing, project, state.forcing ? `Encerrada à força em ${secs} s` : `Parou em ${secs} s`, who);
       }
     }
     const k = key(project, wt.id);
@@ -576,7 +600,7 @@ async function select(project: string, wt: Worktree) {
 
 // ---------- render ----------
 
-/** Redesenha tudo. `focus`: devolve o foco ao terminal (ou ao aviso de troca); só em ações do usuário. */
+/** Redesenha tudo. `focus`: devolve o foco ao terminal (ou à faixa da troca); só em ações do usuário. */
 function render(focus = false) {
   renderBoard();
   renderRunning();
@@ -595,7 +619,7 @@ function render(focus = false) {
     tabsEl.dataset.sig = "";
     urlEl.hidden = true;
     haltTabEl.hidden = haltAllEl.hidden = true;
-    waitEl.hidden = true;
+    switchingEl.hidden = true;
     renderEmpty();
     fitHeader();
     return;
@@ -670,9 +694,8 @@ function render(focus = false) {
   pane?.fit.fit();
   if (!focus || !palette.hidden || document.querySelector("dialog[open]")) return;
   if (stopping.has(project)) {
-    // O foco vai para a troca (o card, ou a faixa no cabeçalho), nunca para um botão: esperar é a ação padrão.
-    const box = waitEl.querySelector<HTMLElement>(".wait-card") ?? (switchingEl.hidden ? null : switchingEl);
-    if (box && !box.contains(document.activeElement)) box.focus();
+    // O foco vai para a faixa da troca, nunca para um botão: esperar é a ação padrão.
+    if (!switchingEl.contains(document.activeElement)) switchingEl.focus();
   } else pane?.term.focus();
 }
 
@@ -706,6 +729,18 @@ function renderHalt(b: HTMLButtonElement, tabs: Tab[]) {
   }
 }
 
+/** Primeiro uso: a troca em três palhetas, com as peças do próprio painel. O que ele vai fazer, antes de ter o que fazer. */
+function howItWorks() {
+  const step = (state: LineState, text: string) => el("li", {}, flap(state, `how:${state}`), el("span", { textContent: text }));
+  return el(
+    "ol",
+    { className: "how", ariaLabel: "Como a troca funciona" },
+    step("stop", "a worktree anterior recebe Ctrl+C"),
+    step("wait", "a nova espera as portas liberarem"),
+    step("run", "API e front sobem, cada um no seu terminal"),
+  );
+}
+
 function renderEmpty() {
   const missing = configError?.includes("Não consegui ler");
   const hadFocus = document.activeElement === document.body || emptyEl.contains(document.activeElement);
@@ -714,6 +749,7 @@ function renderEmpty() {
       ? [
           el("h2", { textContent: missing ? "Nenhum projeto configurado" : "O config tem um problema" }),
           el("p", { textContent: missing ? "Aponte os repositórios da API e do front; as worktrees deles viram as linhas do painel." : configError }),
+          ...(missing ? [howItWorks()] : []),
           el("p", {}, el("button", { type: "button", className: "btn primary", textContent: "Criar projeto", onclick: () => openProjectDialog() })),
           el("p", { textContent: `Ou edite ${CONFIG_PATH} à mão; o painel relê quando você volta para a janela:` }),
           el("pre", { textContent: CONFIG_EXAMPLE }),
@@ -726,151 +762,108 @@ function renderEmpty() {
         : [
             el("h2", { textContent: "Nenhum projeto ainda" }),
             el("p", { textContent: "Aponte os repositórios da API e do front; as worktrees deles viram as linhas do painel." }),
+            howItWorks(),
             el("p", {}, el("button", { type: "button", className: "btn primary", textContent: "Criar projeto", onclick: () => openProjectDialog() })),
           ]),
   );
   if (hadFocus) emptyEl.querySelector<HTMLButtonElement>(".btn.primary")?.focus();
 }
 
-/** Tempo de parada até o card sobre o véu. A maioria das trocas sai em 1–2 s: aparecendo aos 750 ms, o card piscava
- *  por um segundo no gesto mais repetido do dia. Até lá a troca fica no cabeçalho (renderStrip). */
-const CARD_DELAY = 3000;
+/** Tempo de parada até a faixa oferecer "Forçar". A maioria das trocas sai em 1–2 s: antes disso o botão
+ *  era ruído no gesto mais repetido do dia. */
+const FORCE_DELAY = 2000;
 
 /** Contagem até o SIGKILL, em tinta neutra: esperar é o caminho normal. Vermelho só se chegar ao SIGKILL. */
-function countFlap(project: string, st: Stopping, where: string) {
-  const c = flap("idle", `${where}:${project}`, `${Math.max(0, Math.ceil((st.deadline - Date.now()) / 1000))} s`);
+function countFlap(project: string, st: Stopping) {
+  const c = flap("idle", `strip:${project}`, `${Math.max(0, Math.ceil((st.deadline - Date.now()) / 1000))} s`);
   c.classList.add("count");
   return c;
 }
 
-/** Troca curta, no cabeçalho, no lugar das ações (que somem numa troca): "Encerrando [4 s] Voltar para X".
- *  Sem véu sobre o terminal; o card entra depois de CARD_DELAY, ou já no SIGKILL. */
-function renderStrip(project: string, wt: Worktree, st: Stopping | undefined) {
+/** A troca em andamento, do Ctrl+C ao SIGKILL, no cabeçalho, no lugar das ações (que somem numa troca):
+ *  "Encerrando [4 s] Voltar para X · Forçar". Uma casa só: o card sobre o véu entrava aos 3 s, 2 s antes do
+ *  SIGKILL padrão, mudava o Voltar de lugar e puxava o foco no meio da espera. O terminal novo fica à vista e não
+ *  aceita digitação até subir (render). */
+function renderWait(project: string, wt: Worktree) {
+  const st = stopping.get(project);
   switchingEl.hidden = !st;
   if (!st) {
     switchingEl.dataset.sig = "";
     switchingEl.replaceChildren();
+    waitSay.textContent = "";
     return;
   }
   const goingBack = active[project] === st.fromId;
-  const sig = [project, st.fromId, wt.id, goingBack].join("\u0000");
+  const late = !!st.forcing || Date.now() - (st.deadline - config.stopTimeoutMs) >= FORCE_DELAY;
+  // Só reconstrói quando o texto muda (a fala é região viva); a contagem vira no lugar.
+  const sig = [project, st.fromId, wt.id, goingBack, st.forcing, late].join("\u0000");
   if (switchingEl.dataset.sig === sig) {
-    switchingEl.querySelector(".count")?.replaceWith(countFlap(project, st, "strip"));
+    if (!st.forcing) switchingEl.querySelector(".count")?.replaceWith(countFlap(project, st));
     return;
   }
   switchingEl.dataset.sig = sig;
-  const verb = goingBack ? "Voltando para" : "Encerrando";
-  switchingEl.title = `${verb} ${st.from}. Se os processos não saírem até a contagem zerar, recebem SIGKILL.`;
-  switchingEl.replaceChildren(
-    el("span", { className: "what", textContent: goingBack ? "Voltando" : "Encerrando" }),
-    countFlap(project, st, "strip"),
-    // Voltando, ou sem a anterior no config, não há para onde voltar (como no card).
-    ...(goingBack || !st.fromWt
-      ? []
-      : [
-          el(
-            "button",
-            { type: "button", className: "btn back", title: `Cancela a troca e reinicia ${st.from}`, onclick: () => st.fromWt && select(project, st.fromWt) },
-            "Voltar para ",
-            el("span", { className: "to" }, ...labelNodes(st.from)),
-          ),
-        ]),
-  );
-  waitSay.textContent = goingBack ? `Voltando para ${spokenLabel(st.from)}.` : `Encerrando ${spokenLabel(st.from)}; ${proseName(wt.label)} sobe em seguida.`;
-}
-
-/** A troca em andamento: no cabeçalho até CARD_DELAY, depois (ou no SIGKILL) o aviso sobre os terminais. */
-function renderWait(project: string, wt: Worktree) {
-  const st = stopping.get(project);
-  const show = !!st && (Date.now() - (st.deadline - config.stopTimeoutMs) >= CARD_DELAY || !!st.forcing);
-  renderStrip(project, wt, show ? undefined : st);
-  const appearing = show && waitEl.hidden;
-  waitEl.hidden = !show;
-  if (!st || !show) {
-    waitEl.dataset.sig = "";
-    waitEl.replaceChildren();
-    if (!st) waitSay.textContent = "";
-    return;
-  }
-  const goingBack = active[project] === st.fromId;
-  const count = () => countFlap(project, st, "count");
-  // Só reconstrói quando o texto muda (é região viva); a contagem vira no lugar.
-  const sig = [project, st.fromId, wt.id, goingBack, st.forcing].join("\u0000");
-  if (waitEl.dataset.sig === sig) {
-    waitEl.querySelector(".count")?.replaceWith(count());
-    return;
-  }
-  waitEl.dataset.sig = sig;
-  const verb = goingBack ? "Voltando para" : st.forcing ? "Forçando o encerramento de" : "Encerrando";
   const names = st.fromWt ? procs(project, st.fromWt) : [];
-  // "a npm run dev", ou "aos processos" sem nome (não "a os processos").
-  const what = names.length ? ["a ", el("span", { className: "procs", textContent: names.join(", ") })] : ["aos processos"];
-  // A frase leva só o nome (o rótulo inteiro está no título do card): "… sobe auth-refresh.", sem prefixos de par na prosa.
-  const next = el("span", { className: "next", textContent: proseName(wt.label), title: wt.label });
+  const next = proseName(wt.label);
+  const from = spokenLabel(st.from);
   const detail = goingBack
-    ? ["Ctrl+C já enviado; reinicia assim que os processos saírem."]
+    ? `Voltando para ${from}: Ctrl+C já enviado; reinicia assim que os processos saírem.`
     : st.forcing === "user"
-      ? ["Encerrando à força (SIGKILL), como pedido. Depois sobe ", next, "."]
+      ? `Encerrando ${from} à força (SIGKILL), como pedido. Depois sobe ${next}.`
       : st.forcing
-        ? ["Não parou com Ctrl+C a tempo; os processos estão sendo encerrados à força (SIGKILL)."]
-        : ["Ctrl+C enviado ", ...what, ". Quando as portas liberarem, sobe ", next, "."];
-  // Nenhum botão é o padrão: esperar é a ação certa, e forçar mata sem o Ctrl+C.
-  // No SIGKILL não há botão: o backend espera no máximo 1 s depois dele e a troca segue sozinha.
-  const force = st.forcing
-    ? null
-    : el("button", {
-        type: "button",
-        className: "btn",
-        textContent: "Forçar agora",
-        title: "Envia SIGKILL aos processos sem esperar o prazo",
-        onclick: () => {
-          st.forcing = "user";
-          for (const p of st.panes) invoke("pty_force", { id: p.ptyId });
-          render();
-        },
-      });
-  if (force) force.dataset.act = "force";
-  // Voltar reinicia a anterior (o Ctrl+C já foi); depois de voltar, ou já no SIGKILL, não há mais para onde voltar.
+        ? `${from} não parou com Ctrl+C a tempo; os processos estão sendo encerrados à força (SIGKILL). Depois sobe ${next}.`
+        : `Encerrando ${from}: Ctrl+C enviado ${names.length ? `a ${names.join(", ")}` : "aos processos"}. Quando as portas liberarem, sobe ${next}. Se não saírem até a contagem zerar, recebem SIGKILL.`;
+  switchingEl.title = detail;
+  waitSay.textContent = detail;
+  // Voltar reinicia a anterior (o Ctrl+C já foi); depois de voltar, no SIGKILL ou sem a anterior no config, não há para onde voltar.
   // Sem atalho de Esc: no reflexo do vim, ele desfazia a troca recém-pedida.
   const back =
     goingBack || st.forcing || !st.fromWt
       ? null
       : el(
           "button",
-          {
-            type: "button",
-            className: "btn back",
-            title: `Cancela a troca e reinicia ${st.from}`,
-            onclick: () => st.fromWt && select(project, st.fromWt),
-          },
-          "Voltar para ",
+          { type: "button", className: "btn back", title: `Cancela a troca e reinicia ${st.from}`, onclick: () => st.fromWt && select(project, st.fromWt) },
+          "Voltar",
+          el("span", { className: "para" }, "para"),
           el("span", { className: "to" }, ...labelNodes(st.from)),
         );
   if (back) back.dataset.act = "back";
-  // Redesenho mantém o foco onde estava (mesmo botão, ou o card se o botão sumiu ou ficou desabilitado).
-  const had = waitEl.contains(document.activeElement) ? ((document.activeElement as HTMLElement).dataset.act ?? "card") : null;
-  const card = el(
-    "div",
-    { className: "wait-card", tabIndex: -1, role: "group", ariaLabel: "Troca em andamento" },
-    el(
-      "div",
-      { className: "wait-head" },
-      flap(goingBack ? "wait" : st.forcing ? "kill" : "stop", `wait:${project}`),
-      el("strong", { title: `${verb} ${st.from}` }, `${verb} `, ...labelNodes(st.from)),
-      st.forcing ? null : count(),
-    ),
-    el("p", {}, ...detail),
-    st.forcing
-      ? null
-      : el("p", { className: "fine", textContent: goingBack ? "Se não saírem até a contagem zerar, recebem SIGKILL e reiniciam em seguida." : "Se não saírem até a contagem zerar, recebem SIGKILL." }),
-    // Voltar primeiro (Tab + Enter não pode virar SIGKILL); Forçar à direita, afastado.
-    back || force ? el("div", { className: "actions" }, back, force) : null,
+  // No SIGKILL não há botão: o backend espera no máximo 1 s depois dele e a troca segue sozinha.
+  const force =
+    late && !st.forcing
+      ? el("button", {
+          type: "button",
+          className: "btn",
+          textContent: "Forçar",
+          title: "Envia SIGKILL aos processos sem esperar o prazo",
+          onclick: () => {
+            st.forcing = "user";
+            for (const p of st.panes) invoke("pty_force", { id: p.ptyId });
+            render();
+          },
+        })
+      : null;
+  if (force) force.dataset.act = "force";
+  // Redesenho mantém o foco onde estava (o mesmo botão, ou a faixa se o botão sumiu).
+  const had = switchingEl.contains(document.activeElement) ? ((document.activeElement as HTMLElement).dataset.act ?? "strip") : null;
+  switchingEl.replaceChildren(
+    el("span", { className: "what", textContent: goingBack ? "Voltando" : st.forcing ? "Forçando" : "Encerrando" }),
+    st.forcing ? flap("kill", `strip:${project}`) : countFlap(project, st),
+    ...[back, force].filter((b) => b !== null),
   );
-  waitEl.replaceChildren(card);
-  waitSay.textContent = `${card.querySelector("strong")!.textContent}. ${[...card.querySelectorAll("p")].map((p) => p.textContent).join(" ")}`;
-  if (had) (waitEl.querySelector<HTMLButtonElement>(`[data-act="${had}"]:not(:disabled)`) ?? card).focus();
-  // Ao aparecer, o card recebe o foco (esperar é a ação padrão), a não ser que outra superfície esteja aberta por cima.
-  else if (appearing && palette.hidden && !document.querySelector("dialog[open]") && !helpEl.matches(":popover-open")) card.focus();
+  if (had) (switchingEl.querySelector<HTMLElement>(`[data-act="${had}"]`) ?? switchingEl).focus();
+  fitStrip();
+}
+
+/** Piso da faixa da troca: tudo menos o nome do Voltar, que trunca até "Voltar para". Ela cede antes do destino até
+ *  ali e nunca empurra a ajuda para fora da janela. Medido com a faixa inteira, como o piso do recado (headerNote). */
+function fitStrip() {
+  if (switchingEl.hidden) return;
+  const to = switchingEl.querySelector<HTMLElement>(".to");
+  switchingEl.style.removeProperty("--floor");
+  switchingEl.style.minWidth = "max-content";
+  const floor = switchingEl.offsetWidth - (to?.offsetWidth ? to.offsetWidth - 16 : 0);
+  switchingEl.style.minWidth = "";
+  switchingEl.style.setProperty("--floor", `${Math.ceil(floor)}px`);
 }
 
 /** Erro de git do projeto em uma linha legível; o texto cru fica no detalhe. */
@@ -887,7 +880,10 @@ function projectErrorSummary(error: string) {
 
 function lineButton(project: string, wt: Worktree) {
   const k = key(project, wt.id);
-  const state = lineState(project, wt);
+  const who = lastStopEl.querySelector<HTMLElement>(".who");
+  const killed = who?.dataset.kill !== undefined && who.dataset.key === k && lastStopEl.dataset.stay !== undefined;
+  // Encerrada à força pela troca: a palheta diz SIGKILL até o recado sair (troca, ×), não INATIVA.
+  const state = killed && lineState(project, wt) === "idle" ? "kill" : lineState(project, wt);
   const [api, front] = wt.id.split("|");
   // Solo: a etiqueta vai para a segunda linha, como o par; na primeira ela roubava largura do nome.
   const tag = !api ? el("span", { className: "tag", textContent: "SÓ FRONT" }) : !front ? el("span", { className: "tag", textContent: "SÓ API" }) : null;
@@ -916,7 +912,7 @@ function lineButton(project: string, wt: Worktree) {
       className: `line${live ? " live" : ""}`,
       tabIndex: -1,
       title: ends ? `${wt.label}\n${endsText}` : wt.label,
-      ariaLabel: `${spokenLabel(wt.label)}${soloSay(wt)}: ${say(project, wt, state)}`,
+      ariaLabel: `${spokenLabel(wt.label)}${soloSay(wt)}: ${killed && state === "kill" ? "encerrada à força" : say(project, wt, state)}`,
       // Busca a worktree na hora do clique: o botão pode ter sobrevivido a um refresh do config.
       onclick: () => {
         const fresh = findWt(project, wt.id);
@@ -1185,28 +1181,34 @@ const BRANCH_MIN = 48;
 /** A branch em serviço vem antes dos acessórios da faixa: enquanto ela mostrar menos que o piso, eles saem um a um,
  *  o recado primeiro, depois "Parar tudo" e "Parar API" (os atalhos continuam) e por último a porta, o link usado o dia todo. Classe e não hidden: o recado
  *  é região viva e continua falando, e render controla o hidden dos outros. Mede com todos à mostra, senão a branch sempre caberia.
- *  Falha ("não subiu", "à força", "caiu") não cede: em meia tela era o primeiro a sumir, e só o leitor de tela a ouvia.
+ *  Falha ("não subiu", "à força", "caiu") não sai primeiro: aperta (a ação sai, quem caiu trunca). A da worktree em serviço só sai
+ *  quando a branch sumiria e o painel aberto já mostra a palheta dela; a de outra (a anterior encerrada à força, outro projeto)
+ *  sai antes da porta, se o painel aberto mostra a palheta: um SIGKILL de rotina não tira da faixa o link de quem está de pé.
  *  Depois, sem espaço, o outro projeto cuja palheta não caberia sai inteiro: o estado nunca aparece cortado.
  *  O painel e a paleta continuam mostrando o que roda. */
 function fitHeader() {
   const stay = lastStopEl.dataset.stay !== undefined;
   const open = !document.body.classList.contains("sidebar-off");
-  lastStopEl.classList.remove("ceded", "tight");
-  haltTabEl.classList.remove("ceded");
+  for (const a of [lastStopEl, haltAllEl, haltTabEl, urlEl]) a.classList.remove("ceded", "tight");
+  const mine = stay && lastStopEl.querySelector<HTMLElement>(".who")?.dataset.key === currentKey();
   // Com um lado caído, "Subir Front" é a saída da falha: não cede, como ela.
   const recover = !!current && lineState(current.project, current.wt) === "part";
-  const accessories = [...(stay ? [] : [lastStopEl]), haltAllEl, ...(recover ? [] : [haltTabEl]), urlEl];
-  for (const a of accessories) a.classList.remove("ceded");
+  const steps: [HTMLElement, string][] = [
+    [lastStopEl, stay ? "tight" : "ceded"],
+    [haltAllEl, "ceded"],
+    ...(recover ? [] : [[haltTabEl, "ceded"] as [HTMLElement, string]]),
+    ...(stay && !mine && open ? [[lastStopEl, "ceded"] as [HTMLElement, string]] : []),
+    [urlEl, "ceded"],
+  ];
   const branch = destEl.querySelector<HTMLElement>(".branch-name");
   const below = (px: number) => !!branch && branch.clientWidth < Math.min(branch.scrollWidth, px);
-  for (const a of accessories) {
+  for (const [a, c] of steps) {
     if (!below(BRANCH_FLOOR)) break;
-    a.classList.add("ceded");
+    a.classList.add(c);
   }
-  // A falha não cede com os outros: aperta (a ação sai, quem caiu trunca). Só sai de vez quando a branch sumiria
-  // e o painel aberto já mostra a palheta dela.
-  if (stay && below(BRANCH_FLOOR)) lastStopEl.classList.add("tight");
-  if (stay && open && below(BRANCH_MIN)) lastStopEl.classList.add("ceded");
+  if (mine && open && below(BRANCH_MIN)) lastStopEl.classList.add("ceded");
+  // O verbo da faixa da troca some na faixa estreita (CSS): o piso dela muda com a largura.
+  fitStrip();
   const items = [...runningEl.children] as HTMLElement[];
   if (!open) {
     for (const b of items) b.hidden = false;
@@ -1340,7 +1342,7 @@ function announceDrops() {
     wasUp.set(k, up);
     const wt = findWt(project, id);
     if (!lost.length || !wt) continue;
-    headerNote(true, project, `${lost.map((t) => TAB_LABEL[t]).join(" e ")} ${lost.length > 1 ? "pararam" : "parou"}`, noteWho(project, wt.label), seeTerminal(project, id, lost[0]));
+    headerNote(true, project, `${lost.map((t) => TAB_LABEL[t]).join(" e ")} ${lost.length > 1 ? "pararam" : "parou"}`, noteWho(project, id, wt.label), seeTerminal(project, id, lost[0]));
   }
 }
 
@@ -1363,7 +1365,7 @@ async function pollStatus() {
       changed = true;
       const [project, id] = k.split("\u0000");
       const wt = down.length && findWt(project, id);
-      if (wt) headerNote(true, project, `${down.map((t) => TAB_LABEL[t]).join(" e ")} ${down.length > 1 ? "não subiram" : "não subiu"} em 15 s`, noteWho(project, wt.label), seeTerminal(project, id, down[0]));
+      if (wt) headerNote(true, project, `${down.map((t) => TAB_LABEL[t]).join(" e ")} ${down.length > 1 ? "não subiram" : "não subiu"} em 15 s`, noteWho(project, id, wt.label), seeTerminal(project, id, down[0]));
     }
   }
   if (changed) render();
@@ -1382,7 +1384,9 @@ const fuzzy = (q: string, text: string) => {
   return i === q.length;
 };
 
-function renderPalette() {
+/** `reset`: seleção no primeiro item que não é a atual. Ao abrir é a anterior (como no Alt+Tab, Ctrl+Shift+K e Enter voltam
+ *  para ela); digitando, a atual (a mais recente) ganhava o desempate e o Enter nela não fazia nada. */
+function renderPalette(reset = false) {
   const q = paletteInput.value.toLowerCase().replace(/\s+/g, "");
   const recency = (it: Item) => {
     const r = recent.indexOf(key(it.project, it.wt.id));
@@ -1398,6 +1402,7 @@ function renderPalette() {
     .flatMap((p) => p.worktrees.map((wt) => ({ project: p.name, wt })))
     .filter((it) => fuzzy(q, `${it.project}${it.wt.label}`.toLowerCase()))
     .sort((a, b) => quality(a) - quality(b) || recency(a) - recency(b));
+  if (reset) sel = items.length > 1 && currentKey() === key(items[0].project, items[0].wt.id) ? 1 : 0;
   sel = Math.min(sel, Math.max(items.length - 1, 0));
   paletteList.replaceChildren(
     ...(items.length
@@ -1431,7 +1436,7 @@ function renderPalette() {
   paletteList.children[sel]?.scrollIntoView({ block: "nearest" });
 }
 
-/** "[ENCERRA] Encerra feat/x (npm run dev) em INTERNO": a mesma prévia do painel, e diz o que mata.
+/** "[ENCERRA] feat/x (npm run dev) em INTERNO": a mesma prévia do painel, e diz o que mata. A palheta já é o verbo.
  *  Ainda não está parando, então a palheta não diz PARANDO. */
 function endsNote(wt: Worktree, project: string, inPalette = true): (Node | string)[] {
   const names = procs(project, wt);
@@ -1443,7 +1448,6 @@ function endsNote(wt: Worktree, project: string, inPalette = true): (Node | stri
     el(
       "span",
       { className: "ends-text" },
-      "Encerra ",
       el("strong", {}, ...labelNodes(wt.label)),
       ...(names.length ? [" ", el("span", { className: "procs", textContent: `(${names.join(", ")})` })] : []),
       ...(inPalette ? [" em ", el("span", { className: "project", textContent: project })] : [", que está rodando."]),
@@ -1454,15 +1458,9 @@ function endsNote(wt: Worktree, project: string, inPalette = true): (Node | stri
 function openPalette() {
   palette.hidden = false;
   paletteInput.value = "";
-  sel = 0;
-  renderPalette();
-  // Como no Alt+Tab: abre selecionando a anterior, então Ctrl+Shift+K e Enter voltam para ela.
-  if (items.length > 1 && currentKey() === key(items[0].project, items[0].wt.id)) {
-    sel = 1;
-    renderPalette();
-  }
+  renderPalette(true);
   paletteInput.focus();
-  refresh().then(renderPalette);
+  refresh().then(() => renderPalette());
 }
 
 function closePalette() {
@@ -1476,10 +1474,7 @@ function choose(it: Item | undefined) {
   else render(true);
 }
 
-paletteInput.addEventListener("input", () => {
-  sel = 0;
-  renderPalette();
-});
+paletteInput.addEventListener("input", () => renderPalette(true));
 /** Linhas que o PageUp/PageDown pulam na paleta. */
 const PAGE = 8;
 paletteInput.addEventListener("keydown", (e) => {
@@ -1762,6 +1757,8 @@ function openEditDialog(project: string, wt: Worktree) {
   editing = { project, wt, branches, divergent, info: {} };
   const req = ++editReq;
   editForm.querySelector(".where")!.replaceChildren(el("span", { className: "project", textContent: project }), " / ", ...labelNodes(wt.label));
+  // Nunca aberta nesta sessão, não há terminal para fechar.
+  editForm.querySelector<HTMLElement>(".closes")!.hidden = !envs.has(key(project, wt.id));
   editForm.querySelector<HTMLElement>(".shared-branch")!.hidden = divergent;
   sharedBranch.value = divergent ? "" : api || front;
   sharedBranchMsg.textContent = "";
@@ -2113,7 +2110,16 @@ async function loadGithubRepos() {
   } catch (err) {
     ghRepos = null;
     for (const src of projectForm.querySelectorAll<HTMLElement>(".source")) src.hidden = true;
-    ghHint.textContent = `Clonar do GitHub não está disponível: ${String(err)}`;
+    // O backend já traduz os dois casos comuns (gh ausente, sem login); o resto (saída do gh, erro inesperado) vira
+    // um resumo com a saída crua no detalhe, como o erro de git no painel.
+    const raw = String(err);
+    const known = /^(Instale|Entre no GitHub)/.test(raw);
+    ghHint.replaceChildren(
+      `Clonar do GitHub não está disponível: ${known ? raw : "o gh não respondeu como esperado. Confira com "}`,
+      ...(known
+        ? []
+        : [el("code", { textContent: "gh auth status" }), " no terminal.", el("details", {}, el("summary", { textContent: "Detalhe" }), el("code", { textContent: raw }))]),
+    );
     ghHint.hidden = false;
   }
 }
