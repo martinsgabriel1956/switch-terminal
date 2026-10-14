@@ -28,3 +28,6 @@ dist-ssr
 .impeccable/questions/
 .impeccable/live/
 .impeccable/hook.cache.json
+
+# Capturas do MCP do Playwright (críticas e prints de verificação)
+.playwright-mcp/
