@@ -103,12 +103,18 @@ const TERM_THEME: Record<"dark" | "light", ITheme> = {
   },
 };
 const scheme = matchMedia("(prefers-color-scheme: light)");
+type Theme = "dark" | "light";
+const systemTheme = (): Theme => (scheme.matches ? "light" : "dark");
+// Escolha do botão de tema; null segue o sistema. Quando a escolha coincide com o sistema ela é esquecida (applyTheme):
+// o COSMIC alterna dia e noite sozinho, e o app volta a acompanhá-lo na próxima virada.
+let themeChoice: Theme | null = load<Theme | null>("theme", null);
+const theme = (): Theme => themeChoice ?? systemTheme();
 /** Fundo, cursor, seleção e as cores de estado vêm dos tokens do CSS (o terminal fica sobre o mesmo fundo do painel); as outras cores ANSI são conteúdo. */
 function termTheme(): ITheme {
   const css = getComputedStyle(document.documentElement);
   const token = (name: string) => css.getPropertyValue(name).trim();
   return {
-    ...TERM_THEME[scheme.matches ? "light" : "dark"],
+    ...TERM_THEME[theme()],
     background: token("--term-bg"),
     cursor: token("--ink"),
     cursorAccent: token("--term-bg"),
@@ -2941,9 +2947,27 @@ srToggle.addEventListener("change", async () => {
 
 window.addEventListener("focus", () => refresh());
 
-scheme.addEventListener("change", () => {
+// ---------- tema ----------
+
+const themeBtn = $<HTMLButtonElement>("#theme");
+
+function applyTheme() {
+  if (themeChoice === systemTheme()) themeChoice = null;
+  save("theme", themeChoice);
+  const now = theme();
+  document.documentElement.dataset.theme = now;
+  const next = now === "light" ? "escuro" : "claro";
+  themeBtn.setAttribute("aria-label", `Mudar para o tema ${next}`);
+  themeBtn.title = `Tema ${now === "light" ? "claro" : "escuro"}${themeChoice ? "" : " (do sistema)"} · clique para o ${next}`;
   for (const env of envs.values()) for (const pane of Object.values(env.panes)) pane.term.options.theme = termTheme();
+}
+
+themeBtn.addEventListener("click", () => {
+  themeChoice = theme() === "light" ? "dark" : "light";
+  applyTheme();
 });
+scheme.addEventListener("change", applyTheme);
+applyTheme();
 
 // Só o terminal visível, uma vez por quadro: os ocultos se ajustam ao aparecer (render), e arrastando a barra
 // o ajuste espera soltar (o lostpointercapture redesenha). Antes, cada quadro do arraste mandava pty_resize a todos.

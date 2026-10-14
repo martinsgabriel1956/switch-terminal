@@ -610,7 +610,7 @@
       },
       {
         "name": "color-scheme-light",
-        "value": "(prefers-color-scheme: light)",
+        "value": ":root[data-theme=\"light\"] (o sistema, ou o botão de tema)",
         "purpose": "Troca para os tokens -day (tabela em esmalte)."
       },
       {
@@ -708,7 +708,7 @@
   ],
   "narrative": {
     "northStar": "O Painel de Partidas",
-    "overview": "**Creative North Star: \"O Painel de Partidas\"**\n\nA janela é um painel de partidas de estação. Cada projeto é uma plataforma, cada worktree uma linha, e o estado de cada linha é uma palheta split-flap: um bloco com a linha de corte no meio e caracteres em caixa-alta condensada. Trocar de worktree é o painel virando. O terminal é o conteúdo e ocupa todo o resto da janela, sobre o mesmo fundo do painel.\n\nHá dois materiais, escolhidos pelo sistema operacional (`prefers-color-scheme`): à noite, painel grafite; de dia, tabela impressa em esmalte branco. Os dois têm a mesma estrutura e os mesmos papéis; muda só a tinta. A densidade é de quadro de horários: linhas compactas, colunas fixas, números tabulares, nenhum cartão no painel. A hierarquia vem da tinta (cheia no que está em serviço, meia-tinta no resto) e não de tamanho nem de cor.\n\nO mundo recusa a árvore de arquivos estilo IDE (Explorer + quick-open em cinza VS Code). O movimento é mecânico, em passos discretos sem easing, e só acontece quando um estado muda.",
+    "overview": "**Creative North Star: \"O Painel de Partidas\"**\n\nA janela é um painel de partidas de estação. Cada projeto é uma plataforma, cada worktree uma linha, e o estado de cada linha é uma palheta split-flap: um bloco com a linha de corte no meio e caracteres em caixa-alta condensada. Trocar de worktree é o painel virando. O terminal é o conteúdo e ocupa todo o resto da janela, sobre o mesmo fundo do painel.\n\nHá dois materiais, que seguem o sistema operacional (`prefers-color-scheme`) até o botão de tema escolher outro: à noite, painel grafite; de dia, tabela impressa em esmalte branco. Os dois têm a mesma estrutura e os mesmos papéis; muda só a tinta. A densidade é de quadro de horários: linhas compactas, colunas fixas, números tabulares, nenhum cartão no painel. A hierarquia vem da tinta (cheia no que está em serviço, meia-tinta no resto) e não de tamanho nem de cor.\n\nO mundo recusa a árvore de arquivos estilo IDE (Explorer + quick-open em cinza VS Code). O movimento é mecânico, em passos discretos sem easing, e só acontece quando um estado muda.",
     "keyCharacteristics": [
       "Palheta split-flap de 7 caracteres como assinatura do estado.",
       "Uma cor por estado, e nenhuma outra cor na interface.",

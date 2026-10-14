@@ -52,55 +52,53 @@
   color: var(--ink);
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
-    --board: #f4f5f3;
-    --rail: #ebece9;
-    --flap: #d6d7d3;
-    /* A de cima clareia até o degrau entre as metades se ver; a de baixo fica, para o âmbar manter 4,5:1 sobre ela. */
-    --flap-hi: #e7e8e4;
-    /* Palheta diurna: de dia o estado mora no corpo, não na tinta. Tintas escuras de estado sobre metades cinza tinham a
-       mesma luminância (1,00–1,04:1 entre si): ao lado do editor, RODANDO, PARANDO e INATIVA só se separavam lendo.
-       Agora as metades de estado são verdes, âmbar ou vermelhas (abaixo, em .flap[data-state]), com tinta cheia a 7:1
-       ou mais; INATIVA fica nas metades neutras, mais escuras que o esmalte e que a linha atual (degrau de 1,16:1).
-       O terminal (ANSI) e o resto da interface ficam com run/start/fail. */
-    --flap-top: #d2d3ce;
-    --flap-bot: #c3c5bf;
-    --flap-ink: #45474c;
-    --flap-run: #15161a;
-    --flap-start: #15161a;
-    --flap-fail: #15161a;
-    --rule: #cfd1cc;
-    --ink: #15161a;
-    --ink-2: #4f5156;
-    --ink-3: #6e7074;
-    --run: #0d6a3f;
-    --start: #855000;
-    --wait: #855000;
-    --fail: #b3261e;
-    /* De dia o âmbar escuro de 1px ficava abaixo do RODANDO verde que ele substitui: lia como "o estado sumiu", não como
-       "isto vai parar". 2px e um creme âmbar por dentro (#855000 a 5,45:1), sem as metades nem o entalhe de palheta. */
-    --ends-line: 2px;
-    --ends-bg: #f7e7c0;
-    --focus: #15161a;
-    --primary: #15161a;
-    --primary-ink: #f4f5f3;
-    /* véu de tinta, não de esmalte: claro sobre claro, o aviso e os diálogos não se destacavam do terminal */
-    --scrim: rgb(21 22 26 / 24%);
-    --selection: rgb(21 22 26 / 16%);
-    --mark-bg: #15161a;
-    --mark-bg-hi: #2a2b30;
-    --mark-seam: #0a0b0d;
-    --mark-ink: #f4f5f3;
-    --mark-run: #4cc38a;
-    --term-bg: var(--board);
-    /* de dia o trilho sobre o esmalte fica a 1,08:1: a sombra separa a superfície flutuante */
-    --float-shadow: 0 4px 8px rgb(21 22 26 / 14%), 0 12px 28px rgb(21 22 26 / 14%);
-    --side-shadow: 6px 0 16px rgb(21 22 26 / 16%);
-    /* de dia, a meio caminho ficava a 1,1:1 da linha atual (flap): mais perto do trilho */
-    --hover: color-mix(in srgb, var(--flap) 35%, var(--rail));
-  }
+:root[data-theme="light"] {
+  color-scheme: light;
+  --board: #f4f5f3;
+  --rail: #ebece9;
+  --flap: #d6d7d3;
+  /* A de cima clareia até o degrau entre as metades se ver; a de baixo fica, para o âmbar manter 4,5:1 sobre ela. */
+  --flap-hi: #e7e8e4;
+  /* Palheta diurna: de dia o estado mora no corpo, não na tinta. Tintas escuras de estado sobre metades cinza tinham a
+     mesma luminância (1,00–1,04:1 entre si): ao lado do editor, RODANDO, PARANDO e INATIVA só se separavam lendo.
+     Agora as metades de estado são verdes, âmbar ou vermelhas (abaixo, em .flap[data-state]), com tinta cheia a 7:1
+     ou mais; INATIVA fica nas metades neutras, mais escuras que o esmalte e que a linha atual (degrau de 1,16:1).
+     O terminal (ANSI) e o resto da interface ficam com run/start/fail. */
+  --flap-top: #d2d3ce;
+  --flap-bot: #c3c5bf;
+  --flap-ink: #45474c;
+  --flap-run: #15161a;
+  --flap-start: #15161a;
+  --flap-fail: #15161a;
+  --rule: #cfd1cc;
+  --ink: #15161a;
+  --ink-2: #4f5156;
+  --ink-3: #6e7074;
+  --run: #0d6a3f;
+  --start: #855000;
+  --wait: #855000;
+  --fail: #b3261e;
+  /* De dia o âmbar escuro de 1px ficava abaixo do RODANDO verde que ele substitui: lia como "o estado sumiu", não como
+     "isto vai parar". 2px e um creme âmbar por dentro (#855000 a 5,45:1), sem as metades nem o entalhe de palheta. */
+  --ends-line: 2px;
+  --ends-bg: #f7e7c0;
+  --focus: #15161a;
+  --primary: #15161a;
+  --primary-ink: #f4f5f3;
+  /* véu de tinta, não de esmalte: claro sobre claro, o aviso e os diálogos não se destacavam do terminal */
+  --scrim: rgb(21 22 26 / 24%);
+  --selection: rgb(21 22 26 / 16%);
+  --mark-bg: #15161a;
+  --mark-bg-hi: #2a2b30;
+  --mark-seam: #0a0b0d;
+  --mark-ink: #f4f5f3;
+  --mark-run: #4cc38a;
+  --term-bg: var(--board);
+  /* de dia o trilho sobre o esmalte fica a 1,08:1: a sombra separa a superfície flutuante */
+  --float-shadow: 0 4px 8px rgb(21 22 26 / 14%), 0 12px 28px rgb(21 22 26 / 14%);
+  --side-shadow: 6px 0 16px rgb(21 22 26 / 16%);
+  /* de dia, a meio caminho ficava a 1,1:1 da linha atual (flap): mais perto do trilho */
+  --hover: color-mix(in srgb, var(--flap) 35%, var(--rail));
 }
 
 * {
@@ -260,11 +258,9 @@ kbd {
 
 /* De dia a de cima (#d2d3ce) sumiria na linha (#d6d7d3): ali ela clareia até flap-hi e a de baixo fica a da palheta,
    mais escura que a linha. Luz de cima e o corte no meio. Os corpos de estado não mudam na linha atual. */
-@media (prefers-color-scheme: light) {
-  :is(.line[aria-current="true"], #palette li[aria-selected="true"]) .flap {
-    --flap-top: var(--flap-hi);
-    --flap-bot: #c3c5bf;
-  }
+:root[data-theme="light"] :is(.line[aria-current="true"], #palette li[aria-selected="true"]) .flap {
+  --flap-top: var(--flap-hi);
+  --flap-bot: #c3c5bf;
 }
 
 .flap > span {
@@ -320,27 +316,25 @@ kbd {
 
 /* De dia, o corpo diz o estado: verde de pé, âmbar em movimento, vermelho falha, com a tinta cheia por cima
    (7,4:1 ou mais nas duas metades). A luz vem de cima, como nas neutras (degrau de 1,16–1,22:1). */
-@media (prefers-color-scheme: light) {
-  .flap[data-state="run"] {
-    --state-top: #6ccf9c;
-    --state-bot: #55c08a;
-  }
+:root[data-theme="light"] .flap[data-state="run"] {
+  --state-top: #6ccf9c;
+  --state-bot: #55c08a;
+}
 
-  .flap:is([data-state="start"], [data-state="wait"]) {
-    --state-top: #f6c45f;
-    --state-bot: #f0b33f;
-  }
+:root[data-theme="light"] .flap:is([data-state="start"], [data-state="wait"]) {
+  --state-top: #f6c45f;
+  --state-bot: #f0b33f;
+}
 
-  .flap:is([data-state="stop"], [data-state="kill"]):not(.preview) {
-    --state-top: #2b2d32;
-    --state-bot: #222428;
-    color: #f2b33d;
-  }
+:root[data-theme="light"] .flap:is([data-state="stop"], [data-state="kill"]):not(.preview) {
+  --state-top: #2b2d32;
+  --state-bot: #222428;
+  color: #f2b33d;
+}
 
-  .flap[data-state="part"] {
-    --state-top: #f4a29b;
-    --state-bot: #ee8a82;
-  }
+:root[data-theme="light"] .flap[data-state="part"] {
+  --state-top: #f4a29b;
+  --state-bot: #ee8a82;
 }
 
 /* ENCERRA é prévia: só o contorno, na cor de quem está em movimento, nunca a tinta do corpo */
@@ -843,6 +837,12 @@ body:has(header :is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visibl
   flex: 1;
   min-width: 0;
   border-top: 0;
+}
+
+/* tema: o ícone é o do tema que o clique traz (sol à noite, lua de dia) */
+:root[data-theme="light"] #theme .to-light,
+:root:not([data-theme="light"]) #theme .to-dark {
+  display: none;
 }
 
 /* lendo: o ícone gira em degraus, como o resto do painel; o clique repetido não faz nada */
