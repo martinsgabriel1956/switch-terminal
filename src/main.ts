@@ -727,11 +727,17 @@ async function toggleRun(all: boolean, want?: Verb) {
 }
 
 /** Uma worktree ativa por projeto: para a anterior (Ctrl+C → espera → SIGKILL) e só então roda o startCommand. */
+/** Trocas com uma anterior a parar, por projeto, do clique até a nova subir: o destino fica calado (quem fala é a
+ *  faixa). Antes ele só calava depois do `await prevEnv.ready` e anunciava "inativa" no começo e no fim da troca. */
+const quiet = new Map<string, number>();
+
 function activate(project: string, wt: Worktree, created: boolean) {
   const prev = active[project];
   if (prev === wt.id && !created) return;
   active[project] = wt.id;
   saveActive();
+  const hushed = !!prev && prev !== wt.id && envs.has(key(project, prev));
+  if (hushed) quiet.set(project, (quiet.get(project) ?? 0) + 1);
 
   const run = async () => {
     const prevEnv = prev && prev !== wt.id ? envs.get(key(project, prev)) : undefined;
@@ -783,6 +789,7 @@ function activate(project: string, wt: Worktree, created: boolean) {
       }
       // Abandonada antes de subir: fecha, em vez de ficar PARADA sem nunca ter rodado.
     } else if (env && created && currentKey() !== k) disposeEnv(k, env);
+    if (hushed) quiet.set(project, quiet.get(project)! - 1);
     render(currentKey() === key(project, wt.id));
   };
   // Trocas do mesmo projeto em fila, para nunca subir duas worktrees ao mesmo tempo.
@@ -841,7 +848,7 @@ function render(focus = false) {
   const env = envs.get(ck!);
   const state = lineState(project, wt);
   // Durante a troca quem fala é o aviso; o destino calado evita dois anúncios ao mesmo tempo.
-  destEl.setAttribute("aria-live", stopping.has(project) ? "off" : "polite");
+  destEl.setAttribute("aria-live", stopping.has(project) || quiet.get(project) ? "off" : "polite");
   // Região viva: só reescreve quando muda, senão o leitor de tela repete o destino a cada render.
   const sig = `${ck}\u0000${state}\u0000${say(project, wt, state)}`;
   if (destEl.dataset.sig !== sig) {
@@ -1056,22 +1063,27 @@ function renderWait(project: string, wt: Worktree) {
   const next = proseName(wt.label);
   const from = spokenLabel(st.from);
   const detail = goingBack
-    ? `Voltando para ${from}: Ctrl+C já enviado; reinicia assim que os processos saírem.`
+    ? st.forcing
+      ? `Reiniciando ${from}: os processos não saíram com Ctrl+C e estão sendo encerrados à força (SIGKILL); reinicia em seguida.`
+      : `Reiniciando ${from}: Ctrl+C já enviado; reinicia assim que os processos saírem.`
     : st.forcing === "user"
       ? `Parando ${from} à força (SIGKILL), como pedido. Depois sobe ${next}.`
       : st.forcing
         ? `${from} não parou com Ctrl+C a tempo; os processos estão sendo encerrados à força (SIGKILL). Depois sobe ${next}.`
         : `Parando ${from}: Ctrl+C enviado ${names.length ? `a ${names.join(", ")}` : "aos processos"}. Quando as portas liberarem, sobe ${next}. Se não saírem até a contagem zerar, recebem SIGKILL.`;
   switchingEl.title = detail;
-  waitSay.textContent = detail;
+  // Só quando muda: aos 2 s (a contagem entra) o mesmo texto era dito de novo, e o SIGKILL depois do Voltar, nunca.
+  if (waitSay.textContent !== detail) waitSay.textContent = detail;
   // Voltar reinicia a anterior (o Ctrl+C já foi); depois de voltar, no SIGKILL ou sem a anterior no config, não há para onde voltar.
   // Sem atalho de Esc: no reflexo do vim, ele desfazia a troca recém-pedida.
+  // Depois do clique ele guarda o lugar, invisível (.hold): sumindo, o Forçar deslizava para baixo do cursor e o
+  // segundo clique de um duplo clique mandava SIGKILL na que se queria reiniciar.
   const back =
-    goingBack || st.forcing || !st.fromWt
+    st.forcing || !st.fromWt
       ? null
       : el(
           "button",
-          { type: "button", className: "btn back", title: `Cancela a troca e reinicia ${st.from}`, onclick: () => st.fromWt && select(project, st.fromWt) },
+          { type: "button", className: goingBack ? "btn back hold" : "btn back", inert: goingBack, title: `Cancela a troca e reinicia ${st.from}`, onclick: () => st.fromWt && select(project, st.fromWt) },
           // "Voltar e reiniciar": o Ctrl+C já foi, e "Voltar para" prometia desfazer.
           "Voltar",
           el("span", { className: "para" }, "e reiniciar"),
@@ -1087,7 +1099,8 @@ function renderWait(project: string, wt: Worktree) {
           className: "btn",
           textContent: "Forçar",
           title: "Envia SIGKILL aos processos sem esperar o prazo",
-          onclick: () => {
+          onclick: (e: MouseEvent) => {
+            if (e.detail > 1) return;
             st.forcing = "user";
             for (const p of st.panes) invoke("pty_force", { id: p.ptyId });
             render();
@@ -1099,10 +1112,13 @@ function renderWait(project: string, wt: Worktree) {
   const had = switchingEl.contains(document.activeElement) ? ((document.activeElement as HTMLElement).dataset.act ?? "strip") : null;
   switchingEl.replaceChildren(
     // O verbo da palheta da anterior (PARANDO); ENCERRA fica só para a prévia. No SIGKILL ele continua: a palheta ao lado diz como.
-    el("span", { className: "what", textContent: goingBack ? "Reiniciando" : "Parando" }),
+    // Os dois verbos empilhados: "Reiniciando" mais largo empurrava o Forçar para baixo do cursor.
+    el("span", { className: "what" }, el("span", { textContent: goingBack ? "Reiniciando" : "Parando" }), el("span", { className: "ghost", ariaHidden: "true", textContent: "Reiniciando" })),
+    // O Voltar logo depois do verbo: a contagem que entra aos 2 s fica à direita dele, e ele não anda (andava ~110px
+    // no instante em que se mirava nele).
     // A contagem entra com o Forçar: na troca típica (1–2 s), contar até um SIGKILL que não vem era ansiedade à toa.
     // "SIGKILL em [3 s]": sem o rótulo, a contagem lia como "a nova para em 3 s".
-    ...[st.forcing ? flap("kill", `strip:${project}`) : late ? el("span", { className: "count-to", textContent: "SIGKILL em" }) : null, late && !st.forcing ? countFlap(project, st) : null, back, force].filter((b) => b !== null),
+    ...[back, st.forcing ? flap("kill", `strip:${project}`) : late ? el("span", { className: "count-to", textContent: "SIGKILL em" }) : null, late && !st.forcing ? countFlap(project, st) : null, force].filter((b) => b !== null),
     // No SIGKILL não sobra botão: o que vem depois fica escrito, não só no title. Era o momento de mais risco e o de
     // menos reasseguramento à vista.
     ...(st.forcing ? [el("span", { className: "then", textContent: goingBack ? "reinicia em seguida" : `depois sobe ${next}` })] : []),
@@ -1910,7 +1926,12 @@ function renderPalette(reset = false) {
   const it = items[sel];
   const ends = it && wouldStop(it.project, it.wt.id);
   paletteNote.hidden = !ends;
-  paletteNote.replaceChildren(...(ends ? endsNote(ends, it.project) : []));
+  // Região viva: só reescreve quando muda; a cada tecla e seta ela repetia "Encerra main (node) em interno".
+  const noteSig = ends ? `${it.project}\u0000${ends.id}\u0000${procs(it.project, ends).join()}` : "";
+  if (paletteNote.dataset.sig !== noteSig) {
+    paletteNote.dataset.sig = noteSig;
+    paletteNote.replaceChildren(...(ends ? endsNote(ends, it.project) : []));
+  }
   if (items.length) paletteInput.setAttribute("aria-activedescendant", `opt-${sel}`);
   else paletteInput.removeAttribute("aria-activedescendant");
   paletteList.children[sel]?.scrollIntoView({ block: "nearest" });

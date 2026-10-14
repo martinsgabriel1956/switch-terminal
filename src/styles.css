@@ -1337,6 +1337,20 @@ body:not(.sidebar-off, .narrow) header.tight #destination .where > :is(.project,
   flex-shrink: 0;
 }
 
+/* "Parando" e "Reiniciando" empilhados: o verbo não muda de largura depois do Voltar */
+#switching > .what {
+  display: inline-grid;
+}
+
+#switching > .what > * {
+  grid-area: 1 / 1;
+}
+
+#switching > .what > .ghost,
+#switching .back.hold {
+  visibility: hidden;
+}
+
 /* "depois sobe X" no SIGKILL: é o único que trunca */
 #switching > .then {
   flex-shrink: 1;
@@ -1367,7 +1381,7 @@ body:not(.sidebar-off, .narrow) header.tight #destination .where > :is(.project,
   }
 }
 
-/* Forçar mata sem o Ctrl+C: entra depois de FORCE_DELAY, depois do Voltar na ordem do Tab, e afastado dele por um fio */
+/* Forçar mata sem o Ctrl+C: entra depois de FORCE_DELAY, depois do Voltar e da contagem na ordem do Tab, e afastado por um fio */
 #switching [data-act="force"] {
   margin-left: 4px;
   position: relative;
