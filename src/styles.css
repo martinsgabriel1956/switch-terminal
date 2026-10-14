@@ -348,8 +348,9 @@ kbd {
   color: var(--wait);
 }
 
-/* "SEM FRONT" passa dos 7 caracteres: só esta palheta alarga, e a falha se destaca na coluna */
-.flap[data-state="part"] {
+/* "SEM FRONT" passa dos 7 caracteres: só estas palhetas alargam, e a falha se destaca na coluna.
+   Parado à mão ("held") tem o mesmo texto e a palheta neutra de INATIVA, nos dois temas: foi pedido, não caiu. */
+.flap:is([data-state="part"], [data-state="held"]) {
   width: auto;
   min-width: calc(7ch + 20px);
   padding: 0 7px;
@@ -1101,7 +1102,7 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   color: var(--fail);
 }
 
-#tabs button:is(.down, .parked)::before {
+#tabs button.down::before {
   content: "";
   display: inline-block;
   width: 6px;
@@ -1112,9 +1113,21 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   vertical-align: 1px;
 }
 
-/* Parado à mão: o mesmo quadrado, em meia-tinta, e o rótulo segue a aba (foi pedido, não caiu). */
-#tabs button.parked::before {
+/* Parado à mão: o mesmo quadrado, em meia-tinta, e o rótulo segue a aba (foi pedido, não caiu).
+   Parando só este lado: âmbar, enquanto o Ctrl+C não termina; a palheta da worktree fica com o estado dela. */
+#tabs button:is(.parked, .halting)::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 2px;
   background: var(--ink-2);
+  vertical-align: 1px;
+}
+
+#tabs button.halting::before {
+  background: var(--wait);
 }
 
 /* "Parar API", "Parar tudo", "Subir Front": verbo e objeto escritos, com o contorno dos botões (.btn), em 26px */
@@ -1646,6 +1659,8 @@ body:not(.sidebar-off) #running {
   color: var(--ink);
   font: 12px/1.5 var(--mono);
   overflow-x: auto;
+  /* a grade do vazio alinha no começo (max-content): sem o teto, a 600 o exemplo passava da janela e saía cortado */
+  max-width: 100%;
 }
 
 /* ---------- troca ---------- */
@@ -1779,6 +1794,28 @@ dialog.form .pick[aria-disabled="true"] {
 
 #help .chord kbd {
   margin: 0 0 0 3px;
+}
+
+/* Legenda das marcas das abas: os três quadrados de 6px, na ordem da frase (caiu, parando, parado à mão) */
+#help .tab-mark {
+  display: inline-flex;
+  gap: 6px;
+  width: calc(7ch + 20px);
+}
+
+#help .tab-mark i {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--ink-2);
+}
+
+#help .tab-mark .down {
+  background: var(--fail);
+}
+
+#help .tab-mark .halting {
+  background: var(--wait);
 }
 
 #help dl {

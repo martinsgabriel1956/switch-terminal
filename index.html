@@ -86,6 +86,8 @@
       <dl class="legend">
         <dt><span class="flap" data-state="run"><span>RODANDO</span></span></dt><dd>API e Front de pé</dd>
         <dt><span class="flap" data-state="part"><span>SEM FRONT</span></span></dt><dd>Um lado caiu (aqui, o Front); Subir Front o sobe de novo</dd>
+        <dt><span class="flap" data-state="held"><span>SEM API</span></span></dt><dd>Um lado parado à mão (aqui, a API); o outro segue de pé</dd>
+        <dt><span class="tab-mark" aria-hidden="true"><i class="down"></i><i class="halting"></i><i class="parked"></i></span></dt><dd>Quadrado na aba: caiu, parando, parado à mão</dd>
         <dt><span class="flap" data-state="start"><span>SUBINDO</span></span></dt><dd>O comando de start acabou de ser enviado</dd>
         <dt><span class="flap" data-state="wait"><span>AGUARDA</span></span></dt><dd>Esperando o que roda no projeto parar, para subir</dd>
         <dt><span class="flap" data-state="stop"><span>PARANDO</span></span></dt><dd>Ctrl+C enviado; esperando os processos saírem</dd>
@@ -419,7 +421,7 @@
       </form>
     </dialog>
 
-    <div id="palette" role="dialog" aria-label="Trocar de worktree" hidden>
+    <div id="palette" role="dialog" aria-modal="true" aria-label="Trocar de worktree" hidden>
       <div class="search">
         <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3 3" /></svg>
         <input role="combobox" aria-expanded="true" aria-controls="palette-list" aria-autocomplete="list" aria-label="Trocar de worktree" placeholder="Trocar de worktree…" spellcheck="false" />

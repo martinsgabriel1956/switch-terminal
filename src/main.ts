@@ -21,13 +21,14 @@ type Tab = "api" | "front";
 type Pane = { term: Terminal; fit: FitAddon; el: HTMLElement; ptyId: number; side: Side; url: string | null };
 type Env = { project: string; root: HTMLElement; panes: Partial<Record<Tab, Pane>>; ready: Promise<void> };
 /** Estado de uma linha do painel: o que a palheta mostra. */
-type LineState = "run" | "part" | "start" | "wait" | "stop" | "kill" | "idle" | "none";
+type LineState = "run" | "part" | "held" | "start" | "wait" | "stop" | "kill" | "idle" | "none";
 
 const TABS: Tab[] = ["api", "front"];
 const TAB_LABEL: Record<Tab, string> = { api: "API", front: "Front" };
 const FLAP: Record<LineState, string> = {
   run: "RODANDO",
   part: "SEM LADO", // flapText diz qual: "SEM FRONT"
+  held: "SEM LADO", // parado à mão; flapText diz qual
   start: "SUBINDO",
   wait: "AGUARDA",
   stop: "PARANDO",
@@ -38,6 +39,7 @@ const FLAP: Record<LineState, string> = {
 const SPOKEN: Record<LineState, string> = {
   run: "rodando",
   part: "parcial",
+  held: "parcial",
   start: "subindo",
   wait: "aguardando a anterior parar",
   stop: "parando",
@@ -271,7 +273,7 @@ let busy = new Map<number, string>();
 const starting = new Map<string, number>();
 // Parada à mão (botões Parar do cabeçalho): envs parando agora (e se já passou para o SIGKILL), e os terminais parados
 // de propósito, que não contam como queda. O próximo start (Subir ou troca) tira a marca.
-const halting = new Map<string, { forcing: boolean }>();
+const halting = new Map<string, { forcing: boolean; tabs: Tab[] }>();
 const halted = new Set<number>();
 let current: { project: string; wt: Worktree } | null = null;
 let tab: Tab = "api";
@@ -319,7 +321,9 @@ function flap(state: LineState, id: string, text = FLAP[state]) {
 
 /** Texto da palheta de uma worktree; no parcial, o lado que caiu ("SEM FRONT"): "1 LADO" não dizia qual. */
 function flapText(project: string, wt: Worktree, state: LineState) {
-  return state === "part" ? `SEM ${sides(key(project, wt.id)).down.map((t) => TAB_LABEL[t].toUpperCase()).join(" E ")}` : FLAP[state];
+  const s = sides(key(project, wt.id));
+  const off = state === "part" ? s.down : state === "held" ? s.held : null;
+  return off ? `SEM ${off.map((t) => TAB_LABEL[t].toUpperCase()).join(" E ")}` : FLAP[state];
 }
 
 const findWt = (project: string, id: string) => config.projects.find((p) => p.name === project)?.worktrees.find((w) => w.id === id);
@@ -338,14 +342,15 @@ function procs(project: string, wt: Worktree) {
   return [...new Set(panes.map((p) => busy.get(p.ptyId)).filter((n): n is string => !!n))];
 }
 
-const LIVE: LineState[] = ["run", "part", "start", "wait"];
+const LIVE: LineState[] = ["run", "part", "held", "start", "wait"];
 
-/** Lados com processo rodando e os que deveriam estar (os que têm startCommand). */
+/** Lados com processo rodando, os que deveriam estar (os que têm startCommand) e não estão, e os parados à mão. */
 function sides(k: string) {
   const panes = Object.entries(envs.get(k)?.panes ?? {}) as [Tab, Pane][];
   const up = panes.filter(([, p]) => busy.has(p.ptyId)).map(([t]) => t);
   const want = panes.filter(([, p]) => p.side.startCommand && !halted.has(p.ptyId));
-  return { up, down: (want.length ? want : panes).map(([t]) => t).filter((t) => !up.includes(t)) };
+  const held = panes.filter(([, p]) => halted.has(p.ptyId) && !busy.has(p.ptyId)).map(([t]) => t);
+  return { up, down: (want.length ? want : panes).map(([t]) => t).filter((t) => !up.includes(t) && !held.includes(t)), held };
 }
 
 function lineState(project: string, wt: Worktree): LineState {
@@ -354,20 +359,23 @@ function lineState(project: string, wt: Worktree): LineState {
   // Voltou para a que estava parando: ela espera a si mesma parar para reiniciar.
   if (st && active[project] === wt.id) return "wait";
   if (st?.fromId === wt.id) return st.forcing ? "kill" : "stop";
+  // Parada à mão da worktree inteira; parando um lado só, a palheta fica com o estado dela e só a aba fica âmbar.
   const h = halting.get(k);
-  if (h) return h.forcing ? "kill" : "stop";
+  if (h && h.tabs.length >= Object.keys(envs.get(k)?.panes ?? {}).length) return h.forcing ? "kill" : "stop";
   if (starting.has(k)) return "start";
-  const { up, down } = sides(k);
-  if (up.length) return down.length ? "part" : "run";
+  const { up, down, held } = sides(k);
+  // Um lado parado à mão com o outro de pé: SEM API em palheta neutra (nunca vermelha: foi pedido, não caiu).
+  if (up.length) return down.length ? "part" : held.length ? "held" : "run";
   if (envs.has(k)) return "idle";
   return "none";
 }
 
 /** O estado falado; no parcial, diz qual lado caiu. */
 function say(project: string, wt: Worktree, state: LineState) {
-  if (state !== "part") return SPOKEN[state];
-  const { up, down } = sides(key(project, wt.id));
-  return `só ${up.map((t) => TAB_LABEL[t]).join(" e ")} rodando, ${down.map((t) => TAB_LABEL[t]).join(" e ")} parado`;
+  if (state !== "part" && state !== "held") return SPOKEN[state];
+  const { up, down, held } = sides(key(project, wt.id));
+  const names = (ts: Tab[]) => ts.map((t) => TAB_LABEL[t]).join(" e ");
+  return `só ${names(up)} rodando, ${state === "part" ? `${names(down)} caiu` : `${names(held)} parada à mão`}`;
 }
 
 const X_ICON = "M4.5 4.5l7 7M11.5 4.5l-7 7";
@@ -521,7 +529,9 @@ const stopPane = (pane: Pane) => invoke<boolean>("pty_stop", { id: pane.ptyId, t
  *  para "Subir Front" estar à mão olhando a API. */
 function sideTabs(): Tab[] {
   if (!current) return [tab];
-  return lineState(current.project, current.wt) === "part" ? sides(key(current.project, current.wt.id)).down : [tab];
+  const state = lineState(current.project, current.wt);
+  const s = sides(key(current.project, current.wt.id));
+  return state === "part" ? s.down : state === "held" ? s.held : [tab];
 }
 
 /** Botões "Parar API" e "Parar tudo" do cabeçalho: para o que roda nas abas, como na troca, mas o shell fica.
@@ -551,7 +561,7 @@ async function toggleRun(all: boolean, want?: "stop" | "start") {
     for (const p of panes) writeStart(k, p, false);
     return render(true);
   }
-  const state = { forcing: false };
+  const state = { forcing: false, tabs };
   halting.set(k, state);
   starting.delete(k);
   for (const p of panes) halted.add(p.ptyId);
@@ -717,10 +727,12 @@ function render(focus = false) {
   const down = state === "part" ? sides(ck!).down : [];
   // Parado à mão (Parar API) com o outro lado de pé: a palheta segue RODANDO, mas a aba diz que aquele lado está parado.
   // Em ink-2, não em fail: foi pedido, não caiu.
-  const parked = TABS.filter((t) => !down.includes(t) && env?.panes[t] && halted.has(env.panes[t]!.ptyId) && !busy.has(env.panes[t]!.ptyId));
+  const parked = ck ? sides(ck).held : [];
+  // Parando um lado só: a palheta segue com o estado da worktree e a aba que para fica âmbar.
+  const stoppingTabs = (ck && halting.get(ck)?.tabs) || [];
   // Só recria as abas quando elas mudam: recriar com o foco numa delas (a janela voltando, uma palheta virando)
   // jogava o foco do teclado no body. Se mudar com o foco nelas, ele volta para a mesma aba (ou para a selecionada).
-  const tabsSig = [ck, tab, down.join(), parked.join(), ...TABS.map((t) => (wt[t] ? (env?.panes[t]?.el.id ?? "-") : ""))].join("\u0000");
+  const tabsSig = [ck, tab, down.join(), parked.join(), stoppingTabs.join(), ...TABS.map((t) => (wt[t] ? (env?.panes[t]?.el.id ?? "-") : ""))].join("\u0000");
   if (tabsEl.dataset.sig !== tabsSig) {
     tabsEl.dataset.sig = tabsSig;
     const focusedTab = tabsEl.contains(document.activeElement) ? document.activeElement!.id : null;
@@ -731,11 +743,13 @@ function render(focus = false) {
         "button",
         { type: "button", id: `tab-${t}`, tabIndex: t === tab ? 0 : -1, onclick: () => setTab(t, true) },
         el("span", { textContent: TAB_LABEL[t] }),
-        down.includes(t) ? el("span", { className: "sr", textContent: " (parado)" }) : null,
+        down.includes(t) ? el("span", { className: "sr", textContent: " (caiu)" }) : null,
         parked.includes(t) ? el("span", { className: "sr", textContent: " (parado à mão)" }) : null,
+        stoppingTabs.includes(t) ? el("span", { className: "sr", textContent: " (parando)" }) : null,
       );
       b.classList.toggle("down", down.includes(t));
       b.classList.toggle("parked", parked.includes(t));
+      b.classList.toggle("halting", stoppingTabs.includes(t));
       if (down.includes(t)) b.title = `Nada rodando no ${TAB_LABEL[t]}`;
       if (parked.includes(t)) b.title = `${TAB_LABEL[t]} parado à mão (Ctrl+Shift+S sobe)`;
       b.setAttribute("role", "tab");
@@ -1042,8 +1056,8 @@ function editButton(project: string, wt: Worktree) {
       type: "button",
       className: "icon-btn edit",
       tabIndex: -1,
-      title: busyNow ? `${wt.label} está rodando: troque para outra worktree do projeto antes de editar` : `Editar ${wt.label}`,
-      ariaLabel: busyNow ? `Editar ${spoken}: indisponível, está rodando; troque para outra worktree do projeto antes` : `Editar ${spoken}`,
+      title: busyNow ? `${wt.label}, ${say(project, wt, lineState(project, wt))}: troque para outra worktree do projeto antes de editar` : `Editar ${wt.label}`,
+      ariaLabel: busyNow ? `Editar ${spoken}: indisponível, ${say(project, wt, lineState(project, wt))}; troque para outra worktree do projeto antes` : `Editar ${spoken}`,
       onclick: () => {
         const fresh = findWt(project, wt.id);
         if (fresh && !BUSY.includes(lineState(project, fresh))) openEditDialog(project, fresh);
@@ -1292,10 +1306,7 @@ const BRANCH_MIN = 48;
 function fitHeader() {
   const stay = lastStopEl.dataset.stay !== undefined;
   const open = !document.body.classList.contains("sidebar-off");
-  for (const a of [lastStopEl, haltAllEl, haltTabEl, urlEl]) a.classList.remove("ceded", "tight");
-  headerEl.classList.remove("dense");
   delete switchingEl.dataset.tight;
-  moreBtn.hidden = true;
   destEl.classList.remove("bare", "no-project");
   // Mede com a faixa da troca inteira: o piso dela muda com a largura (verbo, contagem).
   fitStrip();
@@ -1319,22 +1330,47 @@ function fitHeader() {
   const below = (px: number) => !!branch && branch.clientWidth < Math.min(branch.scrollWidth, px);
   // O sufixo do par ("feature-api ⇄ feature-app") é o primeiro a sair: o nome em comum é o que diz a worktree.
   if (branch?.querySelector(".pair-pre") && branch.clientWidth < branch.scrollWidth) destEl.classList.add("bare");
-  let i = 0;
-  const cede = () => {
-    for (; i < steps.length && below(BRANCH_FLOOR); i++) steps[i][0].classList.add(steps[i][1]);
-  };
-  cede();
-  // Algo cedeu: o ⋯ entra, e ele mesmo pode empurrar o próximo passo.
-  if (cededActions().length) {
-    moreBtn.hidden = false;
+  const fitSteps = () => {
+    for (const a of [lastStopEl, haltAllEl, haltTabEl, urlEl]) a.classList.remove("ceded", "tight");
+    headerEl.classList.remove("dense");
+    moreBtn.hidden = true;
+    let i = 0;
+    const cede = () => {
+      for (; i < steps.length && below(BRANCH_FLOOR); i++) steps[i][0].classList.add(steps[i][1]);
+    };
     cede();
+    // Algo cedeu: o ⋯ entra, e ele mesmo pode empurrar o próximo passo.
+    if (cededActions().length) {
+      moreBtn.hidden = false;
+      cede();
+    }
+  };
+  // Painel recolhido: os outros projetos em serviço cuja palheta não cabe saem inteiros (nunca uma palheta cortada).
+  const items = [...runningEl.children] as HTMLElement[];
+  const cutRunning = () => {
+    if (open) return 0;
+    const edge = runningEl.getBoundingClientRect().right + 0.5;
+    const cut = items.filter((b) => !b.hidden && b.querySelector(".flap")!.getBoundingClientRect().right > edge);
+    for (const b of cut) b.hidden = true;
+    return cut.length;
+  };
+  for (const b of items) b.hidden = false;
+  fitSteps();
+  // O #running encolhe junto com o destino, na proporção: medidos com ele inteiro, as ações cediam e depois ele saía,
+  // e a 600 sobravam 89px vazios com a branch truncada e três ações no ⋯. Sem os que saíram, mede de novo.
+  if (cutRunning()) {
+    fitSteps();
+    cutRunning();
   }
   if (mine && open && below(BRANCH_MIN)) lastStopEl.classList.add("ceded");
   // Na troca, para onde se vai é o que se procura: cedem, um de cada vez, antes da branch que sobe, o "para", o nome do
   // Voltar até a cauda ("Voltar agrupados": a linha do painel já diz o nome inteiro), o verbo e, por último, a contagem
   // até o SIGKILL, que só a faixa mostra. Tudo de uma vez deixava a faixa muda com espaço sobrando.
   for (const level of ["1", "2", "3", "4"]) {
-    if (switchingEl.hidden || !below(BRANCH_FLOOR)) break;
+    // Com o painel aberto, a linha atual ao lado já mostra o nome inteiro: antes de o verbo e a contagem saírem
+    // (degraus 3 e 4), a branch do destino desce até o piso mínimo (a cauda, "…agrupados").
+    const floor = open && level >= "3" ? BRANCH_MIN : BRANCH_FLOOR;
+    if (switchingEl.hidden || !below(floor)) break;
     // Antes do nome do Voltar, do verbo e da contagem, sai o projeto do destino, se o painel aberto ao lado já diz qual
     // é: a 960 a faixa ficava muda ("Voltar login-time…", sem "Parando" nem contagem) com "INTERNO /" inteiro.
     if (level === "2" && open) {
@@ -1349,13 +1385,6 @@ function fitHeader() {
   if (below(BRANCH_MIN)) destEl.classList.add("no-project");
   cutBack();
   cutDest(branch, nameNode);
-  const items = [...runningEl.children] as HTMLElement[];
-  if (!open) {
-    for (const b of items) b.hidden = false;
-    const edge = runningEl.getBoundingClientRect().right + 0.5;
-    const cut = items.filter((b) => b.querySelector(".flap")!.getBoundingClientRect().right > edge);
-    for (const b of cut) b.hidden = true;
-  }
   // Falha em outro projeto que a faixa não mostra (cortada, faixa estreita, painel fechado): o botão do painel leva
   // um quadrado vermelho e "falha em PROJETO" no nome. Com o painel aberto ao lado, o painel já mostra.
   const shown = items.filter((b) => !b.hidden && b.offsetParent).map((b) => b.dataset.key);
@@ -1509,9 +1538,15 @@ const wasUp = new Map<string, Tab[]>();
 function announceDrops() {
   for (const [k, env] of envs) {
     const [project, id] = k.split("\u0000");
-    // Parando por uma troca, ou subindo: lado que some ou ainda não veio não é queda.
-    if (stopping.get(project)?.fromId === id || starting.has(k)) {
+    // Parando por uma troca: lado que some não é queda.
+    if (stopping.get(project)?.fromId === id) {
       wasUp.delete(k);
+      continue;
+    }
+    // Subindo: lado que ainda não veio não é queda, mas o que já subiu conta. Apagado aqui, a consulta em que o
+    // start terminava zerava a memória, e um Front que caía 300 ms depois do RODANDO não dava recado nenhum.
+    if (starting.has(k)) {
+      wasUp.set(k, sides(k).up);
       continue;
     }
     const { up } = sides(k);
@@ -2705,6 +2740,13 @@ window.addEventListener(
   (e) => {
     // Com um diálogo aberto, nada atrás dele responde: a paleta abriria presa sob o véu.
     if (!e.ctrlKey || !e.shiftKey || document.querySelector("dialog[open]")) return;
+    // Com a paleta aberta, só o próprio Ctrl+Shift+K (que a fecha): os outros agiam atrás dela (Ctrl+Shift+X parava a API
+    // e o rodapé dela ficava desatualizado).
+    if (!palette.hidden && e.code !== "KeyK") {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     if (e.code === "KeyK") palette.hidden ? openPalette() : closePalette();
     else if (e.code === "KeyB") toggleAndFocus();
     else if (e.code === "KeyE") focusBoard();
@@ -2717,6 +2759,8 @@ window.addEventListener(
       else reload();
     } else if (e.code === "KeyJ") {
       if (current?.wt.api && current.wt.front) setTab(tab === "api" ? "front" : "api", true);
+      // Solo: não há o que alternar, e o atalho diz por quê.
+      else if (current) headerNote(false, current.project, `${current.wt.api ? "Só API" : "Só Front"}: nada para alternar`);
     } else if (e.code === "KeyX") toggleRun(e.altKey, "stop");
     else if (e.code === "KeyS") toggleRun(e.altKey, "start");
     else return;
