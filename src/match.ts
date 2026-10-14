@@ -13,3 +13,7 @@ export function matchAt(q: string, text: string): number[] | null {
 export function matchItem(terms: string[], project: string, label: string) {
   return terms.every((t) => matchAt(t, project) || matchAt(t, label));
 }
+
+/** Quantos termos começam o nome do projeto (já em minúsculas): "lei agr" é o LEILAO, mesmo que "lei" também case no
+ *  fim de "fix/agrupador-de-lotes-por-leilao" do INTERNO. Desempata antes da recência na paleta. */
+export const projectTerms = (terms: string[], project: string) => terms.filter((q) => project.startsWith(q)).length;

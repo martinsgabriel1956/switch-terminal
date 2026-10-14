@@ -236,6 +236,8 @@ kbd {
   color: var(--flap-ink);
   font: 700 12px/1 var(--ui);
   letter-spacing: 0.06em;
+  /* "SEM FRONT" no mínimo da janela quebrava em duas linhas cortadas: a palheta é uma linha só */
+  white-space: nowrap;
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -1036,10 +1038,15 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   text-decoration: underline;
 }
 
-/* a porta sumiu logo depois de um clique em Parar: o lugar dela fica até o cursor sair do cabeçalho (main.ts) */
-#dev-url[hidden][data-hold] {
+/* depois de um clique em Parar ou Subir, a porta fica como estava até o cursor sair do cabeçalho (main.ts):
+   a que sumiu guarda o lugar, a que apareceu espera */
+#dev-url[hidden][data-hold=""] {
   display: inline !important;
   visibility: hidden;
+}
+
+#dev-url[data-hold="off"] {
+  display: none !important;
 }
 
 /* sem espaço, o sufixo do par sai primeiro (fitHeader): o nome em comum é o que diz a worktree */
@@ -1147,12 +1154,18 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   color: var(--fail);
 }
 
+/* O quadrado entra no respiro da esquerda (2 + 6 + 4 = os 12px de sempre): a aba não muda de largura e as ações
+   ao lado não andam quando um lado cai ou para. */
+#tabs button:is(.down, .parked, .halting) {
+  padding-left: 2px;
+}
+
 #tabs button.down::before {
   content: "";
   display: inline-block;
   width: 6px;
   height: 6px;
-  margin-right: 6px;
+  margin-right: 4px;
   border-radius: 2px;
   background: currentColor;
   vertical-align: 1px;
@@ -1165,7 +1178,7 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   display: inline-block;
   width: 6px;
   height: 6px;
-  margin-right: 6px;
+  margin-right: 4px;
   border-radius: 2px;
   box-shadow: inset 0 0 0 1.5px var(--ink-2);
   vertical-align: 1px;
@@ -1416,7 +1429,10 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   color: var(--fail);
 }
 
+/* Onde caiu vem antes de por quê: a causa crua cede primeiro ("LEILAO / m…" a 960), e ela está inteira em "Ver o terminal" */
 #alert > .who {
+  flex-shrink: 0;
+  max-width: 50%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

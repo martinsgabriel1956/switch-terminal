@@ -9,7 +9,7 @@ import "@fontsource/barlow-semi-condensed/latin-700.css";
 import "./styles.css";
 import { asPm, isPm, joinStart, PREFIX, rewrite, splitStart, switchPm, type Pm } from "./pm";
 import { endCut, middleCut, nameTail } from "./branch";
-import { matchAt, matchItem } from "./match";
+import { matchAt, matchItem, projectTerms } from "./match";
 
 /** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto. */
 type Side = { path: string; startCommand: string | null; setupCommand: string | null; projectStart: string | null };
@@ -146,17 +146,29 @@ const termNoteEl = $("#term-note");
 const headerEl = $("header");
 const haltTabEl = $<HTMLButtonElement>("#halt-tab");
 const haltAllEl = $<HTMLButtonElement>("#halt-all");
+// Depois de um clique nas ações, o que fica à esquerda delas guarda a largura até o cursor sair do cabeçalho: a porta
+// que some (Parar) deixa o lugar, a que aparece (Subir) espera, e o destino fica com a largura que tinha (a palheta
+// cresce de INATIVA a SUBINDO; quem cede é a branch). Sem isso o vizinho deslizava para baixo do cursor, com a prévia
+// ENCERRA acesa, e o segundo clique parava outra coisa. Antes do toggleRun: a largura é a de antes do clique. Pelo
+// teclado não guarda: o foco anda com o botão.
+for (const b of [haltTabEl, haltAllEl])
+  b.addEventListener("click", (e) => {
+    if (!e.detail || urlEl.dataset.hold !== undefined) return;
+    urlEl.dataset.hold = urlEl.hidden ? "off" : "";
+    destEl.style.flex = `0 0 ${destEl.getBoundingClientRect().width}px`;
+    destEl.style.maxWidth = "none";
+  });
 haltTabEl.addEventListener("click", () => toggleRun(false));
 haltAllEl.addEventListener("click", () => toggleRun(true));
-// Parar a API tira a porta dela da faixa, e as ações andavam para a esquerda: "Parar tudo" caía embaixo do cursor, com a
-// prévia ENCERRA acesa, e o segundo clique parava a worktree inteira. Depois de um clique nas ações, o lugar da porta fica
-// (invisível) até o cursor sair do cabeçalho.
-for (const b of [haltTabEl, haltAllEl]) b.addEventListener("click", () => (urlEl.dataset.hold = ""));
-headerEl.addEventListener("pointerleave", () => {
+function releaseHold() {
   if (urlEl.dataset.hold === undefined) return;
   delete urlEl.dataset.hold;
+  destEl.style.removeProperty("flex");
+  destEl.style.removeProperty("max-width");
   fitHeader();
-});
+}
+headerEl.addEventListener("pointerleave", releaseHold);
+addEventListener("resize", releaseHold);
 
 /** ⋯ do cabeçalho: o que não coube na faixa (Parar API, Parar tudo, a porta) vai para cá em vez de sumir sem rastro.
  *  Existe só enquanto algo cedeu (fitHeader); cada item repete o atalho e a prévia ENCERRA do botão que substitui. */
@@ -410,7 +422,10 @@ function wouldStop(project: string, id: string | null): Worktree | undefined {
   const prev = active[project];
   if (!prev || prev === id) return;
   const wt = findWt(project, prev);
-  return wt && LIVE.includes(lineState(project, wt)) ? wt : undefined;
+  if (!wt) return;
+  const state = lineState(project, wt);
+  // SEM FRONT com a API parada à mão: nada de pé para encerrar.
+  return LIVE.includes(state) && (state !== "part" || sides(key(project, wt.id)).up.length) ? wt : undefined;
 }
 
 /** Nomes dos processos em primeiro plano da worktree ("npm run dev"): a troca diz o que mata, não só onde. */
@@ -443,6 +458,9 @@ function lineState(project: string, wt: Worktree): LineState {
   const { up, down, held } = sides(k);
   // Um lado parado à mão com o outro de pé: API PARADA em palheta neutra (nunca vermelha: foi pedido, não caiu).
   if (up.length) return down.length ? "part" : held.length ? "held" : "run";
+  // A API parada à mão e o Front caiu depois: é queda (SEM FRONT), não INATIVA. Neutra, a palheta escondia a falha e o
+  // botão oferecia "Subir API", o lado que foi pedido.
+  if (held.length && down.length) return "part";
   if (envs.has(k)) return "idle";
   return "none";
 }
@@ -452,6 +470,7 @@ function say(project: string, wt: Worktree, state: LineState) {
   if (state !== "part" && state !== "held") return SPOKEN[state];
   const { up, down, held } = sides(key(project, wt.id));
   const names = (ts: Tab[]) => ts.map((t) => TAB_LABEL[t]).join(" e ");
+  if (!up.length) return `${names(held)} parada à mão, ${names(down)} caiu`;
   return `só ${names(up)} rodando, ${state === "part" ? `${names(down)} caiu` : `${names(held)} parada à mão`}`;
 }
 
@@ -1776,7 +1795,8 @@ function renderPalette(reset = false) {
     const r = recent.indexOf(key(it.project, it.wt.id));
     return r < 0 ? Infinity : r;
   };
-  // Trecho inteiro no começo de uma palavra > trecho inteiro > subsequência (o pior termo decide); empate, a mais recente.
+  // Trecho inteiro no começo de uma palavra > trecho inteiro > subsequência (o pior termo decide); empate, o projeto que um
+  // termo começa ("lei agr" no LEILAO: o Enter no INTERNO matava o servidor errado), depois a mais recente.
   const quality = (it: Item) => {
     const text = `${it.project} ${it.wt.label}`.toLowerCase();
     return Math.max(
@@ -1790,7 +1810,7 @@ function renderPalette(reset = false) {
   items = config.projects
     .flatMap((p) => p.worktrees.map((wt) => ({ project: p.name, wt })))
     .filter((it) => matchItem(terms, it.project.toLowerCase(), it.wt.label.toLowerCase()))
-    .sort((a, b) => quality(a) - quality(b) || recency(a) - recency(b));
+    .sort((a, b) => quality(a) - quality(b) || projectTerms(terms, b.project.toLowerCase()) - projectTerms(terms, a.project.toLowerCase()) || recency(a) - recency(b));
   // Subsequência só quando nada casa como trecho: "log" achando l…o…g espalhados em "calculo-…-agrupados" era ruído.
   if (items.length && quality(items[0]) < 2) items = items.filter((it) => quality(it) < 2);
   if (reset) sel = items.length > 1 && currentKey() === key(items[0].project, items[0].wt.id) ? 1 : 0;
