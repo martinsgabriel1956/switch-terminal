@@ -946,16 +946,15 @@ header {
   background: var(--board);
 }
 
-/* A meia tela, os vãos apertam (12 → 8px) e os botões perdem 2px de respiro de cada lado: a 960, "Parar API" saía
-   para o ⋯ por 10px. */
-@container (max-width: 800px) {
-  header {
-    --gap: 8px;
-  }
+/* Sem espaço para as ações (fitHeader liga .tight), os vãos apertam (12 → 8px) e os botões perdem 2px de respiro de
+   cada lado: a 960, "Parar API" saía para o ⋯ por 10px. Pela necessidade, não por uma largura: com o corte em 800px da
+   faixa, a 830 as ações cabiam e a branch truncava, a 860 elas iam para o ⋯ e a branch voltava inteira. */
+header.tight {
+  --gap: 8px;
+}
 
-  header .halt {
-    padding: 0 8px;
-  }
+header.tight .halt {
+  padding: 0 8px;
 }
 
 /* O destino é a verdade do que está em serviço. Base no piso (projeto, a branch até 160px e a palheta, medido em
@@ -973,7 +972,8 @@ header {
 }
 
 /* A palheta do destino é a verdade de relance da janela: 14px (a da linha tem 12) e o sentido desenhado
-   (↑ subindo, ↓ parando). A largura cresce com o texto, então o estado nunca trunca. */
+   (↑ subindo, ↓ parando). A largura é a do rótulo mais largo que ela pode ter (.ghost), então o estado nunca trunca
+   e o que vem depois dela não anda. */
 #destination .flap {
   width: auto;
   min-width: calc(7ch + 16px);
@@ -986,6 +986,14 @@ header {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* os rótulos mais largos, empilhados e invisíveis: a largura da palheta não muda com o estado (main.ts) */
+#destination .flap > .ghost {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  visibility: hidden;
 }
 
 #destination .flap > span:first-child::before {
@@ -1071,12 +1079,11 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
 }
 
 /* A meia tela (960 num monitor de 1920, ao lado do editor) é o caso base. Com o painel aberto ao lado, a placa do projeto
-   e a linha atual já estão à vista: o projeto sai do destino e os ~75px vão para "Parar API" e "Parar tudo", que iam
-   para o ⋯. O leitor de tela ouve o projeto (.sr). Com o painel por cima (narrow) ou recolhido, ele fica. */
-@container (max-width: 800px) {
-  body:not(.sidebar-off, .narrow) #destination .where > :is(.project, .sep) {
-    display: none;
-  }
+   e a linha atual já estão à vista: sem espaço para as ações (.tight), o projeto sai do destino e os ~75px vão para
+   "Parar API" e "Parar tudo", que iam para o ⋯. O leitor de tela ouve o projeto (.sr). Com o painel por cima (narrow)
+   ou recolhido, ele fica. */
+body:not(.sidebar-off, .narrow) header.tight #destination .where > :is(.project, .sep) {
+  display: none;
 }
 
 #destination .where > .project,

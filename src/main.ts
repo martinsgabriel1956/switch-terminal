@@ -146,25 +146,21 @@ const termNoteEl = $("#term-note");
 const headerEl = $("header");
 const haltTabEl = $<HTMLButtonElement>("#halt-tab");
 const haltAllEl = $<HTMLButtonElement>("#halt-all");
-// Depois de um clique nas ações, o que fica à esquerda delas guarda a largura até o cursor sair do cabeçalho: a porta
-// que some (Parar) deixa o lugar, a que aparece (Subir) espera, e o destino fica com a largura que tinha (a palheta
-// cresce de INATIVA a SUBINDO; quem cede é a branch). Sem isso o vizinho deslizava para baixo do cursor, com a prévia
-// ENCERRA acesa, e o segundo clique parava outra coisa. Antes do toggleRun: a largura é a de antes do clique. Pelo
-// teclado não guarda: o foco anda com o botão.
+// Depois de um clique nas ações, a porta fica como estava até o cursor sair do cabeçalho: a que some (Parar) deixa o
+// lugar, a que aparece (Subir) espera. A palheta do destino e as abas já têm largura fixa (os rótulos empilhados, o
+// quadrado no respiro). Sem isso o vizinho deslizava para baixo do cursor, com a prévia ENCERRA acesa, e o segundo
+// clique parava outra coisa. Pelo teclado não guarda: o foco anda com o botão.
+// O segundo clique de um duplo clique não age: o verbo vira na hora ("Subir tudo" → "Parar tudo") e ele parava o
+// que acabara de subir.
 for (const b of [haltTabEl, haltAllEl])
   b.addEventListener("click", (e) => {
-    if (!e.detail || urlEl.dataset.hold !== undefined) return;
-    urlEl.dataset.hold = urlEl.hidden ? "off" : "";
-    destEl.style.flex = `0 0 ${destEl.getBoundingClientRect().width}px`;
-    destEl.style.maxWidth = "none";
+    if (e.detail === 1 && urlEl.dataset.hold === undefined) urlEl.dataset.hold = urlEl.hidden ? "off" : "";
   });
-haltTabEl.addEventListener("click", () => toggleRun(false));
-haltAllEl.addEventListener("click", () => toggleRun(true));
+haltTabEl.addEventListener("click", (e) => e.detail < 2 && toggleRun(false));
+haltAllEl.addEventListener("click", (e) => e.detail < 2 && toggleRun(true));
 function releaseHold() {
   if (urlEl.dataset.hold === undefined) return;
   delete urlEl.dataset.hold;
-  destEl.style.removeProperty("flex");
-  destEl.style.removeProperty("max-width");
   fitHeader();
 }
 headerEl.addEventListener("pointerleave", releaseHold);
@@ -448,9 +444,10 @@ function sides(k: string) {
 function lineState(project: string, wt: Worktree): LineState {
   const k = key(project, wt.id);
   const st = stopping.get(project);
-  // Voltou para a que estava parando: ela espera a si mesma parar para reiniciar.
-  if (st && active[project] === wt.id) return "wait";
+  // A que está parando diz PARANDO (SIGKILL) enquanto os processos dela existem, também depois do Voltar: ali ela dizia
+  // AGUARDA enquanto levava SIGKILL. Reinicia (SUBINDO) quando eles saem.
   if (st?.fromId === wt.id) return st.forcing ? "kill" : "stop";
+  if (st && active[project] === wt.id) return "wait";
   // Parada à mão da worktree inteira; parando um lado só, a palheta fica com o estado dela e só a aba fica âmbar.
   const h = halting.get(k);
   if (h && h.tabs.length >= Object.keys(envs.get(k)?.panes ?? {}).length) return h.forcing ? "kill" : "stop";
@@ -844,6 +841,10 @@ function render(focus = false) {
     // Aqui, maior e com o sentido desenhado: SUBINDO, AGUARDA e PARANDO dividem o âmbar e só a palavra os separava.
     const dir = DIR[state];
     if (dir) f.firstElementChild!.prepend(icon(dir, "dir"));
+    // Largura fixa: os rótulos mais largos que ela pode ter, empilhados e invisíveis (como .halt). Crescendo de
+    // RODANDO a API PARADA, ela empurrava "Parar tudo" para baixo do cursor.
+    const ghost = (...c: (Node | string)[]) => el("span", { className: "ghost" }, ...c);
+    f.append(ghost(icon(DIR.stop!, "dir"), FLAP.stop), ...(wt.api && wt.front ? [ghost("FRONT PARADO"), ghost("API PARADA"), ghost("SEM FRONT")] : []));
     // "Parar tudo" com o cursor ou o foco mostra a mesma prévia ENCERRA das linhas (CSS).
     if (LIVE.includes(state)) f.append(el("span", { className: "ends", textContent: "ENCERRA" }));
     // O visível trunca (cutDest) e perde o projeto; quem fala é o .sr, inteiro. Truncado dentro da região viva, o leitor
@@ -1062,8 +1063,9 @@ function renderWait(project: string, wt: Worktree) {
       : el(
           "button",
           { type: "button", className: "btn back", title: `Cancela a troca e reinicia ${st.from}`, onclick: () => st.fromWt && select(project, st.fromWt) },
+          // "Voltar e reiniciar": o Ctrl+C já foi, e "Voltar para" prometia desfazer.
           "Voltar",
-          el("span", { className: "para" }, "para"),
+          el("span", { className: "para" }, "e reiniciar"),
           // Só o nome (sem os prefixos do par): na faixa estreita ele trunca no meio e fica (cutBack).
           el("span", { className: "to", textContent: proseName(st.from) }),
         );
@@ -1088,7 +1090,7 @@ function renderWait(project: string, wt: Worktree) {
   const had = switchingEl.contains(document.activeElement) ? ((document.activeElement as HTMLElement).dataset.act ?? "strip") : null;
   switchingEl.replaceChildren(
     // O verbo da palheta da anterior (PARANDO); ENCERRA fica só para a prévia. No SIGKILL ele continua: a palheta ao lado diz como.
-    el("span", { className: "what", textContent: goingBack ? "Voltando" : "Parando" }),
+    el("span", { className: "what", textContent: goingBack ? "Reiniciando" : "Parando" }),
     // A contagem entra com o Forçar: na troca típica (1–2 s), contar até um SIGKILL que não vem era ansiedade à toa.
     // "SIGKILL em [3 s]": sem o rótulo, a contagem lia como "a nova para em 3 s".
     ...[st.forcing ? flap("kill", `strip:${project}`) : late ? el("span", { className: "count-to", textContent: "SIGKILL em" }) : null, late && !st.forcing ? countFlap(project, st) : null, back, force].filter((b) => b !== null),
@@ -1476,7 +1478,18 @@ const BRANCH_MIN = 112;
  *  ~15 degraus medidos em JS decidiam isso, e cada regressão de largura saía de uma medida errada.
  *  Aqui só o que o CSS não sabe: o piso (depende do texto), a largura que o #flow usa de fato (o vão do que quebrou volta
  *  para a branch), quem quebrou (fica inert e entra no ⋯), o sufixo do par e o projeto que saem do destino, e o corte no meio. */
+/** Mede o cabeçalho folgado e, se Parar API ou Parar tudo (ou o lugar deles numa troca) não couber, apertado (.tight:
+ *  vãos de 8px e, com o painel ao lado, sem o projeto no destino). Pela necessidade: um corte fixo em 800px fazia a
+ *  branch truncar a 830 e voltar inteira a 860, com as ações indo para o ⋯ com mais largura. */
 function fitHeader() {
+  headerEl.classList.remove("tight");
+  fitHeaderOnce();
+  if (![haltTabEl, haltAllEl].some((a) => !a.hidden && ceded(a))) return;
+  headerEl.classList.add("tight");
+  fitHeaderOnce();
+}
+
+function fitHeaderOnce() {
   destEl.classList.remove("bare", "no-project");
   const branch = destEl.querySelector<HTMLElement>(".branch-name");
   // O nome inteiro antes de medir: cutDest o trunca no meio no fim.
@@ -1498,8 +1511,8 @@ function fitHeader() {
     }
     const flapEl = destEl.querySelector<HTMLElement>(".flap")!;
     const tail = parseFloat(getComputedStyle(destEl).columnGap) + flapEl.offsetWidth;
-    // A palheta que passa da largura de RODANDO (API PARADA, SEM FRONT, ↓ PARANDO) tira do piso da branch, não das
-    // ações: a 960, "Parar tudo" ia para o ⋯ justo nos estados em que se para e se sobe à mão.
+    // O que a palheta tem além da largura de RODANDO (ela guarda a de FRONT PARADO em todos os estados) tira do piso da
+    // branch, não das ações: a 960, "Parar tudo" ia para o ⋯.
     const wider = Math.max(0, flapEl.offsetWidth - parseFloat(getComputedStyle(flapEl).minWidth));
     const floor = (b: number) => destEl.style.setProperty("--floor", `${Math.ceil(head + b + tail)}px`);
     // O recado de rotina ("Parou à força em 5,7 s · …") só fica na faixa se a branch em serviço couber inteira ao lado
@@ -1714,7 +1727,7 @@ function announceDrops() {
     wasUp.set(k, up);
     const wt = findWt(project, id);
     if (!lost.length || !wt) continue;
-    headerNote(true, project, `${lost.map((t) => TAB_LABEL[t]).join(" e ")} ${lost.length > 1 ? "pararam" : "parou"}`, noteWho(project, id, wt.label), errorWhy(project, id, lost[0]), upHere(project, id, lost), seeTerminal(project, id, lost[0]));
+    headerNote(true, project, `${lost.map((t) => TAB_LABEL[t]).join(" e ")} ${lost.length > 1 ? "caíram" : "caiu"}`, noteWho(project, id, wt.label), errorWhy(project, id, lost[0]), upHere(project, id, lost), seeTerminal(project, id, lost[0]));
   }
 }
 
