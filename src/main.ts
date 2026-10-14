@@ -8,7 +8,7 @@ import "@fontsource/barlow-semi-condensed/latin-600.css";
 import "@fontsource/barlow-semi-condensed/latin-700.css";
 import "./styles.css";
 import { asPm, isPm, joinStart, PREFIX, rewrite, splitStart, switchPm, type Pm } from "./pm";
-import { middleCut, nameTail } from "./branch";
+import { endCut, middleCut, nameTail } from "./branch";
 import { matchAt, matchItem } from "./match";
 
 /** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto. */
@@ -17,8 +17,9 @@ type Worktree = { id: string; label: string; api: Side | null; front: Side | nul
 type Project = { name: string; error: string | null; worktrees: Worktree[] };
 type Config = { stopTimeoutMs: number; screenReader: boolean; projects: Project[] };
 type Tab = "api" | "front";
-/** `url`: endereço do dev server lido da saída do terminal ("Local: http://localhost:3000"). */
-type Pane = { term: Terminal; fit: FitAddon; el: HTMLElement; ptyId: number; side: Side; url: string | null };
+/** `url`: endereço do dev server lido da saída do terminal ("Local: http://localhost:3000").
+ *  `follow`: desliga o acompanhamento até o fim que fitPane liga depois de um resize. */
+type Pane = { term: Terminal; fit: FitAddon; el: HTMLElement; ptyId: number; side: Side; url: string | null; follow?: () => void };
 type Env = { project: string; root: HTMLElement; panes: Partial<Record<Tab, Pane>>; ready: Promise<void> };
 /** Estado de uma linha do painel: o que a palheta mostra. */
 type LineState = "run" | "part" | "held" | "start" | "wait" | "stop" | "kill" | "idle" | "none";
@@ -163,10 +164,33 @@ function ceded(e: HTMLElement) {
   const edge = flowEl.getBoundingClientRect().right - parseFloat(getComputedStyle(flowEl).paddingRight) + 0.5;
   return e.getBoundingClientRect().right > edge;
 }
-const cededActions = () => [haltTabEl, haltAllEl, urlEl].filter((a) => !a.hidden && ceded(a));
+const cededActions = () => [haltTabEl, haltAllEl, urlEl].filter((a) => !a.hidden && !a.classList.contains("hold") && ceded(a));
+/** Outros projetos em serviço que quebraram para fora da faixa: vão para o ⋯ também. Sumiam sem rastro (painel recolhido
+ *  a 960, e sempre a 600), e nada dizia que o LEILAO seguia de pé. */
+const cededOthers = () => [...runningEl.querySelectorAll<HTMLElement>(".other")].filter(ceded);
 moreMenu.addEventListener("toggle", (e) => {
   if ((e as ToggleEvent).newState !== "open") return;
   moreMenu.replaceChildren(
+    ...cededOthers().map((o) => {
+      const project = o.dataset.key!;
+      const wt = findWt(project, active[project] ?? "");
+      const b = el(
+        "button",
+        {
+          type: "button",
+          className: "more-item other",
+          title: o.title,
+          onclick: () => {
+            moreMenu.hidePopover();
+            if (wt) select(project, wt);
+          },
+        },
+        el("span", { className: "where" }, el("span", { className: "project", textContent: project }), ` / ${wt ? proseName(wt.label) : ""}`),
+        o.querySelector(".flap")!.cloneNode(true),
+      );
+      b.setAttribute("aria-label", o.title);
+      return b;
+    }),
     ...cededActions().map((src) => {
       const keys = src.getAttribute("aria-keyshortcuts")?.replace("Control", "Ctrl");
       // A ação direto, não src.click(): o original quebrou para fora da faixa e está inert.
@@ -186,6 +210,7 @@ moreMenu.addEventListener("toggle", (e) => {
   const r = moreBtn.getBoundingClientRect();
   moreMenu.style.top = `${r.bottom + 4}px`;
   moreMenu.style.right = `${innerWidth - r.right}px`;
+  // Os outros projetos vêm antes das ações: com eles no menu, o foco abre num que só leva até lá, não num que para.
   moreMenu.querySelector<HTMLElement>("button")?.focus();
 });
 
@@ -530,6 +555,32 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
   return pane;
 }
 
+/** Ajusta o terminal ao tamanho do painel sem tirá-lo do fim. A faixa da troca (36px) entra e sai e o terminal perde e
+ *  ganha uma linha; no resize o xterm 6.0 sincroniza a rolagem com a altura antiga e prende a vista uma linha acima do
+ *  fim, e fora do fim ele para de acompanhar a saída: com histórico, toda troca ficava parada no "^C" da anterior, com o
+ *  prompt e o servidor subindo abaixo da dobra. Um scrollToBottom logo depois é limitado pela mesma altura antiga; ele só
+ *  vale depois que a saída nova a atualiza. Então desce a cada escrita até chegar ao fim, a menos que a roda role antes.
+ *  ponytail: contorno de um bug do xterm 6.0; sai quando o 6.1 estável corrigir o Viewport. */
+function fitPane(pane: Pane) {
+  const { term } = pane;
+  const atEnd = term.buffer.active.viewportY >= term.buffer.active.baseY;
+  const rows = term.rows;
+  pane.fit.fit();
+  if (!atEnd || term.rows === rows) return;
+  pane.follow?.();
+  const stop = () => {
+    written.dispose();
+    pane.el.removeEventListener("wheel", stop);
+    pane.follow = undefined;
+  };
+  const written = term.onWriteParsed(() => {
+    term.scrollToBottom();
+    if (term.buffer.active.viewportY >= term.buffer.active.baseY) stop();
+  });
+  pane.el.addEventListener("wheel", stop);
+  pane.follow = stop;
+}
+
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g;
 // "http://localhost:3000", "127.0.0.1:3333", "listening on port 3333"
 const PORT_RE = /(?:https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):|\bporta?\s*:?\s+)(\d{2,5})\b/gi;
@@ -829,7 +880,7 @@ function render(focus = false) {
 
   for (const t of TABS) env?.panes[t]?.el.classList.toggle("off", t !== tab);
   const pane = env?.panes[tab];
-  pane?.fit.fit();
+  if (pane) fitPane(pane);
   if (!focus || !palette.hidden || document.querySelector("dialog[open]")) return;
   if (stopping.has(project)) {
     // O foco vai para a faixa da troca, nunca para um botão: esperar é a ação padrão.
@@ -856,7 +907,12 @@ function renderHalt(b: HTMLButtonElement, all: boolean) {
   const tabs = all ? (wt.api && wt.front ? TABS : []) : sideTabs(verb);
   const panes = tabs.flatMap((t) => envs.get(k)?.panes[t] ?? []);
   const running = verb === "stop";
-  b.hidden = !tabs.length || stopping.has(current!.project) || (!running && !panes.some((p) => p.side.startCommand));
+  // Numa troca os botões não servem (a nova sobe sozinha), mas guardam o lugar, invisíveis (`.hold`): sumindo, a branch
+  // do destino aparecia inteira durante a troca e encolhia no fecho, quando eles voltavam.
+  const swapping = stopping.has(current!.project);
+  b.hidden = !tabs.length || (!swapping && !running && !panes.some((p) => p.side.startCommand));
+  b.classList.toggle("hold", swapping);
+  b.inert = swapping;
   if (b.hidden) return;
   const word = running ? "Parar" : "Subir";
   const text = `${word} ${all ? "tudo" : TAB_LABEL[tabs[0]]}`;
@@ -1009,7 +1065,8 @@ function renderWait(project: string, wt: Worktree) {
     // O verbo da palheta da anterior (PARANDO); ENCERRA fica só para a prévia. No SIGKILL ele continua: a palheta ao lado diz como.
     el("span", { className: "what", textContent: goingBack ? "Voltando" : "Parando" }),
     // A contagem entra com o Forçar: na troca típica (1–2 s), contar até um SIGKILL que não vem era ansiedade à toa.
-    ...[st.forcing ? flap("kill", `strip:${project}`) : late ? countFlap(project, st) : null, back, force].filter((b) => b !== null),
+    // "SIGKILL em [3 s]": sem o rótulo, a contagem lia como "a nova para em 3 s".
+    ...[st.forcing ? flap("kill", `strip:${project}`) : late ? el("span", { className: "count-to", textContent: "SIGKILL em" }) : null, late && !st.forcing ? countFlap(project, st) : null, back, force].filter((b) => b !== null),
     // No SIGKILL não sobra botão: o que vem depois fica escrito, não só no title. Era o momento de mais risco e o de
     // menos reasseguramento à vista.
     ...(st.forcing ? [el("span", { className: "then", textContent: goingBack ? "reinicia em seguida" : `depois sobe ${next}` })] : []),
@@ -1052,14 +1109,20 @@ function cutBack() {
   to.textContent = w(name) <= avail ? name : middleCut(name, avail, w);
 }
 
-/** A branch do destino, sem espaço, trunca como no painel (fitBranches): o meio do nome primeiro, o prefixo ("feat/") e o
- *  fim ("…leilao") ficam; o prefixo só sai inteiro quando o começo do nome ficaria com menos de 3em ("fe…leilao" a 480).
+/** A branch do destino, sem espaço. Com o painel aberto ao lado, corta pelo começo ("…de-lotes-por-leilao"): a linha
+ *  atual dele guarda o começo e o fim ("feat/agrupador-de-…leilao"), e com o mesmo corte nos dois o meio do nome não
+ *  aparecia em lugar nenhum. Sem o painel, trunca como ele (fitBranches): o meio do nome primeiro, o prefixo ("feat/")
+ *  e o fim ficam; o prefixo só sai inteiro quando o começo do nome ficaria com menos de 3em ("fe…leilao" a 480).
  *  Só o nome sozinho; o par de prefixos diferentes ("a ⇄ b") fica com a reticência do CSS. */
 function cutDest(branch: HTMLElement | null, name: Text | null) {
   if (!branch || !name || !overflows(branch)) return;
   if (branch.childNodes.length > 1 && !destEl.classList.contains("bare")) return;
   const avail = branch.getBoundingClientRect().width;
   const w = fontWidth(branch);
+  if (!document.body.classList.contains("sidebar-off") && !document.body.classList.contains("narrow")) {
+    name.data = endCut(branch.dataset.full!, avail, w);
+    return;
+  }
   const [prefix, rest] = splitBranch(branch.dataset.full!);
   const keep = prefix && avail - w(prefix) - w(`…${nameTail(rest)}`) >= 3 * parseFloat(getComputedStyle(branch).fontSize);
   name.data = keep ? prefix + middleCut(rest, avail - w(prefix), w) : middleCut(rest || prefix, avail, w);
@@ -1397,7 +1460,8 @@ function fitHeader() {
   // O #flow com toda a largura que pede: o que não cabe quebra. Algo quebrou: o ⋯ entra, e ele mesmo ocupa largura.
   flowEl.style.removeProperty("--flow-w");
   moreBtn.hidden = true;
-  lastStopEl.classList.remove("out");
+  lastStopEl.classList.remove("out", "short");
+  lastStopEl.removeAttribute("title");
   if (branch) {
     const project = destEl.querySelector<HTMLElement>(".project")!;
     // Meia tela com o painel aberto ao lado, o projeto não está no destino (CSS): a placa do painel já diz qual é.
@@ -1407,17 +1471,27 @@ function fitHeader() {
       // Projeto de até 8 letras não trunca; o longo, até "INT…" (2.5em, o min-width do CSS).
       head = (project.classList.contains("short") ? project.scrollWidth : Math.min(project.scrollWidth, 2.5 * parseFloat(getComputedStyle(project).fontSize))) + parseFloat(sep.width) + parseFloat(sep.marginLeft) + parseFloat(sep.marginRight);
     }
-    const tail = parseFloat(getComputedStyle(destEl).columnGap) + destEl.querySelector<HTMLElement>(".flap")!.offsetWidth;
+    const flapEl = destEl.querySelector<HTMLElement>(".flap")!;
+    const tail = parseFloat(getComputedStyle(destEl).columnGap) + flapEl.offsetWidth;
+    // A palheta que passa da largura de RODANDO (API PARADA, SEM FRONT, ↓ PARANDO) tira do piso da branch, não das
+    // ações: a 960, "Parar tudo" ia para o ⋯ justo nos estados em que se para e se sobe à mão.
+    const wider = Math.max(0, flapEl.offsetWidth - parseFloat(getComputedStyle(flapEl).minWidth));
     const floor = (b: number) => destEl.style.setProperty("--floor", `${Math.ceil(head + b + tail)}px`);
     // O recado de rotina ("Parou à força em 5,7 s · …") só fica na faixa se a branch em serviço couber inteira ao lado
-    // dele; senão vai para o canto do terminal. Ele encolhia a branch recém-trocada por 8 s: a verdade da tela cedia ao fecho.
+    // dele: ele encolhia a branch recém-trocada por 8 s, e a verdade da tela cedia ao fecho. Sem espaço, primeiro sai o
+    // nome da anterior (que já está INATIVA no painel; fica no title e no leitor de tela), depois ele vai para o canto
+    // do terminal. Inteiro ou para o canto, a 1440 ele quase nunca ficava, com 235px livres.
     if (lastStopEl.childElementCount) {
       floor(textWidth(branch));
+      if (ceded(lastStopEl) && lastStopEl.querySelector(".who")) {
+        lastStopEl.classList.add("short");
+        lastStopEl.title = lastStopEl.textContent!;
+      }
       lastStopEl.classList.toggle("out", ceded(lastStopEl));
     }
-    floor(Math.min(textWidth(branch), BRANCH_FLOOR));
+    floor(Math.min(textWidth(branch), BRANCH_FLOOR - wider));
   }
-  if (cededActions().length) moreBtn.hidden = false;
+  if (cededActions().length || cededOthers().length) moreBtn.hidden = false;
   // A largura que o que ficou usa de fato: o vão deixado pelo que quebrou volta para a branch (a 600 sobravam 89px
   // vazios ao lado de uma branch truncada). Sem a margem automática que empurra os outros projetos para a direita.
   const items = [...flowEl.querySelectorAll<HTMLElement>(":scope > a, .halt, #running > .other, #last-stop")];
@@ -1439,9 +1513,9 @@ function fitHeader() {
   for (const i of items) {
     const gone = ceded(i);
     i.classList.toggle("cut", gone && i.offsetTop <= flowEl.clientHeight / 2);
-    if (i !== lastStopEl) i.inert = gone;
+    if (i !== lastStopEl) i.inert = gone || i.classList.contains("hold");
   }
-  moreBtn.hidden = !cededActions().length;
+  moreBtn.hidden = !cededActions().length && !cededOthers().length;
   alertEl.classList.toggle("recover", haltTabEl.inert && !haltTabEl.hidden);
 
   // Falha em outro projeto que a faixa não mostra (quebrou, painel fechado): o botão do painel leva um quadrado
@@ -2879,7 +2953,8 @@ new ResizeObserver(() => {
   fitFrame = requestAnimationFrame(() => {
     fitFrame = 0;
     const ck = currentKey();
-    if (ck) envs.get(ck)?.panes[tab]?.fit.fit();
+    const pane = ck && envs.get(ck)?.panes[tab];
+    if (pane) fitPane(pane);
   });
 }).observe(panesEl);
 

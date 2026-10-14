@@ -1254,6 +1254,11 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   margin-left: calc(4px - var(--gap));
 }
 
+/* numa troca: o lugar fica, o botão não (renderHalt) */
+.halt.hold {
+  visibility: hidden;
+}
+
 .halt[aria-disabled="true"] {
   opacity: 0.5;
   background: none;
@@ -1378,6 +1383,15 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
 /* a branch em serviço não coube inteira ao lado dele (fitHeader): quebra para fora da faixa e vai para o canto do terminal */
 #last-stop.out {
   flex-basis: 100%;
+}
+
+/* sem espaço para o fecho inteiro: o nome da anterior sai da vista e fica para o leitor de tela (e no title) */
+#last-stop.short .who {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 
 #last-stop .forced {
@@ -1535,6 +1549,7 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
 
 /* nome de projeto: sempre em caixa-alta espaçada, como nas placas */
 #running .project,
+.more-item .project,
 #last-stop .project,
 #alert .project,
 #term-note .project,
@@ -1598,6 +1613,27 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
 .more-item[aria-disabled="true"] {
   color: var(--ink-2);
   cursor: default;
+}
+
+/* outro projeto em serviço que não coube na faixa: nome à esquerda, a palheta na coluna dos atalhos; um fio o separa das ações */
+.more-item.other {
+  color: var(--ink-2);
+}
+
+.more-item.other .flap {
+  margin-left: auto;
+}
+
+.more-item.other + .more-item:not(.other) {
+  position: relative;
+  margin-top: 9px;
+}
+
+.more-item.other + .more-item:not(.other)::before {
+  content: "";
+  position: absolute;
+  inset: -5px 0 auto;
+  border-top: 1px solid var(--rule);
 }
 
 .more-item .keys {
