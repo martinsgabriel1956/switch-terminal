@@ -533,7 +533,10 @@ async function toggleRun(all: boolean, want?: "stop" | "start") {
   const { project, wt } = current;
   const k = key(project, wt.id);
   const env = envs.get(k);
-  if (!env || stopping.has(project) || halting.has(k)) return;
+  if (!env) return;
+  // Atalho durante a troca ou outra parada: não faz nada, mas diz por quê (mudo, parecia que a tecla não pegou).
+  if (stopping.has(project)) return headerNote(false, project, "Troca em andamento · Voltar ou Forçar na faixa");
+  if (halting.has(k)) return headerNote(false, project, "Parando · espere os processos saírem");
   const tabs = (all ? TABS : sideTabs()).filter((t) => env.panes[t]);
   const panes = tabs.map((t) => env.panes[t]!);
   const running = starting.has(k) || panes.some((p) => busy.has(p.ptyId));
@@ -541,9 +544,10 @@ async function toggleRun(all: boolean, want?: "stop" | "start") {
   if (want === "stop" && !running) return headerNote(false, project, `Nada rodando ${all ? "na worktree" : `em ${what}`} · Ctrl+Shift+${all ? "Alt+" : ""}S sobe`);
   if (want === "start" && running) return headerNote(false, project, `${all ? "A worktree" : what} já está rodando · Ctrl+Shift+${all ? "Alt+" : ""}X para`);
   if (want === "start" && !panes.some((p) => p.side.startCommand)) return headerNote(false, project, `${what}: sem comando de start`);
+  // Parar ou subir responde a qualquer recado deste projeto: "Nada rodando em API" ao lado de RODANDO, ou o "Parou à força"
+  // da troca anterior ao lado de ↓ PARANDO, contradiziam o estado. A troca já faz isso (activate).
+  if (noteProject === project) clearNote();
   if (!running) {
-    // Subir de novo responde à falha deste projeto ("Front parou"): ela já foi vista.
-    if (lastStopEl.dataset.stay !== undefined && noteProject === project) clearNote();
     for (const p of panes) writeStart(k, p, false);
     return render(true);
   }
@@ -711,9 +715,12 @@ function render(focus = false) {
   renderHalt(haltTabEl, sideTabs());
   renderHalt(haltAllEl, wt.api && wt.front ? TABS : []);
   const down = state === "part" ? sides(ck!).down : [];
+  // Parado à mão (Parar API) com o outro lado de pé: a palheta segue RODANDO, mas a aba diz que aquele lado está parado.
+  // Em ink-2, não em fail: foi pedido, não caiu.
+  const parked = TABS.filter((t) => !down.includes(t) && env?.panes[t] && halted.has(env.panes[t]!.ptyId) && !busy.has(env.panes[t]!.ptyId));
   // Só recria as abas quando elas mudam: recriar com o foco numa delas (a janela voltando, uma palheta virando)
   // jogava o foco do teclado no body. Se mudar com o foco nelas, ele volta para a mesma aba (ou para a selecionada).
-  const tabsSig = [ck, tab, down.join(), ...TABS.map((t) => (wt[t] ? (env?.panes[t]?.el.id ?? "-") : ""))].join("\u0000");
+  const tabsSig = [ck, tab, down.join(), parked.join(), ...TABS.map((t) => (wt[t] ? (env?.panes[t]?.el.id ?? "-") : ""))].join("\u0000");
   if (tabsEl.dataset.sig !== tabsSig) {
     tabsEl.dataset.sig = tabsSig;
     const focusedTab = tabsEl.contains(document.activeElement) ? document.activeElement!.id : null;
@@ -725,9 +732,12 @@ function render(focus = false) {
         { type: "button", id: `tab-${t}`, tabIndex: t === tab ? 0 : -1, onclick: () => setTab(t, true) },
         el("span", { textContent: TAB_LABEL[t] }),
         down.includes(t) ? el("span", { className: "sr", textContent: " (parado)" }) : null,
+        parked.includes(t) ? el("span", { className: "sr", textContent: " (parado à mão)" }) : null,
       );
       b.classList.toggle("down", down.includes(t));
+      b.classList.toggle("parked", parked.includes(t));
       if (down.includes(t)) b.title = `Nada rodando no ${TAB_LABEL[t]}`;
+      if (parked.includes(t)) b.title = `${TAB_LABEL[t]} parado à mão (Ctrl+Shift+S sobe)`;
       b.setAttribute("role", "tab");
       b.setAttribute("aria-selected", String(t === tab));
       const pane = env?.panes[t];
@@ -1325,6 +1335,12 @@ function fitHeader() {
   // até o SIGKILL, que só a faixa mostra. Tudo de uma vez deixava a faixa muda com espaço sobrando.
   for (const level of ["1", "2", "3", "4"]) {
     if (switchingEl.hidden || !below(BRANCH_FLOOR)) break;
+    // Antes do nome do Voltar, do verbo e da contagem, sai o projeto do destino, se o painel aberto ao lado já diz qual
+    // é: a 960 a faixa ficava muda ("Voltar login-time…", sem "Parando" nem contagem) com "INTERNO /" inteiro.
+    if (level === "2" && open) {
+      destEl.classList.add("no-project");
+      if (!below(BRANCH_FLOOR)) break;
+    }
     switchingEl.dataset.tight = level;
     fitStrip();
   }
@@ -1636,7 +1652,9 @@ function renderPalette(reset = false) {
   // Sem projeto, o Enter não tem o que trocar: cria o projeto, e o rodapé diz isso. Na atual ("int log" achando só ela),
   // o Enter só fecha a paleta: "trocar" prometia uma troca que não vem.
   const onCurrent = !!items[sel] && currentKey() === key(items[sel].project, items[sel].wt.id);
-  paletteEnter.textContent = !config.projects.length ? "criar projeto" : onCurrent ? "já é a atual" : "trocar";
+  // Ativa de outro projeto: o Enter só leva até ela, não troca nada.
+  const onActive = !!items[sel] && active[items[sel].project] === items[sel].wt.id;
+  paletteEnter.textContent = !config.projects.length ? "criar projeto" : onCurrent ? "já é a atual" : onActive ? "ir para" : "trocar";
   paletteInput.placeholder = config.projects.length ? "Trocar de worktree…" : "Sem projeto: Enter cria o primeiro";
   // Busca sem resultado: o Enter não faz nada, e o rodapé não promete.
   paletteEnter.hidden = (paletteEnter.previousElementSibling as HTMLElement).hidden = !items.length && !!config.projects.length;
@@ -1648,6 +1666,11 @@ function renderPalette(reset = false) {
   if (items.length) paletteInput.setAttribute("aria-activedescendant", `opt-${sel}`);
   else paletteInput.removeAttribute("aria-activedescendant");
   paletteList.children[sel]?.scrollIntoView({ block: "nearest" });
+}
+
+/** Caminho com ponto de quebra depois de cada "/": quebrava no meio da palavra ("…agrupad / os"). */
+function pathNodes(path: string): (Node | string)[] {
+  return path.split("/").flatMap((part, i) => (i ? [document.createElement("wbr"), `/${part}`] : [part]));
 }
 
 /** "[ENCERRA] feat/x (npm run dev) em INTERNO": a mesma prévia do painel, e diz o que mata. A palheta já é o verbo.
@@ -1867,7 +1890,7 @@ function syncSides() {
     const base = sideBase(t).value;
     sideBox(t)
       .querySelector(".preview")!
-      .replaceChildren(...(dir ? [`${dir}/${branch}`, ...(base ? [icon(FROM_ICON, "inline"), base] : [])] : ["Carregando…"]));
+      .replaceChildren(...(dir ? [...pathNodes(`${dir}/${branch}`), ...(base ? [icon(FROM_ICON, "inline"), base] : [])] : ["Carregando…"]));
   }
 }
 
@@ -2088,7 +2111,7 @@ function syncEdit() {
       const move = editField<HTMLInputElement>(`${t}-move`);
       const dir = editField<HTMLInputElement>(`${t}-dir`).value.trim().replace(/\/+$/, "");
       ePart<HTMLElement>(t, ".move-dir").hidden = !move.checked;
-      ePart<HTMLElement>(t, ".has > .preview").replaceChildren(move.checked ? `${dir}/${nb}` : side.path);
+      ePart<HTMLElement>(t, ".has > .preview").replaceChildren(...pathNodes(move.checked ? `${dir}/${nb}` : side.path));
       const up = ed.info[t]?.upstream;
       const renamed = newBranch(t) !== ed.branches[t];
       ePart<HTMLElement>(t, ".upstream").hidden = !(up && renamed);
@@ -2103,7 +2126,7 @@ function syncEdit() {
       const dir = editField<HTMLInputElement>(`${t}-new-dir`).value.trim().replace(/\/+$/, "");
       const base = editField<HTMLSelectElement>(`${t}-base`).value;
       const nb = newBranch(otherTab(t)) || "<branch>";
-      ePart<HTMLElement>(t, ".create > .preview").replaceChildren(...(dir ? [`${dir}/${nb}`, ...(base ? [icon(FROM_ICON, "inline"), base] : [])] : ["Carregando…"]));
+      ePart<HTMLElement>(t, ".create > .preview").replaceChildren(...(dir ? [...pathNodes(`${dir}/${nb}`), ...(base ? [icon(FROM_ICON, "inline"), base] : [])] : ["Carregando…"]));
     }
   }
 }

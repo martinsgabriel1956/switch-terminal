@@ -925,6 +925,11 @@ header.dense {
   gap: 8px;
 }
 
+/* Com "feat/relatorio-mensal", a 960, "Parar API" ainda saía por 2px: os botões perdem 2px de respiro de cada lado. */
+header.dense .halt {
+  padding: 0 8px;
+}
+
 /* O destino é a verdade do que está em serviço: ocupa o que sobrar e só cede largura depois que o recado
    e os outros projetos já cederam tudo. Um teto (40% da faixa) cortava a branch com a faixa meio vazia. */
 #destination {
@@ -1096,7 +1101,7 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   color: var(--fail);
 }
 
-#tabs button.down::before {
+#tabs button:is(.down, .parked)::before {
   content: "";
   display: inline-block;
   width: 6px;
@@ -1105,6 +1110,11 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   border-radius: 2px;
   background: currentColor;
   vertical-align: 1px;
+}
+
+/* Parado à mão: o mesmo quadrado, em meia-tinta, e o rótulo segue a aba (foi pedido, não caiu). */
+#tabs button.parked::before {
+  background: var(--ink-2);
 }
 
 /* "Parar API", "Parar tudo", "Subir Front": verbo e objeto escritos, com o contorno dos botões (.btn), em 26px */
@@ -1328,9 +1338,11 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   color: var(--fail);
 }
 
-/* "Encerrada à força em 5,0 s": rotina, em meia-tinta; só "à força" na cor do SIGKILL que ela explica */
+/* "Parou à força em 5,0 s": rotina, em meia-tinta; "à força" em tinta cheia. Ênfase pela tinta, não pela cor:
+   em fail era a única palavra vermelha de um fecho que o sistema chama de rotina. */
 #last-stop .forced {
-  color: var(--fail);
+  color: var(--ink);
+  font-weight: 600;
 }
 
 /* A branch em serviço mostraria menos que o piso (fitHeader): os acessórios saem da faixa, um a um.
@@ -1577,7 +1589,8 @@ body:not(.sidebar-off) #running {
 }
 
 #term-note .forced {
-  color: var(--fail);
+  color: var(--ink);
+  font-weight: 600;
 }
 
 /* O xterm.css pinta o viewport de preto; a borda vazava 1px ao redor do terminal. */
@@ -2138,9 +2151,10 @@ dialog.form p.preview {
   font-size: 13px;
 }
 
+/* quebra depois das barras (<wbr>, pathNodes); anywhere só para um trecho que sozinho não cabe */
 dialog.form p.preview {
   font: 12px/1.5 var(--mono);
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 #gh-hint summary {
