@@ -152,15 +152,24 @@ const haltAllEl = $<HTMLButtonElement>("#halt-all");
 // clique parava outra coisa. Pelo teclado não guarda: o foco anda com o botão.
 // O segundo clique de um duplo clique não age: o verbo vira na hora ("Subir tudo" → "Parar tudo") e ele parava o
 // que acabara de subir.
+// O aperto (.tight) e o projeto do destino também ficam como estavam: a 960 recolhido, o "INTERNO /" voltava depois de
+// "Subir tudo" e "Parar API" andava 73px para baixo do cursor. E a prévia ENCERRA não acende (.acted): o botão sob o
+// cursor vira Parar, e o hover pintava de ENCERRA o que acabara de subir.
+let frozen: { tight: boolean; noProject: boolean } | null = null;
 for (const b of [haltTabEl, haltAllEl])
   b.addEventListener("click", (e) => {
-    if (e.detail === 1 && urlEl.dataset.hold === undefined) urlEl.dataset.hold = urlEl.hidden ? "off" : "";
+    if (e.detail !== 1 || frozen) return;
+    urlEl.dataset.hold = urlEl.hidden ? "off" : "";
+    frozen = { tight: headerEl.classList.contains("tight"), noProject: destEl.classList.contains("no-project") };
+    headerEl.classList.add("acted");
   });
 haltTabEl.addEventListener("click", (e) => e.detail < 2 && toggleRun(false));
 haltAllEl.addEventListener("click", (e) => e.detail < 2 && toggleRun(true));
 function releaseHold() {
-  if (urlEl.dataset.hold === undefined) return;
+  if (!frozen) return;
   delete urlEl.dataset.hold;
+  frozen = null;
+  headerEl.classList.remove("acted");
   fitHeader();
 }
 headerEl.addEventListener("pointerleave", releaseHold);
@@ -1482,12 +1491,24 @@ const BRANCH_MIN = 112;
  *  vãos de 8px e, com o painel ao lado, sem o projeto no destino). Pela necessidade: um corte fixo em 800px fazia a
  *  branch truncar a 830 e voltar inteira a 860, com as ações indo para o ⋯ com mais largura. */
 function fitHeader() {
+  if (frozen) {
+    headerEl.classList.toggle("tight", frozen.tight);
+    return fitHeaderOnce();
+  }
   headerEl.classList.remove("tight");
   fitHeaderOnce();
   if (![haltTabEl, haltAllEl].some((a) => !a.hidden && ceded(a))) return;
   headerEl.classList.add("tight");
   fitHeaderOnce();
+  // "Subir API" com o lado parado à mão é a única ação útil: ela fica antes do piso da branch (a 720 ia para o ⋯).
+  if (!haltTabEl.hidden && haltTabEl.dataset.label?.startsWith("Subir") && ceded(haltTabEl)) {
+    branchFloor = BRANCH_MIN;
+    fitHeaderOnce();
+    branchFloor = BRANCH_FLOOR;
+  }
 }
+
+let branchFloor = BRANCH_FLOOR;
 
 function fitHeaderOnce() {
   destEl.classList.remove("bare", "no-project");
@@ -1527,21 +1548,34 @@ function fitHeaderOnce() {
       }
       lastStopEl.classList.toggle("out", ceded(lastStopEl));
     }
-    floor(Math.min(textWidth(branch), BRANCH_FLOOR - wider));
+    floor(Math.min(textWidth(branch), branchFloor - wider));
   }
   if (cededActions().length || cededOthers().length) moreBtn.hidden = false;
   // A largura que o que ficou usa de fato: o vão deixado pelo que quebrou volta para a branch (a 600 sobravam 89px
   // vazios ao lado de uma branch truncada). Sem a margem automática que empurra os outros projetos para a direita.
   const items = [...flowEl.querySelectorAll<HTMLElement>(":scope > a, .halt, #running > .other, #last-stop")];
-  flowEl.classList.add("measuring");
-  const used = Math.max(0, ...items.filter((i) => i.offsetWidth && !ceded(i)).map((i) => i.offsetLeft + i.offsetWidth));
-  flowEl.classList.remove("measuring");
-  flowEl.style.setProperty("--flow-w", `${Math.ceil(used + parseFloat(getComputedStyle(flowEl).paddingRight))}px`);
+  const setFlowW = () => {
+    flowEl.classList.add("measuring");
+    const used = Math.max(0, ...items.filter((i) => i.offsetWidth && !ceded(i)).map((i) => i.offsetLeft + i.offsetWidth));
+    flowEl.classList.remove("measuring");
+    flowEl.style.setProperty("--flow-w", `${Math.ceil(used + parseFloat(getComputedStyle(flowEl).paddingRight))}px`);
+  };
+  setFlowW();
+  // O recado cede antes do projeto do destino: inteiro por pouco, ele espremia o destino abaixo do piso (a 960
+  // recolhido, 156px de 229) e o "INTERNO /" saía com o recado de 8 s ao lado.
+  const squeezed = () => !!branch && branch.getBoundingClientRect().width < Math.min(textWidth(branch), BRANCH_MIN);
+  while (squeezed() && lastStopEl.childElementCount && !lastStopEl.classList.contains("out")) {
+    if (!lastStopEl.classList.contains("short") && lastStopEl.querySelector(".who")) {
+      lastStopEl.classList.add("short");
+      lastStopEl.title = lastStopEl.textContent!;
+    } else lastStopEl.classList.add("out");
+    setFlowW();
+  }
 
   // O sufixo do par ("feature-api ⇄ feature-app") é o primeiro a sair: o nome em comum é o que diz a worktree.
   if (branch?.querySelector(".pair-pre") && overflows(branch)) destEl.classList.add("bare");
   // Nem o piso mínimo da branch: o projeto e a "/" saem do destino (a 640px, com o painel acoplado em 200px, sobrava "INTERNO / …").
-  if (branch && branch.getBoundingClientRect().width < Math.min(textWidth(branch), BRANCH_MIN)) destEl.classList.add("no-project");
+  if (frozen ? frozen.noProject : squeezed()) destEl.classList.add("no-project");
   cutDest(branch, nameNode);
   cutBack();
 
@@ -1578,16 +1612,20 @@ function renderTermNote() {
     const next = pane.el.querySelector(".xterm-rows")?.children[pane.term.buffer.active.cursorY + 1];
     termNoteEl.classList.toggle("lock", !!next);
     termNoteEl.style.top = next ? `${next.getBoundingClientRect().top - panesEl.getBoundingClientRect().top}px` : "";
-    termNoteEl.textContent = `Aguardando ${proseName(st.from)} parar · digitação liberada em seguida`;
+    // Depois do Voltar, a que espera é a própria anterior: "Aguardando main parar" no terminal da main.
+    termNoteEl.textContent =
+      active[env.project] === st.fromId ? `Reiniciando ${proseName(st.from)} · digitação liberada quando subir` : `Aguardando ${proseName(st.from)} parar · digitação liberada em seguida`;
     termNoteEl.hidden = false;
     return;
   }
   termNoteEl.classList.remove("lock");
   termNoteEl.style.top = "";
-  const show = !!pane && !!lastStopEl.childElementCount && ceded(lastStopEl);
-  termNoteEl.hidden = !show;
-  if (!show) return;
-  termNoteEl.replaceChildren(...[...lastStopEl.children].map((c) => c.cloneNode(true)));
+  const note = !!pane && !!lastStopEl.childElementCount && ceded(lastStopEl);
+  // Parado à mão com "Subir API" no ⋯ (a 720 a faixa não tem lugar para ele): a única ação útil fica escrita no canto.
+  const parked = !!pane && !note && !haltTabEl.hidden && haltTabEl.inert && lineState(env.project, current!.wt) === "held";
+  termNoteEl.hidden = !note && !parked;
+  if (!pane || termNoteEl.hidden) return;
+  termNoteEl.replaceChildren(...(note ? [...lastStopEl.children].map((c) => c.cloneNode(true)) : [`${haltTabEl.dataset.label} · Ctrl+Shift+S`]));
   // No canto, na primeira das 4 linhas de cima cuja saída termina antes dele: por cima de uma linha longa do dev
   // server, cobria a saída por 8 s. Nenhuma livre: sai (o leitor de tela já ouviu, e a linha voltou a INATIVA).
   const rows = pane.el.querySelector(".xterm-rows");
@@ -1839,7 +1877,9 @@ function renderPalette(reset = false) {
           markHits(project, terms, it.project.toLowerCase(), it.wt.label.toLowerCase());
           const li = el("li", { id: `opt-${i}`, onclick: () => choose(it) }, label, project, flap(state, `pal:${key(it.project, it.wt.id)}`, flapText(it.project, it.wt, state)));
           // Nome falado inteiro, com pausas e o lado: os spans juntos liam "hotfix/loginATUAL interno : rodando".
-          li.setAttribute("aria-label", `${spokenLabel(it.wt.label)}${isCurrent ? ", atual" : ""}${soloSay(it.wt)}, ${it.project}: ${say(it.project, it.wt, state)}`);
+          // O que o Enter mata também na opção: a prévia ENCERRA é visual, e o rodapé só fala quando muda.
+          const kills = wouldStop(it.project, it.wt.id);
+          li.setAttribute("aria-label", `${spokenLabel(it.wt.label)}${isCurrent ? ", atual" : ""}${soloSay(it.wt)}, ${it.project}: ${say(it.project, it.wt, state)}${kills ? `; encerra ${spokenLabel(kills.label)}` : ""}`);
           // Tinta cheia só no que está em serviço (rodando, em movimento, a atual), como no painel.
           if (LIVE.includes(state) || isCurrent) li.classList.add("live");
           li.setAttribute("role", "option");
@@ -1893,6 +1933,8 @@ function endsNote(wt: Worktree, project: string, inPalette = true): (Node | stri
     el(
       "span",
       { className: "ends-text" },
+      // A palheta ENCERRA é aria-hidden: sem o verbo, a região viva lia "main (node) em leilao".
+      el("span", { className: "sr", textContent: "Encerra " }),
       el("strong", {}, ...labelNodes(wt.label)),
       ...(names.length ? [" ", el("span", { className: "procs", textContent: `(${names.join(", ")})` })] : []),
       ...(inPalette ? [" em ", el("span", { className: "project", textContent: project })] : [", que está rodando."]),

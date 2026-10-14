@@ -378,17 +378,17 @@ kbd {
 }
 
 .platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap,
-body:has(header :is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) .line.live[aria-current="true"] .flap {
+body:has(header:not(.acted) :is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) .line.live[aria-current="true"] .flap {
   animation: ends-ink 0s 120ms forwards;
 }
 
 .platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap > span:first-child,
-body:has(header :is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) .line.live[aria-current="true"] .flap > span:first-child {
+body:has(header:not(.acted) :is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) .line.live[aria-current="true"] .flap > span:first-child {
   animation: ends-off 0s 120ms forwards;
 }
 
 .platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap .ends,
-body:has(header :is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) .line.live[aria-current="true"] .flap .ends {
+body:has(header:not(.acted) :is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) .line.live[aria-current="true"] .flap .ends {
   animation: ends-on 0s 120ms forwards;
 }
 
@@ -1008,24 +1008,24 @@ header.tight .halt {
 
 /* Prévia da parada à mão: com o cursor ou o foco em Parar, o que ela encerra ganha o contorno âmbar,
    como ENCERRA nas linhas. "Parar API" marca a aba; o que para a worktree inteira marca as abas e o destino. */
-header:has(:is(#halt-tab, .more-item)[data-ends="tab"]:is(:hover, :focus-visible)) #tabs [aria-selected="true"],
-header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #tabs button {
+header:not(.acted):has(:is(#halt-tab, .more-item)[data-ends="tab"]:is(:hover, :focus-visible)) #tabs [aria-selected="true"],
+header:not(.acted):has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #tabs button {
   border-color: var(--wait);
   color: var(--wait);
 }
 
-header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap {
+header:not(.acted):has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap {
   color: var(--wait);
   background: var(--ends-bg);
   box-shadow: inset 0 0 0 var(--ends-line) var(--wait);
   clip-path: none;
 }
 
-header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap > span:first-child {
+header:not(.acted):has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap > span:first-child {
   visibility: hidden;
 }
 
-header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap .ends {
+header:not(.acted):has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap .ends {
   visibility: visible;
 }
 
@@ -1359,9 +1359,10 @@ body:not(.sidebar-off, .narrow) header.tight #destination .where > :is(.project,
   overflow: hidden;
 }
 
-/* Janela pequena (ou zoom alto): o "para" sai antes de o nome do Voltar truncar. "Voltar X" ainda diz para onde leva. */
+/* Janela pequena (ou zoom alto): o nome sai, e o botão fica "Voltar e reiniciar" (o nome no title e na faixa). "Voltar
+   main" prometia desfazer, e o Ctrl+C já foi. */
 @container (max-width: 480px) {
-  #switching .para {
+  #switching .back .to {
     display: none;
   }
 }
