@@ -8,7 +8,7 @@ import "@fontsource/barlow-semi-condensed/latin-600.css";
 import "@fontsource/barlow-semi-condensed/latin-700.css";
 import "./styles.css";
 import { asPm, isPm, joinStart, PREFIX, rewrite, splitStart, switchPm, type Pm } from "./pm";
-import { middleCut, nameTail } from "./branch";
+import { backName, middleCut, nameTail } from "./branch";
 import { matchAt, matchItem } from "./match";
 
 /** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto. */
@@ -127,6 +127,7 @@ const paletteEnter = $("#palette-enter");
 const urlEl = $<HTMLAnchorElement>("#dev-url");
 const lastStopEl = $("#last-stop");
 const termNoteEl = $("#term-note");
+const headerEl = $("header");
 const haltTabEl = $<HTMLButtonElement>("#halt-tab");
 const haltAllEl = $<HTMLButtonElement>("#halt-all");
 haltTabEl.addEventListener("click", () => toggleRun(false));
@@ -516,16 +517,18 @@ async function writeStart(k: string, pane: Pane, isFresh: boolean) {
 /** Ctrl+C → espera → SIGKILL; resolve `true` se precisou forçar. */
 const stopPane = (pane: Pane) => invoke<boolean>("pty_stop", { id: pane.ptyId, timeoutMs: config.stopTimeoutMs });
 
-/** Lado do botão de um lado só ("Parar API", Ctrl+Shift+X): a aba aberta, ou o lado caído (SEM FRONT) seja qual for a aba,
+/** Lado do botão de um lado só ("Parar API", Ctrl+Shift+X; "Subir API", Ctrl+Shift+S): a aba aberta, ou o lado caído (SEM FRONT) seja qual for a aba,
  *  para "Subir Front" estar à mão olhando a API. */
 function sideTabs(): Tab[] {
   if (!current) return [tab];
   return lineState(current.project, current.wt) === "part" ? sides(key(current.project, current.wt.id)).down : [tab];
 }
 
-/** Botões "Parar API" e "Parar tudo" do cabeçalho (Ctrl+Shift+X, com Alt os dois): para o que roda nas abas, como na troca, mas o shell fica.
- *  Parado, sobe de novo. A worktree continua a ativa do projeto. */
-async function toggleRun(all: boolean) {
+/** Botões "Parar API" e "Parar tudo" do cabeçalho: para o que roda nas abas, como na troca, mas o shell fica.
+ *  Parado, o botão sobe de novo (o rótulo diz o verbo). A worktree continua a ativa do projeto.
+ *  `want`: o atalho tem um verbo só (Ctrl+Shift+X para, Ctrl+Shift+S sobe; com Alt, os dois lados). Um atalho que alternava
+ *  fazia o contrário do pensado no reflexo, durante SUBINDO ou com um lado caído; no estado errado ele não faz nada e diz o outro. */
+async function toggleRun(all: boolean, want?: "stop" | "start") {
   if (!current) return;
   const { project, wt } = current;
   const k = key(project, wt.id);
@@ -533,7 +536,12 @@ async function toggleRun(all: boolean) {
   if (!env || stopping.has(project) || halting.has(k)) return;
   const tabs = (all ? TABS : sideTabs()).filter((t) => env.panes[t]);
   const panes = tabs.map((t) => env.panes[t]!);
-  if (!(starting.has(k) || panes.some((p) => busy.has(p.ptyId)))) {
+  const running = starting.has(k) || panes.some((p) => busy.has(p.ptyId));
+  const what = tabs.map((t) => TAB_LABEL[t]).join(" e ");
+  if (want === "stop" && !running) return headerNote(false, project, `Nada rodando ${all ? "na worktree" : `em ${what}`} · Ctrl+Shift+${all ? "Alt+" : ""}S sobe`);
+  if (want === "start" && running) return headerNote(false, project, `${all ? "A worktree" : what} já está rodando · Ctrl+Shift+${all ? "Alt+" : ""}X para`);
+  if (want === "start" && !panes.some((p) => p.side.startCommand)) return headerNote(false, project, `${what}: sem comando de start`);
+  if (!running) {
     // Subir de novo responde à falha deste projeto ("Front parou"): ela já foi vista.
     if (lastStopEl.dataset.stay !== undefined && noteProject === project) clearNote();
     for (const p of panes) writeStart(k, p, false);
@@ -759,11 +767,13 @@ function renderHalt(b: HTMLButtonElement, tabs: Tab[]) {
   // Prévia do que Parar encerra (CSS): a aba, ou a worktree inteira quando os lados dela são todos estes.
   if (running && !wait) b.dataset.ends = panes.length === Object.keys(envs.get(k)?.panes ?? {}).length ? "all" : "tab";
   else delete b.dataset.ends;
-  const title = wait ? "Aguarde: parando processos" : `${verb} ${tabs.map((t) => TAB_LABEL[t]).join(" e ")} (Ctrl+Shift+${all ? "Alt+" : ""}X)`;
+  // Um verbo por atalho: X para, S sobe.
+  const chord = `Shift+${all ? "Alt+" : ""}${running ? "X" : "S"}`;
+  const title = wait ? "Aguarde: parando processos" : `${verb} ${tabs.map((t) => TAB_LABEL[t]).join(" e ")} (Ctrl+${chord})`;
   if (b.title === title && b.textContent === text) return;
   b.title = title;
   b.textContent = text;
-  b.setAttribute("aria-keyshortcuts", `Control+Shift+${all ? "Alt+" : ""}X`);
+  b.setAttribute("aria-keyshortcuts", `Control+${chord}`);
   if (wait) {
     b.setAttribute("aria-disabled", "true");
     b.setAttribute("aria-description", title);
@@ -933,7 +943,7 @@ function cutBack() {
   measure.font = `${css.fontWeight} ${css.fontSize} ${css.fontFamily}`;
   const w = (t: string) => measure.measureText(t).width + 2;
   const full = splitBranch(to.dataset.full!)[1] || to.dataset.full!;
-  const name = Number(switchingEl.dataset.tight) >= 2 ? nameTail(full) : full;
+  const name = backName(full, Number(switchingEl.dataset.tight) >= 2);
   to.textContent = w(name) <= to.clientWidth ? name : middleCut(name, to.clientWidth, w);
 }
 
@@ -1273,6 +1283,7 @@ function fitHeader() {
   const stay = lastStopEl.dataset.stay !== undefined;
   const open = !document.body.classList.contains("sidebar-off");
   for (const a of [lastStopEl, haltAllEl, haltTabEl, urlEl]) a.classList.remove("ceded", "tight");
+  headerEl.classList.remove("dense");
   delete switchingEl.dataset.tight;
   moreBtn.hidden = true;
   destEl.classList.remove("bare", "no-project");
@@ -1281,7 +1292,10 @@ function fitHeader() {
   const mine = stay && lastStopEl.querySelector<HTMLElement>(".who")?.dataset.key === currentKey();
   // Com um lado caído, "Subir Front" é a saída da falha: não cede, como ela.
   const recover = !!current && lineState(current.project, current.wt) === "part";
+  // Antes de ceder qualquer coisa, os vãos da faixa apertam (12 → 8px): a 960, "Parar API" saía para o ⋯ por 10px
+  // e deixava ~100px vazios; com os vãos de 8 ele cabe ao lado da branch inteira.
   const steps: [HTMLElement, string][] = [
+    [headerEl, "dense"],
     [lastStopEl, stay ? "tight" : "ceded"],
     [haltAllEl, "ceded"],
     ...(recover ? [] : [[haltTabEl, "ceded"] as [HTMLElement, string]]),
@@ -1372,7 +1386,7 @@ function renderTermNote() {
   if (row) termNoteEl.style.top = `${row.getBoundingClientRect().top - box.top - 3}px`;
 }
 // A faixa (não o #running, que some e reaparece ao medir) muda de largura com a janela, o zoom e o painel.
-new ResizeObserver(fitHeader).observe($("header"));
+new ResizeObserver(fitHeader).observe(headerEl);
 // A Barlow chega depois do primeiro render e alarga os nomes sem mudar a largura da faixa.
 document.fonts.addEventListener("loadingdone", () => {
   fitBranches();
@@ -1619,8 +1633,10 @@ function renderPalette(reset = false) {
           }),
         ]),
   );
-  // Sem projeto, o Enter não tem o que trocar: cria o projeto, e o rodapé diz isso.
-  paletteEnter.textContent = config.projects.length ? "trocar" : "criar projeto";
+  // Sem projeto, o Enter não tem o que trocar: cria o projeto, e o rodapé diz isso. Na atual ("int log" achando só ela),
+  // o Enter só fecha a paleta: "trocar" prometia uma troca que não vem.
+  const onCurrent = !!items[sel] && currentKey() === key(items[sel].project, items[sel].wt.id);
+  paletteEnter.textContent = !config.projects.length ? "criar projeto" : onCurrent ? "já é a atual" : "trocar";
   paletteInput.placeholder = config.projects.length ? "Trocar de worktree…" : "Sem projeto: Enter cria o primeiro";
   // Busca sem resultado: o Enter não faz nada, e o rodapé não promete.
   paletteEnter.hidden = (paletteEnter.previousElementSibling as HTMLElement).hidden = !items.length && !!config.projects.length;
@@ -2678,7 +2694,8 @@ window.addEventListener(
       else reload();
     } else if (e.code === "KeyJ") {
       if (current?.wt.api && current.wt.front) setTab(tab === "api" ? "front" : "api", true);
-    } else if (e.code === "KeyX") toggleRun(e.altKey);
+    } else if (e.code === "KeyX") toggleRun(e.altKey, "stop");
+    else if (e.code === "KeyS") toggleRun(e.altKey, "start");
     else return;
     e.preventDefault();
     e.stopPropagation();

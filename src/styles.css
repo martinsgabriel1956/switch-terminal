@@ -1,6 +1,7 @@
 /* Hotswap: painel de partidas.
    Noite: painel grafite. Dia: tabela impressa em esmalte branco. Uma cor por estado, nenhuma outra:
-   verde de pé, âmbar em movimento (subindo, aguardando, parando), vermelho só quando algo falhou ou foi morto. */
+   verde de pé, âmbar em movimento (subindo, aguardando, parando), vermelho só quando algo falhou.
+   Quem está morrendo (PARANDO, SIGKILL) é o negativo de quem espera: a mesma palheta âmbar, invertida. */
 
 :root {
   color-scheme: dark;
@@ -23,6 +24,9 @@
   --start: #f2b33d;
   --wait: #f2b33d;
   --fail: #f26d6d;
+  /* ENCERRA (prévia): contorno de quem vai parar. À noite o âmbar vivo de 1px basta. */
+  --ends-line: 1px;
+  --ends-bg: none;
   --focus: #ecebe6;
   --primary: #ecebe6;
   --primary-ink: #131417;
@@ -75,6 +79,10 @@
     --start: #855000;
     --wait: #855000;
     --fail: #b3261e;
+    /* De dia o âmbar escuro de 1px ficava abaixo do RODANDO verde que ele substitui: lia como "o estado sumiu", não como
+       "isto vai parar". 2px e um creme âmbar por dentro (#855000 a 5,45:1), sem as metades nem o entalhe de palheta. */
+    --ends-line: 2px;
+    --ends-bg: #f7e7c0;
     --focus: #15161a;
     --primary: #15161a;
     --primary-ink: #f4f5f3;
@@ -292,12 +300,18 @@ kbd {
   color: var(--flap-start);
 }
 
-/* Parar é a consequência esperada de uma troca: âmbar, como tudo que está em movimento. O SIGKILL também:
-   parar à força é rotina (o alvo sobe, a anterior sai como pedido); o vermelho fica para o que ficou de pé errado. */
-.flap[data-state="wait"],
-.flap[data-state="stop"],
-.flap[data-state="kill"] {
+.flap[data-state="wait"] {
   color: var(--flap-start);
+}
+
+/* Parar é a consequência esperada de uma troca: âmbar, como tudo que está em movimento. O SIGKILL também:
+   parar à força é rotina (o alvo sobe, a anterior sai como pedido); o vermelho fica para o que ficou de pé errado.
+   Mas quem morre é o negativo de quem espera: lado a lado, PARANDO e AGUARDA tinham o mesmo âmbar e só se separavam
+   lendo. À noite, corpo âmbar e tinta do painel (9,9:1 ou mais); de dia (abaixo), corpo grafite e tinta âmbar (7,4:1). */
+.flap:is([data-state="stop"], [data-state="kill"]):not(.preview) {
+  --state-top: #f6c45f;
+  --state-bot: #f0b33f;
+  color: var(--board);
 }
 
 .flap[data-state="part"] {
@@ -312,9 +326,15 @@ kbd {
     --state-bot: #55c08a;
   }
 
-  .flap:is([data-state="start"], [data-state="wait"], [data-state="stop"], [data-state="kill"]) {
+  .flap:is([data-state="start"], [data-state="wait"]) {
     --state-top: #f6c45f;
     --state-bot: #f0b33f;
+  }
+
+  .flap:is([data-state="stop"], [data-state="kill"]):not(.preview) {
+    --state-top: #2b2d32;
+    --state-bot: #222428;
+    color: #f2b33d;
   }
 
   .flap[data-state="part"] {
@@ -356,15 +376,15 @@ kbd {
 /* ENCERRA é prévia, não estado: a forma da palheta (metades e entalhes) fica para o que é verdade agora.
    Só o contorno, na cor de quem está em movimento. */
 .flap.preview {
-  background: none;
-  box-shadow: inset 0 0 0 1px currentColor;
+  background: var(--ends-bg);
+  box-shadow: inset 0 0 0 var(--ends-line) currentColor;
 }
 
 @keyframes ends-ink {
   to {
     color: var(--wait);
-    background: none;
-    box-shadow: inset 0 0 0 1px var(--wait);
+    background: var(--ends-bg);
+    box-shadow: inset 0 0 0 var(--ends-line) var(--wait);
     clip-path: none;
   }
 }
@@ -900,6 +920,11 @@ header {
   background: var(--board);
 }
 
+/* Primeiro degrau de fitHeader, antes de ceder qualquer acessório: os vãos apertam e as ações ficam. */
+header.dense {
+  gap: 8px;
+}
+
 /* O destino é a verdade do que está em serviço: ocupa o que sobrar e só cede largura depois que o recado
    e os outros projetos já cederam tudo. Um teto (40% da faixa) cortava a branch com a faixa meio vazia. */
 #destination {
@@ -945,8 +970,8 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
 
 header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #destination .flap {
   color: var(--wait);
-  background: none;
-  box-shadow: inset 0 0 0 1px var(--wait);
+  background: var(--ends-bg);
+  box-shadow: inset 0 0 0 var(--ends-line) var(--wait);
   clip-path: none;
 }
 
