@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-10-14T10:00:40.969Z",
+        "reason": "Claude: static scan renders index.html without styles.css (imported by main.ts), so it sees 16px defaults; DESIGN.md sets hierarchy by ink and weight in one condensed family, and the live overlay measures 13/15/17/22px"
+      }
+    ]
+  }
+}

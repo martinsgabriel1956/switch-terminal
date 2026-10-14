@@ -8,7 +8,7 @@ import "@fontsource/barlow-semi-condensed/latin-600.css";
 import "@fontsource/barlow-semi-condensed/latin-700.css";
 import "./styles.css";
 import { asPm, isPm, joinStart, PREFIX, rewrite, splitStart, switchPm, type Pm } from "./pm";
-import { backName, middleCut, nameTail } from "./branch";
+import { middleCut, nameTail } from "./branch";
 import { matchAt, matchItem } from "./match";
 
 /** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto. */
@@ -36,10 +36,9 @@ const FLAP: Record<LineState, string> = {
   idle: "INATIVA",
   none: "",
 };
-const SPOKEN: Record<LineState, string> = {
+// SEM API / SEM FRONT falam qual lado e por quê (say): "só Front rodando, API parada à mão".
+const SPOKEN: Record<Exclude<LineState, "part" | "held">, string> = {
   run: "rodando",
-  part: "parcial",
-  held: "parcial",
   start: "subindo",
   wait: "aguardando a anterior parar",
   stop: "parando",
@@ -48,12 +47,20 @@ const SPOKEN: Record<LineState, string> = {
   none: "não aberta",
 };
 const CONFIG_PATH = "~/.config/hotswap/config.json";
+// Linhas de até ~40 caracteres: com repo e startCommand na mesma linha (74), a 1440 o exemplo saía cortado em "npm r",
+// com uma rolagem horizontal que não se via e que o teclado não alcançava no WebKitGTK.
 const CONFIG_EXAMPLE = `{
   "projects": [
     {
       "name": "meu-projeto",
-      "api":   { "repo": "~/dev/meu-api", "startCommand": "npm run dev" },
-      "front": { "repo": "~/dev/meu-web", "startCommand": "npm run dev" }
+      "api": {
+        "repo": "~/dev/meu-api",
+        "startCommand": "npm run dev"
+      },
+      "front": {
+        "repo": "~/dev/meu-web",
+        "startCommand": "npm run dev"
+      }
     }
   ]
 }`;
@@ -134,21 +141,40 @@ const haltTabEl = $<HTMLButtonElement>("#halt-tab");
 const haltAllEl = $<HTMLButtonElement>("#halt-all");
 haltTabEl.addEventListener("click", () => toggleRun(false));
 haltAllEl.addEventListener("click", () => toggleRun(true));
+// Parar a API tira a porta dela da faixa, e as ações andavam para a esquerda: "Parar tudo" caía embaixo do cursor, com a
+// prévia ENCERRA acesa, e o segundo clique parava a worktree inteira. Depois de um clique nas ações, o lugar da porta fica
+// (invisível) até o cursor sair do cabeçalho.
+for (const b of [haltTabEl, haltAllEl]) b.addEventListener("click", () => (urlEl.dataset.hold = ""));
+headerEl.addEventListener("pointerleave", () => {
+  if (urlEl.dataset.hold === undefined) return;
+  delete urlEl.dataset.hold;
+  fitHeader();
+});
 
-/** ⋯ do cabeçalho: o que cedeu largura (Parar API, Parar tudo, a porta) vai para cá em vez de sumir sem rastro.
+/** ⋯ do cabeçalho: o que não coube na faixa (Parar API, Parar tudo, a porta) vai para cá em vez de sumir sem rastro.
  *  Existe só enquanto algo cedeu (fitHeader); cada item repete o atalho e a prévia ENCERRA do botão que substitui. */
 const moreBtn = $<HTMLButtonElement>("#more");
 const moreMenu = $("#more-menu");
-const cededActions = () => [haltTabEl, haltAllEl, urlEl].filter((a) => a.classList.contains("ceded") && !a.hidden);
+const flowEl = $("#flow");
+/** Não coube na faixa: quebrou para a segunda linha do #flow, que fica fora dela (CSS), ou é o primeiro da linha (esse
+ *  não quebra) e passa da borda. */
+function ceded(e: HTMLElement) {
+  if (e.offsetTop > flowEl.clientHeight / 2) return true;
+  const edge = flowEl.getBoundingClientRect().right - parseFloat(getComputedStyle(flowEl).paddingRight) + 0.5;
+  return e.getBoundingClientRect().right > edge;
+}
+const cededActions = () => [haltTabEl, haltAllEl, urlEl].filter((a) => !a.hidden && ceded(a));
 moreMenu.addEventListener("toggle", (e) => {
   if ((e as ToggleEvent).newState !== "open") return;
   moreMenu.replaceChildren(
     ...cededActions().map((src) => {
       const keys = src.getAttribute("aria-keyshortcuts")?.replace("Control", "Ctrl");
+      // A ação direto, não src.click(): o original quebrou para fora da faixa e está inert.
+      const act = () => (src === urlEl ? invoke("open_url", { url: urlEl.href }) : toggleRun(src === haltAllEl));
       const b = el(
         "button",
-        { type: "button", className: "more-item", title: src.title, onclick: () => (moreMenu.hidePopover(), src.click()) },
-        el("span", { textContent: src === urlEl ? `Abrir ${urlEl.textContent} no navegador` : src.textContent! }),
+        { type: "button", className: "more-item", title: src.title, onclick: () => (moreMenu.hidePopover(), act()) },
+        el("span", { textContent: src === urlEl ? `Abrir ${urlEl.textContent} no navegador` : src.dataset.label! }),
         ...(keys ? [el("span", { className: "keys", textContent: keys })] : []),
       );
       if (src.dataset.ends) b.dataset.ends = src.dataset.ends;
@@ -168,33 +194,29 @@ urlEl.addEventListener("click", (e) => {
   invoke("open_url", { url: urlEl.href });
 });
 
+/** Falhas ("não subiu", "caiu") na segunda faixa, embaixo do cabeçalho, até a próxima troca ou o ×. Na faixa de cima elas
+ *  disputavam largura com o destino e as ações: apertavam, cediam, iam para o canto do terminal. */
+const alertEl = $("#alert");
 let lastStopTimer = 0;
-// Quando o recado atual apareceu e de que projeto ele é, e o de outro projeto que espera ele ser lido.
-let noteAt = 0;
-let noteProject: string | null = null;
-let queuedTimer = 0;
 const NOTE_MS = 8000;
-function clearNote() {
-  lastStopEl.replaceChildren();
-  lastStopEl.style.removeProperty("--floor");
-  lastStopEl.style.removeProperty("--floor-tight");
-  delete lastStopEl.dataset.stay;
-  noteProject = null;
+/** Tira um recado (o de rotina, `#last-stop`, ou a falha, `#alert`). */
+function clearNote(target: HTMLElement) {
+  target.replaceChildren();
+  delete target.dataset.project;
   fitHeader();
 }
-/** Recado curto no cabeçalho ("Parou em 1,8 s · feat/x", "Worktrees relidas: nada mudou."), por alguns segundos.
- *  `stay`: falha ("não subiu", "caiu") fica até a próxima troca, em vez de sumir antes de ser lida. Encerrar à força não é falha.
- *  `about`: o projeto do recado. O de outro projeto espera o atual completar 8 s: uma queda no LEILAO não apaga
- *  o "Parou em" da troca que acabou de acontecer no INTERNO. */
-function headerNote(stay: boolean, about: string | null, ...nodes: (Node | string)[]) {
-  const wait = noteAt + NOTE_MS - Date.now();
-  if (about && about !== current?.project && lastStopEl.childElementCount && wait > 0) {
-    // ponytail: só o último recado em espera aparece; uma fila de verdade se dois projetos caírem juntos importar
-    clearTimeout(queuedTimer);
-    queuedTimer = setTimeout(() => headerNote(stay, about, ...nodes), wait);
-    return;
-  }
-  clearTimeout(queuedTimer);
+/** Tira os recados de um projeto: parar, subir ou trocar nele responde a eles ("Nada rodando em API" ao lado de RODANDO,
+ *  "Front parou" depois do Subir Front). */
+function clearNotes(project: string) {
+  for (const t of [lastStopEl, alertEl]) if (t.dataset.project === project) clearNote(t);
+}
+/** Recado no cabeçalho. Rotina ("Parou em 1,8 s · feat/x", "Worktrees relidas: nada mudou.") fica 8 s na faixa, depois
+ *  das ações; sem espaço, quebra para fora dela e a cópia vai para o canto do terminal (renderTermNote).
+ *  `stay`: falha, na segunda faixa, até a próxima troca ou o ×. Encerrar à força não é falha. Os dois lugares são
+ *  independentes: uma queda no LEILAO não apaga o "Parou em" da troca que acabou de acontecer no INTERNO.
+ *  `about`: o projeto do recado. */
+function headerNote(stay: boolean, about: string | null, ...nodes: (Node | string | null)[]) {
+  const target = stay ? alertEl : lastStopEl;
   // A falha fica até a próxima troca; o × a tira antes, para quem já leu (um servidor que sempre vai ao SIGKILL).
   const dismiss = stay
     ? el(
@@ -205,28 +227,19 @@ function headerNote(stay: boolean, about: string | null, ...nodes: (Node | strin
           title: "Dispensar o recado",
           ariaLabel: "Dispensar o recado",
           onclick: () => {
-            clearNote();
+            clearNote(alertEl);
             render(true);
           },
         },
         icon(X_ICON),
       )
     : null;
-  lastStopEl.replaceChildren(...nodes.map((n) => (typeof n === "string" ? el("span", { textContent: n }) : n)), ...(dismiss ? [dismiss] : []));
-  // O piso do recado é o verbo e o tempo inteiros, o começo de quem (até ~90px), a ação e o ×: sem espaço, o destino cede
-  // antes de virar "Encerr…". Apertado (fitHeader), só o verbo, o tempo e o ×.
-  const gap = parseFloat(getComputedStyle(lastStopEl).columnGap) || 0;
-  const parts = [...lastStopEl.children] as HTMLElement[];
-  const floor = parts.reduce((w, p) => w + (p.classList.contains("who") ? Math.min(p.scrollWidth, 90) : p.offsetWidth + (parseFloat(getComputedStyle(p).marginLeft) || 0)), gap * (parts.length - 1));
-  lastStopEl.style.setProperty("--floor", `${Math.ceil(floor)}px`);
-  lastStopEl.style.setProperty("--floor-tight", `${Math.ceil(parts[0].scrollWidth + (dismiss ? dismiss.offsetWidth + gap : 0))}px`);
-  noteAt = Date.now();
-  noteProject = about;
-  clearTimeout(lastStopTimer);
-  if (stay) lastStopEl.dataset.stay = "";
-  else {
-    delete lastStopEl.dataset.stay;
-    lastStopTimer = setTimeout(clearNote, NOTE_MS);
+  target.replaceChildren(...nodes.filter((n) => n !== null).map((n) => (typeof n === "string" ? el("span", { textContent: n }) : n)), ...(dismiss ? [dismiss] : []));
+  if (about) target.dataset.project = about;
+  else delete target.dataset.project;
+  if (!stay) {
+    clearTimeout(lastStopTimer);
+    lastStopTimer = setTimeout(() => clearNote(lastStopEl), NOTE_MS);
   }
   fitHeader();
 }
@@ -239,11 +252,17 @@ function seeTerminal(project: string, id: string, side: Tab) {
     textContent: "Ver o terminal",
     onclick: () => {
       const wt = findWt(project, id);
-      if (!wt || active[project] !== id) return clearNote();
+      if (!wt || active[project] !== id) return clearNote(alertEl);
       tab = side;
       select(project, wt);
     },
   });
+}
+/** "Subir Front" na própria falha da worktree em serviço. Só aparece quando o "Subir Front" do cabeçalho quebrou para
+ *  fora da faixa (fitHeader liga): a meia tela, a saída da falha ficava escondida no ⋯. */
+function upHere(project: string, id: string, down: Tab[]) {
+  if (key(project, id) !== currentKey()) return null;
+  return el("button", { type: "button", className: "note-act note-up", textContent: `Subir ${down.map((t) => TAB_LABEL[t]).join(" e ")}`, onclick: () => toggleRun(false, "start") });
 }
 /** "Parou em 1,8 s" ou "Parou à força em 5,0 s": encerrar à força é rotina (o alvo subiu, a anterior parou como pedido),
  *  então o recado é neutro e expira; só "à força" fala na cor do SIGKILL. */
@@ -251,12 +270,15 @@ function stoppedIn(secs: string, forced: boolean) {
   return forced ? el("span", {}, "Parou ", el("span", { className: "forced", textContent: "à força" }), ` em ${secs} s`) : `Parou em ${secs} s`;
 }
 /** "· INTERNO / feat/x": o projeto entra quando não é o atual, onde outra worktree pode ter o mesmo nome ("main").
- *  A chave diz a fitHeader se o recado é da worktree em serviço ou de outra (a anterior, outro projeto). */
+ *  A worktree em serviço já está no destino, logo acima: o recado dela não repete o nome ("Front parou", "Parou em 0,4 s · API");
+ *  sem nada a dizer depois do "·", não há quem. */
 function noteWho(project: string, id: string, label: string, ...before: (Node | string)[]) {
+  if (key(project, id) === currentKey()) {
+    const what = before.filter((b) => b !== " · ");
+    return what.length ? el("span", { className: "who" }, "· ", ...what) : null;
+  }
   const where = project === current?.project ? [] : [el("span", { className: "project", textContent: project }), " / "];
-  const who = el("span", { className: "who" }, "· ", ...before, ...where, ...labelNodes(label));
-  who.dataset.key = key(project, id);
-  return who;
+  return el("span", { className: "who" }, "· ", ...before, ...where, ...labelNodes(label));
 }
 
 let config: Config = { stopTimeoutMs: 5000, screenReader: false, projects: [] };
@@ -525,20 +547,32 @@ async function writeStart(k: string, pane: Pane, isFresh: boolean) {
 /** Ctrl+C → espera → SIGKILL; resolve `true` se precisou forçar. */
 const stopPane = (pane: Pane) => invoke<boolean>("pty_stop", { id: pane.ptyId, timeoutMs: config.stopTimeoutMs });
 
-/** Lado do botão de um lado só ("Parar API", Ctrl+Shift+X; "Subir API", Ctrl+Shift+S): a aba aberta, ou o lado caído (SEM FRONT) seja qual for a aba,
- *  para "Subir Front" estar à mão olhando a API. */
-function sideTabs(): Tab[] {
-  if (!current) return [tab];
+type Verb = "stop" | "start";
+
+/** Lados do botão de um lado só ("Parar API", Ctrl+Shift+X; "Subir API", Ctrl+Shift+S). Parar age na aba aberta, como o
+ *  atalho promete: com a API parada à mão e o Front de pé, olhando o Front, Ctrl+Shift+X dizia "Nada rodando em API".
+ *  Subir age no lado caído (SEM FRONT) ou parado à mão seja qual for a aba, para "Subir Front" estar à mão olhando a API. */
+function sideTabs(verb: Verb): Tab[] {
+  if (!current || verb === "stop") return [tab];
   const state = lineState(current.project, current.wt);
   const s = sides(key(current.project, current.wt.id));
   return state === "part" ? s.down : state === "held" ? s.held : [tab];
+}
+
+/** O verbo do botão: Parar se algo roda (ou acabou de subir) nos lados dele, senão Subir. O de um lado olha a aba aberta,
+ *  menos com um lado caído: aí é "Subir Front", a saída da falha, seja qual for a aba. */
+function haltVerb(all: boolean): Verb {
+  const k = currentKey()!;
+  if (!all && lineState(current!.project, current!.wt) === "part") return "start";
+  const panes = (all ? TABS : [tab]).flatMap((t) => envs.get(k)?.panes[t] ?? []);
+  return starting.has(k) || panes.some((p) => busy.has(p.ptyId)) ? "stop" : "start";
 }
 
 /** Botões "Parar API" e "Parar tudo" do cabeçalho: para o que roda nas abas, como na troca, mas o shell fica.
  *  Parado, o botão sobe de novo (o rótulo diz o verbo). A worktree continua a ativa do projeto.
  *  `want`: o atalho tem um verbo só (Ctrl+Shift+X para, Ctrl+Shift+S sobe; com Alt, os dois lados). Um atalho que alternava
  *  fazia o contrário do pensado no reflexo, durante SUBINDO ou com um lado caído; no estado errado ele não faz nada e diz o outro. */
-async function toggleRun(all: boolean, want?: "stop" | "start") {
+async function toggleRun(all: boolean, want?: Verb) {
   if (!current) return;
   const { project, wt } = current;
   const k = key(project, wt.id);
@@ -547,7 +581,8 @@ async function toggleRun(all: boolean, want?: "stop" | "start") {
   // Atalho durante a troca ou outra parada: não faz nada, mas diz por quê (mudo, parecia que a tecla não pegou).
   if (stopping.has(project)) return headerNote(false, project, "Troca em andamento · Voltar ou Forçar na faixa");
   if (halting.has(k)) return headerNote(false, project, "Parando · espere os processos saírem");
-  const tabs = (all ? TABS : sideTabs()).filter((t) => env.panes[t]);
+  // Sem verbo (o clique), o do botão: ele diz o que vai fazer.
+  const tabs = (all ? TABS : sideTabs(want ?? haltVerb(all))).filter((t) => env.panes[t]);
   const panes = tabs.map((t) => env.panes[t]!);
   const running = starting.has(k) || panes.some((p) => busy.has(p.ptyId));
   const what = tabs.map((t) => TAB_LABEL[t]).join(" e ");
@@ -556,7 +591,7 @@ async function toggleRun(all: boolean, want?: "stop" | "start") {
   if (want === "start" && !panes.some((p) => p.side.startCommand)) return headerNote(false, project, `${what}: sem comando de start`);
   // Parar ou subir responde a qualquer recado deste projeto: "Nada rodando em API" ao lado de RODANDO, ou o "Parou à força"
   // da troca anterior ao lado de ↓ PARANDO, contradiziam o estado. A troca já faz isso (activate).
-  if (noteProject === project) clearNote();
+  clearNotes(project);
   if (!running) {
     for (const p of panes) writeStart(k, p, false);
     return render(true);
@@ -602,7 +637,7 @@ function activate(project: string, wt: Worktree, created: boolean) {
       };
       stopping.set(project, state);
       // O "Parou em" da troca anterior deste projeto sai: ao lado de PARANDO/AGUARDA, dizia que esta já tinha acabado.
-      if (noteProject === project) clearNote();
+      clearNotes(project);
       // O backend manda SIGKILL ao estourar o prazo; aqui só avisa que chegou nessa fase.
       const forceTimer = setTimeout(() => {
         state.forcing ??= "timeout";
@@ -646,7 +681,7 @@ function activate(project: string, wt: Worktree, created: boolean) {
 async function select(project: string, wt: Worktree) {
   closeOverlay();
   // A falha que ficou no cabeçalho já foi vista: a próxima troca a tira.
-  if (lastStopEl.dataset.stay !== undefined) clearNote();
+  if (alertEl.childElementCount) clearNote(alertEl);
   current = { project, wt };
   const k = key(project, wt.id);
   recent = [k, ...recent.filter((r) => r !== k)].slice(0, 30);
@@ -722,10 +757,10 @@ function render(focus = false) {
     urlEl.title = `Abrir ${url} no navegador`;
     urlEl.setAttribute("aria-label", urlEl.title);
   }
-  renderHalt(haltTabEl, sideTabs());
-  renderHalt(haltAllEl, wt.api && wt.front ? TABS : []);
+  renderHalt(haltTabEl, false);
+  renderHalt(haltAllEl, true);
   const down = state === "part" ? sides(ck!).down : [];
-  // Parado à mão (Parar API) com o outro lado de pé: a palheta segue RODANDO, mas a aba diz que aquele lado está parado.
+  // Parado à mão (Parar API) com o outro lado de pé: a palheta diz SEM API em neutro, e a aba leva o quadrado vazado.
   // Em ink-2, não em fail: foi pedido, não caiu.
   const parked = ck ? sides(ck).held : [];
   // Parando um lado só: a palheta segue com o estado da worktree e a aba que para fica âmbar.
@@ -774,29 +809,41 @@ function render(focus = false) {
   } else pane?.term.focus();
 }
 
-/** "Parar API" / "Subir tudo" de `tabs` da worktree atual: Parar se algo roda (ou acabou de subir), Subir se há start;
+/** Todos os rótulos que o botão pode ter, empilhados na mesma célula e invisíveis: ele fica sempre com a largura do maior.
+ *  Clicar em "Parar API" virava "Subir API", mais estreito, e "Parar tudo" deslizava para baixo do cursor, com a prévia
+ *  ENCERRA acesa; o segundo clique parava a worktree inteira. */
+const HALT_LABELS = {
+  tab: ["Parar API", "Subir API", "Parar Front", "Subir Front"],
+  all: ["Parar tudo", "Subir tudo"],
+};
+
+/** "Parar API" (`all`: "Parar tudo") da worktree atual: Parar se algo roda (ou acabou de subir), Subir se há start;
  *  senão some. Verbo e objeto escritos: um quadrado desenhado lia como maximizar ou checkbox, ao lado das abas.
  *  Numa troca do projeto some: a nova sobe sozinha, e "Subir" ali dizia o contrário. Numa parada à mão fica aria-disabled com o motivo. */
-function renderHalt(b: HTMLButtonElement, tabs: Tab[]) {
+function renderHalt(b: HTMLButtonElement, all: boolean) {
   const k = currentKey()!;
-  const panes = tabs.flatMap((t) => envs.get(k)?.panes[t] ?? []);
-  const running = starting.has(k) || panes.some((p) => busy.has(p.ptyId));
+  const { wt } = current!;
+  const verb = haltVerb(all);
   // Sem lados (o "tudo" de uma worktree solo), some: starting.has(k) sozinho mostrava "Parar undefined" enquanto ela subia.
+  const tabs = all ? (wt.api && wt.front ? TABS : []) : sideTabs(verb);
+  const panes = tabs.flatMap((t) => envs.get(k)?.panes[t] ?? []);
+  const running = verb === "stop";
   b.hidden = !tabs.length || stopping.has(current!.project) || (!running && !panes.some((p) => p.side.startCommand));
   if (b.hidden) return;
-  const all = tabs.length > 1;
-  const verb = running ? "Parar" : "Subir";
-  const text = `${verb} ${all ? "tudo" : TAB_LABEL[tabs[0]]}`;
+  const word = running ? "Parar" : "Subir";
+  const text = `${word} ${all ? "tudo" : TAB_LABEL[tabs[0]]}`;
   const wait = halting.has(k);
   // Prévia do que Parar encerra (CSS): a aba, ou a worktree inteira quando os lados dela são todos estes.
   if (running && !wait) b.dataset.ends = panes.length === Object.keys(envs.get(k)?.panes ?? {}).length ? "all" : "tab";
   else delete b.dataset.ends;
   // Um verbo por atalho: X para, S sobe.
   const chord = `Shift+${all ? "Alt+" : ""}${running ? "X" : "S"}`;
-  const title = wait ? "Aguarde: parando processos" : `${verb} ${tabs.map((t) => TAB_LABEL[t]).join(" e ")} (Ctrl+${chord})`;
-  if (b.title === title && b.textContent === text) return;
+  const title = wait ? "Aguarde: parando processos" : `${word} ${tabs.map((t) => TAB_LABEL[t]).join(" e ")} (Ctrl+${chord})`;
+  if (b.title === title && b.dataset.label === text) return;
   b.title = title;
-  b.textContent = text;
+  b.dataset.label = text;
+  // Os fantasmas ficam fora do nome acessível (aria-hidden e invisíveis): o leitor de tela ouve só "Parar API".
+  b.replaceChildren(el("span", { textContent: text }), ...HALT_LABELS[all ? "all" : "tab"].map((g) => el("span", { className: "ghost", textContent: g, ariaHidden: "true" })));
   b.setAttribute("aria-keyshortcuts", `Control+${chord}`);
   if (wait) {
     b.setAttribute("aria-disabled", "true");
@@ -941,44 +988,45 @@ function renderWait(project: string, wt: Worktree) {
   fitHeader();
 }
 
-/** Largura mínima do nome no Voltar: "login" (sem o prefixo) ainda diz para onde se volta. "Voltar" sozinho, a meia tela,
- *  não dizia; e o nome inteiro tirava largura da branch de destino, que é o que se procura na troca. */
-const BACK_MIN = 56;
+/** Largura real do texto, com subpixel. scrollWidth e clientWidth são inteiros: com a caixa em 212,70px e o texto em
+ *  212,77px os dois davam 213, o corte no meio não entrava e a reticência do CSS cortava o fim ("…agrupad…"). */
+function textWidth(e: HTMLElement) {
+  const r = document.createRange();
+  r.selectNodeContents(e);
+  return r.getBoundingClientRect().width;
+}
+const overflows = (e: HTMLElement) => textWidth(e) > e.getBoundingClientRect().width + 0.01;
 
-/** Piso da faixa da troca: tudo, com o nome do Voltar em até BACK_MIN. Ela cede antes do destino até ali e nunca
- *  empurra a ajuda para fora da janela. Medido com a faixa inteira, como o piso do recado (headerNote). */
-function fitStrip() {
-  if (switchingEl.hidden) return;
-  const to = switchingEl.querySelector<HTMLElement>(".to");
-  if (to) to.textContent = to.dataset.full ??= to.textContent!;
-  switchingEl.style.removeProperty("--floor");
-  switchingEl.style.minWidth = "max-content";
-  const floor = switchingEl.offsetWidth - (to ? Math.max(0, to.offsetWidth - BACK_MIN) : 0);
-  switchingEl.style.minWidth = "";
-  switchingEl.style.setProperty("--floor", `${Math.ceil(floor)}px`);
+/** Mede um texto na fonte de `e`, com 2px de folga (o canvas ignora tabular-nums): o corte nunca encosta na reticência do CSS. */
+function fontWidth(e: HTMLElement) {
+  const css = getComputedStyle(e);
+  // o shorthand css.font volta vazio com font-variant-numeric definido
+  const font = `${css.fontWeight} ${css.fontSize} ${css.fontFamily}`;
+  return (t: string) => {
+    measure.font = font;
+    return measure.measureText(t).width + 2;
+  };
 }
 
 /** O nome do Voltar, sem espaço: primeiro sai o prefixo ("feat/"), o nome é o que distingue; depois trunca no meio,
- *  como as branches do painel. O nome inteiro fica no title. */
+ *  como as branches do painel ("Voltar calculo…agrupados"). O nome inteiro fica no title. */
 function cutBack() {
   const to = switchingEl.hidden ? null : switchingEl.querySelector<HTMLElement>(".to");
-  if (!to || to.scrollWidth <= to.clientWidth) return;
-  const css = getComputedStyle(to);
-  measure.font = `${css.fontWeight} ${css.fontSize} ${css.fontFamily}`;
-  const w = (t: string) => measure.measureText(t).width + 2;
-  const full = splitBranch(to.dataset.full!)[1] || to.dataset.full!;
-  const name = backName(full, Number(switchingEl.dataset.tight) >= 2);
-  to.textContent = w(name) <= to.clientWidth ? name : middleCut(name, to.clientWidth, w);
+  if (!to) return;
+  to.textContent = to.dataset.full ??= to.textContent!;
+  if (!overflows(to)) return;
+  const avail = to.getBoundingClientRect().width;
+  const w = fontWidth(to);
+  const name = splitBranch(to.dataset.full!)[1] || to.dataset.full!;
+  to.textContent = w(name) <= avail ? name : middleCut(name, avail, w);
 }
 
 /** A branch do destino, sem espaço, trunca no meio como no painel: o fim do nome é o que distingue ("…agrupados").
  *  Só o nome sozinho; o par de prefixos diferentes ("a ⇄ b") fica com a reticência do CSS. */
 function cutDest(branch: HTMLElement | null, name: Text | null) {
-  if (!branch || !name || branch.scrollWidth <= branch.clientWidth) return;
+  if (!branch || !name || !overflows(branch)) return;
   if (branch.childNodes.length > 1 && !destEl.classList.contains("bare")) return;
-  const css = getComputedStyle(branch);
-  measure.font = `${css.fontWeight} ${css.fontSize} ${css.fontFamily}`;
-  name.data = middleCut(branch.dataset.full!, branch.clientWidth, (t) => measure.measureText(t).width + 2);
+  name.data = middleCut(branch.dataset.full!, branch.getBoundingClientRect().width, fontWidth(branch));
 }
 
 /** Erro de git do projeto em uma linha legível; o texto cru fica no detalhe. */
@@ -1213,8 +1261,9 @@ function fitBranches() {
   const sizes = rests.map((r) => {
     const css = getComputedStyle(r);
     return {
-      avail: r.clientWidth,
-      need: r.scrollWidth,
+      // com subpixel (textWidth): os inteiros deixavam a reticência do CSS cortar o fim
+      avail: r.getBoundingClientRect().width,
+      need: textWidth(r),
       prefix: (r.previousElementSibling as HTMLElement).offsetWidth,
       // o shorthand css.font volta vazio com font-variant-numeric definido
       font: `${css.fontWeight} ${css.fontSize} ${css.fontFamily}`,
@@ -1292,102 +1341,64 @@ function renderRunning() {
 
 /** Piso da branch em serviço na faixa: o nome inteiro ou, se for longo, uns 17 caracteres. */
 const BRANCH_FLOOR = 160;
-/** Abaixo disso a branch some de vez: aí a falha cede, se o painel aberto a mostra na palheta. */
+/** Abaixo disso o projeto sai do destino: a placa do painel ou a paleta dizem qual é; a branch é o que está em serviço. */
 const BRANCH_MIN = 48;
 
-/** A branch em serviço vem antes dos acessórios da faixa: enquanto ela mostrar menos que o piso, eles saem um a um,
- *  o recado primeiro, depois "Parar tudo" e "Parar API" (os atalhos continuam) e por último a porta, o link usado o dia todo. Classe e não hidden: o recado
- *  é região viva e continua falando, e render controla o hidden dos outros. Mede com todos à mostra, senão a branch sempre caberia.
- *  Falha ("não subiu", "caiu") não sai primeiro: aperta (a ação sai, quem caiu trunca). A da worktree em serviço só sai
- *  quando a branch sumiria e o painel aberto já mostra a palheta dela; a de outro projeto sai antes da porta, se o painel
- *  aberto mostra a palheta. O "Parou à força" da anterior é rotina: sai primeiro, como o "Parou em".
- *  Depois, sem espaço, o outro projeto cuja palheta não caberia sai inteiro: o estado nunca aparece cortado.
- *  O painel e a paleta continuam mostrando o que roda. */
+/** A faixa é CSS (#flow em styles.css): o destino tem um piso (projeto, a branch até BRANCH_FLOOR e a palheta) e, acima
+ *  dele, os acessórios vêm antes do resto da branch. O que não cabe quebra para uma segunda linha do #flow, fora da
+ *  faixa, de trás para a frente: o recado, os outros projetos, "Parar tudo", "Parar API" e por último a porta. Antes,
+ *  ~15 degraus medidos em JS decidiam isso, e cada regressão de largura saía de uma medida errada.
+ *  Aqui só o que o CSS não sabe: o piso (depende do texto), a largura que o #flow usa de fato (o vão do que quebrou volta
+ *  para a branch), quem quebrou (fica inert e entra no ⋯), o sufixo do par e o projeto que saem do destino, e o corte no meio. */
 function fitHeader() {
-  const stay = lastStopEl.dataset.stay !== undefined;
-  const open = !document.body.classList.contains("sidebar-off");
-  delete switchingEl.dataset.tight;
   destEl.classList.remove("bare", "no-project");
-  // Mede com a faixa da troca inteira: o piso dela muda com a largura (verbo, contagem).
-  fitStrip();
-  const mine = stay && lastStopEl.querySelector<HTMLElement>(".who")?.dataset.key === currentKey();
-  // Com um lado caído, "Subir Front" é a saída da falha: não cede, como ela.
-  const recover = !!current && lineState(current.project, current.wt) === "part";
-  // Antes de ceder qualquer coisa, os vãos da faixa apertam (12 → 8px): a 960, "Parar API" saía para o ⋯ por 10px
-  // e deixava ~100px vazios; com os vãos de 8 ele cabe ao lado da branch inteira.
-  const steps: [HTMLElement, string][] = [
-    [headerEl, "dense"],
-    [lastStopEl, stay ? "tight" : "ceded"],
-    [haltAllEl, "ceded"],
-    ...(recover ? [] : [[haltTabEl, "ceded"] as [HTMLElement, string]]),
-    ...(stay && !mine && open ? [[lastStopEl, "ceded"] as [HTMLElement, string]] : []),
-    [urlEl, "ceded"],
-  ];
   const branch = destEl.querySelector<HTMLElement>(".branch-name");
   // O nome inteiro antes de medir: cutDest o trunca no meio no fim.
   const nameNode = branch?.firstChild instanceof Text ? branch.firstChild : null;
   if (nameNode) nameNode.data = branch!.dataset.full ??= nameNode.data;
-  const below = (px: number) => !!branch && branch.clientWidth < Math.min(branch.scrollWidth, px);
+  if (branch) {
+    const project = destEl.querySelector<HTMLElement>(".project")!;
+    const sep = getComputedStyle(destEl.querySelector(".sep")!);
+    // Projeto de até 8 letras não trunca; o longo, até "INT…" (2.5em, o min-width do CSS).
+    const projectMin = project.classList.contains("short") ? project.scrollWidth : Math.min(project.scrollWidth, 2.5 * parseFloat(getComputedStyle(project).fontSize));
+    const floor = projectMin + parseFloat(sep.width) + parseFloat(sep.marginLeft) + parseFloat(sep.marginRight) + Math.min(textWidth(branch), BRANCH_FLOOR) + parseFloat(getComputedStyle(destEl).columnGap) + destEl.querySelector<HTMLElement>(".flap")!.offsetWidth;
+    destEl.style.setProperty("--floor", `${Math.ceil(floor)}px`);
+  }
+
+  // O #flow com toda a largura que pede: o que não cabe quebra. Algo quebrou: o ⋯ entra, e ele mesmo ocupa largura.
+  flowEl.style.removeProperty("--flow-w");
+  moreBtn.hidden = true;
+  if (cededActions().length) moreBtn.hidden = false;
+  // A largura que o que ficou usa de fato: o vão deixado pelo que quebrou volta para a branch (a 600 sobravam 89px
+  // vazios ao lado de uma branch truncada). Sem a margem automática que empurra os outros projetos para a direita.
+  const items = [...flowEl.querySelectorAll<HTMLElement>(":scope > a, .halt, #running > .other, #last-stop")];
+  flowEl.classList.add("measuring");
+  const used = Math.max(0, ...items.filter((i) => i.offsetWidth && !ceded(i)).map((i) => i.offsetLeft + i.offsetWidth));
+  flowEl.classList.remove("measuring");
+  flowEl.style.setProperty("--flow-w", `${Math.ceil(used + parseFloat(getComputedStyle(flowEl).paddingRight))}px`);
+
   // O sufixo do par ("feature-api ⇄ feature-app") é o primeiro a sair: o nome em comum é o que diz a worktree.
-  if (branch?.querySelector(".pair-pre") && branch.clientWidth < branch.scrollWidth) destEl.classList.add("bare");
-  const fitSteps = () => {
-    for (const a of [lastStopEl, haltAllEl, haltTabEl, urlEl]) a.classList.remove("ceded", "tight");
-    headerEl.classList.remove("dense");
-    moreBtn.hidden = true;
-    let i = 0;
-    const cede = () => {
-      for (; i < steps.length && below(BRANCH_FLOOR); i++) steps[i][0].classList.add(steps[i][1]);
-    };
-    cede();
-    // Algo cedeu: o ⋯ entra, e ele mesmo pode empurrar o próximo passo.
-    if (cededActions().length) {
-      moreBtn.hidden = false;
-      cede();
-    }
-  };
-  // Painel recolhido: os outros projetos em serviço cuja palheta não cabe saem inteiros (nunca uma palheta cortada).
-  const items = [...runningEl.children] as HTMLElement[];
-  const cutRunning = () => {
-    if (open) return 0;
-    const edge = runningEl.getBoundingClientRect().right + 0.5;
-    const cut = items.filter((b) => !b.hidden && b.querySelector(".flap")!.getBoundingClientRect().right > edge);
-    for (const b of cut) b.hidden = true;
-    return cut.length;
-  };
-  for (const b of items) b.hidden = false;
-  fitSteps();
-  // O #running encolhe junto com o destino, na proporção: medidos com ele inteiro, as ações cediam e depois ele saía,
-  // e a 600 sobravam 89px vazios com a branch truncada e três ações no ⋯. Sem os que saíram, mede de novo.
-  if (cutRunning()) {
-    fitSteps();
-    cutRunning();
-  }
-  if (mine && open && below(BRANCH_MIN)) lastStopEl.classList.add("ceded");
-  // Na troca, para onde se vai é o que se procura: cedem, um de cada vez, antes da branch que sobe, o "para", o nome do
-  // Voltar até a cauda ("Voltar agrupados": a linha do painel já diz o nome inteiro), o verbo e, por último, a contagem
-  // até o SIGKILL, que só a faixa mostra. Tudo de uma vez deixava a faixa muda com espaço sobrando.
-  for (const level of ["1", "2", "3", "4"]) {
-    // Com o painel aberto, a linha atual ao lado já mostra o nome inteiro: antes de o verbo e a contagem saírem
-    // (degraus 3 e 4), a branch do destino desce até o piso mínimo (a cauda, "…agrupados").
-    const floor = open && level >= "3" ? BRANCH_MIN : BRANCH_FLOOR;
-    if (switchingEl.hidden || !below(floor)) break;
-    // Antes do nome do Voltar, do verbo e da contagem, sai o projeto do destino, se o painel aberto ao lado já diz qual
-    // é: a 960 a faixa ficava muda ("Voltar login-time…", sem "Parando" nem contagem) com "INTERNO /" inteiro.
-    if (level === "2" && open) {
-      destEl.classList.add("no-project");
-      if (!below(BRANCH_FLOOR)) break;
-    }
-    switchingEl.dataset.tight = level;
-    fitStrip();
-  }
-  // Nem o piso mínimo da branch, depois de tudo ceder: o projeto e a "/" saem do destino (a placa do painel ao lado
-  // já diz qual é). A 640px, com o painel acoplado em 200px, sobrava "INTERNO / …": alargar a janela perdia a branch.
-  if (below(BRANCH_MIN)) destEl.classList.add("no-project");
-  cutBack();
+  if (branch?.querySelector(".pair-pre") && overflows(branch)) destEl.classList.add("bare");
+  // Nem o piso mínimo da branch: o projeto e a "/" saem do destino (a 640px, com o painel acoplado em 200px, sobrava "INTERNO / …").
+  if (branch && branch.getBoundingClientRect().width < Math.min(textWidth(branch), BRANCH_MIN)) destEl.classList.add("no-project");
   cutDest(branch, nameNode);
-  // Falha em outro projeto que a faixa não mostra (cortada, faixa estreita, painel fechado): o botão do painel leva
-  // um quadrado vermelho e "falha em PROJETO" no nome. Com o painel aberto ao lado, o painel já mostra.
-  const shown = items.filter((b) => !b.hidden && b.offsetParent).map((b) => b.dataset.key);
+  cutBack();
+
+  // Quem não coube sai do Tab e do leitor de tela (o ⋯ oferece as ações); o recado não: é região viva e continua falando,
+  // e a cópia dele vai para o canto do terminal. O primeiro da linha que passaria da borda some inteiro (`.cut`):
+  // a porta pela metade, ou outro projeto com a palheta cortada.
+  for (const i of items) {
+    const gone = ceded(i);
+    i.classList.toggle("cut", gone && i.offsetTop <= flowEl.clientHeight / 2);
+    if (i !== lastStopEl) i.inert = gone;
+  }
+  moreBtn.hidden = !cededActions().length;
+  alertEl.classList.toggle("recover", haltTabEl.inert && !haltTabEl.hidden);
+
+  // Falha em outro projeto que a faixa não mostra (quebrou, painel fechado): o botão do painel leva um quadrado
+  // vermelho e "falha em PROJETO" no nome. Com o painel aberto ao lado, o painel já mostra.
+  const open = !document.body.classList.contains("sidebar-off");
+  const shown = items.filter((b) => b.classList.contains("other") && !b.inert && b.offsetParent).map((b) => b.dataset.key);
   const failing = toggleBtn.dataset.failing ? toggleBtn.dataset.failing.split("\u0000") : [];
   toggleBtn.dataset.alert = open ? "" : failing.filter((p) => !shown.includes(p)).map((p) => p.toUpperCase()).join(", ");
   labelToggle();
@@ -1412,7 +1423,7 @@ function renderTermNote() {
   }
   termNoteEl.classList.remove("lock");
   termNoteEl.style.top = "";
-  const show = !!pane && !!lastStopEl.childElementCount && lastStopEl.dataset.stay === undefined && !lastStopEl.offsetWidth;
+  const show = !!pane && !!lastStopEl.childElementCount && ceded(lastStopEl);
   termNoteEl.hidden = !show;
   if (!show) return;
   termNoteEl.replaceChildren(...[...lastStopEl.children].map((c) => c.cloneNode(true)));
@@ -1555,7 +1566,7 @@ function announceDrops() {
     wasUp.set(k, up);
     const wt = findWt(project, id);
     if (!lost.length || !wt) continue;
-    headerNote(true, project, `${lost.map((t) => TAB_LABEL[t]).join(" e ")} ${lost.length > 1 ? "pararam" : "parou"}`, noteWho(project, id, wt.label), seeTerminal(project, id, lost[0]));
+    headerNote(true, project, `${lost.map((t) => TAB_LABEL[t]).join(" e ")} ${lost.length > 1 ? "pararam" : "parou"}`, noteWho(project, id, wt.label), upHere(project, id, lost), seeTerminal(project, id, lost[0]));
   }
 }
 
@@ -1578,7 +1589,7 @@ async function pollStatus() {
       changed = true;
       const [project, id] = k.split("\u0000");
       const wt = down.length && findWt(project, id);
-      if (wt) headerNote(true, project, `${down.map((t) => TAB_LABEL[t]).join(" e ")} ${down.length > 1 ? "não subiram" : "não subiu"} em 15 s`, noteWho(project, id, wt.label), seeTerminal(project, id, down[0]));
+      if (wt) headerNote(true, project, `${down.map((t) => TAB_LABEL[t]).join(" e ")} ${down.length > 1 ? "não subiram" : "não subiu"} em 15 s`, noteWho(project, id, wt.label), upHere(project, id, down), seeTerminal(project, id, down[0]));
     }
   }
   if (changed) render();

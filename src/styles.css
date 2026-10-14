@@ -356,6 +356,24 @@ kbd {
   padding: 0 7px;
 }
 
+/* Os dois "SEM X" se separam pela forma, não só pela cor (à noite, vermelho e meia-tinta ficam a ~1,2:1 de luminância):
+   o quadrado das abas vem para dentro da palheta, cheio no que caiu, vazado no parado à mão. */
+.flap:is([data-state="part"], [data-state="held"]) > span:first-child::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 2px;
+  background: currentColor;
+  vertical-align: 1px;
+}
+
+.flap[data-state="held"] > span:first-child::before {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
 /* Prévia da troca: com o cursor (ou o foco) em outra linha do projeto, a que está em serviço mostra ENCERRA.
    Não vira (o estado não mudou) e espera 120ms: o cursor só de passagem pelo painel não faz a palheta piscar. */
 .flap .ends {
@@ -904,6 +922,7 @@ body.narrow #sidebar-handle {
 /* ---------- faixa de destino ---------- */
 
 main {
+  container-type: inline-size;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -911,37 +930,40 @@ main {
 }
 
 header {
-  container-type: inline-size;
+  --gap: 12px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--gap);
   height: 44px;
   padding: 0 8px;
   border-bottom: 1px solid var(--rule);
   background: var(--board);
 }
 
-/* Primeiro degrau de fitHeader, antes de ceder qualquer acessório: os vãos apertam e as ações ficam. */
-header.dense {
-  gap: 8px;
+/* A meia tela, os vãos apertam (12 → 8px) e os botões perdem 2px de respiro de cada lado: a 960, "Parar API" saía
+   para o ⋯ por 10px. */
+@container (max-width: 800px) {
+  header {
+    --gap: 8px;
+  }
+
+  header .halt {
+    padding: 0 8px;
+  }
 }
 
-/* Com "feat/relatorio-mensal", a 960, "Parar API" ainda saía por 2px: os botões perdem 2px de respiro de cada lado. */
-header.dense .halt {
-  padding: 0 8px;
-}
-
-/* O destino é a verdade do que está em serviço: ocupa o que sobrar e só cede largura depois que o recado
-   e os outros projetos já cederam tudo. Um teto (40% da faixa) cortava a branch com a faixa meio vazia. */
+/* O destino é a verdade do que está em serviço. Base no piso (projeto, a branch até 160px e a palheta, medido em
+   fitHeader) e um fator de crescimento enorme: acima do piso, o que sobra vai primeiro para a branch, até ela caber
+   inteira (max-content), e só então para o #flow. Abaixo do piso, quem encolhe é o #flow (fator 1000). */
 #destination {
   display: grid;
-  /* O piso do destino é a palheta inteira (coluna auto): ela nunca passa por cima das abas, como fazia com zoom de 200%.
-     O nome cede antes dela. Em flex, o piso era o nome inteiro (a branch não quebra) e, com o painel aberto na janela
-     mínima, a faixa transbordava; um piso fixo (6em) abria um buraco depois de um nome mais curto que ele. */
+  /* A palheta inteira sempre (coluna auto): ela nunca passa por cima das abas, como fazia com zoom de 200%. O nome cede antes dela. */
   grid-template-columns: minmax(0, max-content) auto;
   align-items: center;
   gap: 10px;
-  flex-shrink: 1;
+  flex: 1000000 1 var(--floor, auto);
+  min-width: 0;
+  max-width: max-content;
 }
 
 /* A palheta do destino é a verdade de relance da janela: 14px (a da linha tem 12) e o sentido desenhado
@@ -958,6 +980,10 @@ header.dense .halt {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+#destination .flap > span:first-child::before {
+  margin-right: 1px;
 }
 
 #destination .flap .dir {
@@ -1004,6 +1030,12 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
 #dev-url:hover {
   color: var(--ink);
   text-decoration: underline;
+}
+
+/* a porta sumiu logo depois de um clique em Parar: o lugar dela fica até o cursor sair do cabeçalho (main.ts) */
+#dev-url[hidden][data-hold] {
+  display: inline !important;
+  visibility: hidden;
 }
 
 /* sem espaço, o sufixo do par sai primeiro (fitHeader): o nome em comum é o que diz a worktree */
@@ -1113,8 +1145,8 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   vertical-align: 1px;
 }
 
-/* Parado à mão: o mesmo quadrado, em meia-tinta, e o rótulo segue a aba (foi pedido, não caiu).
-   Parando só este lado: âmbar, enquanto o Ctrl+C não termina; a palheta da worktree fica com o estado dela. */
+/* Parado à mão: o mesmo quadrado, vazado e em meia-tinta, e o rótulo segue a aba (foi pedido, não caiu).
+   Parando só este lado: cheio, em âmbar, enquanto o Ctrl+C não termina; a palheta da worktree fica com o estado dela. */
 #tabs button:is(.parked, .halting)::before {
   content: "";
   display: inline-block;
@@ -1122,17 +1154,48 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   height: 6px;
   margin-right: 6px;
   border-radius: 2px;
-  background: var(--ink-2);
+  box-shadow: inset 0 0 0 1.5px var(--ink-2);
   vertical-align: 1px;
 }
 
 #tabs button.halting::before {
   background: var(--wait);
+  box-shadow: none;
 }
 
-/* "Parar API", "Parar tudo", "Subir Front": verbo e objeto escritos, com o contorno dos botões (.btn), em 26px */
-.halt {
+/* Os acessórios da faixa (a porta, as ações, os outros projetos, o recado) numa linha que quebra: o que não cabe desce
+   para uma segunda linha, cortada pelo overflow, de trás para a frente na ordem do DOM. Ceder é quebrar, sem medida.
+   A segunda linha começa a 56px (8 de respiro, 28 da primeira, 20 de vão), fora dos 44px da faixa; o respiro em volta
+   da primeira é onde cabem os anéis de foco. Quem quebrou fica inert e entra no ⋯ (fitHeader). */
+#flow {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: flex-start;
+  gap: 20px var(--gap);
+  /* base: a largura que o que ficou usa (fitHeader); sem ela, tudo. Encolhe antes do destino descer do piso. */
+  flex: 1 1000 var(--flow-w, auto);
+  min-width: 0;
+  height: 44px;
+  margin: 0 -4px;
+  padding: 8px 4px;
+  overflow: hidden;
+}
+
+#flow > *,
+#actions > *,
+#running > * {
   flex-shrink: 0;
+}
+
+/* "Parar API", "Parar tudo", "Subir Front": verbo e objeto escritos, com o contorno dos botões (.btn), em 26px.
+   Todos os rótulos possíveis empilhados na mesma célula, só o atual à vista: a largura não muda com o verbo, e o
+   clique não puxa o vizinho para baixo do cursor. */
+.halt {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
   height: 26px;
   padding: 0 10px;
   border: 1px solid var(--rule);
@@ -1144,9 +1207,38 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   cursor: pointer;
 }
 
+.halt > span {
+  grid-area: 1 / 1;
+}
+
+.halt > .ghost {
+  visibility: hidden;
+}
+
 .halt:hover {
   background: var(--flap);
   color: var(--ink);
+}
+
+/* Um fio abre o grupo das ações: abas e porta dizem o que está aberto, as ações dizem o que fazer. Fica na primeira
+   à mostra e quebra junto com ela. Entre as duas, 4px. */
+#halt-tab:not([hidden]),
+#halt-tab[hidden] + #halt-all {
+  margin-left: 9px;
+}
+
+#halt-tab:not([hidden])::before,
+#halt-tab[hidden] + #halt-all::before {
+  content: "";
+  position: absolute;
+  left: -9px;
+  top: 4px;
+  bottom: 4px;
+  border-left: 1px solid var(--rule);
+}
+
+#halt-tab:not([hidden]) + #halt-all {
+  margin-left: calc(4px - var(--gap));
 }
 
 .halt[aria-disabled="true"] {
@@ -1155,33 +1247,37 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   cursor: not-allowed;
 }
 
-/* As ações ficam num grupo à parte, depois de um fio: abas e porta dizem o que está aberto, o grupo diz o que fazer.
-   Sem nenhuma ação à mostra (numa troca, ou cedidas por espaço), o grupo some com o fio. */
-#actions {
+/* As ações e os outros projetos quebram um a um: os grupos não têm caixa própria. */
+#actions,
+#running {
+  display: contents;
+}
+
+/* Segunda faixa, embaixo do cabeçalho: a troca em andamento e as falhas. Só existe enquanto tem o que dizer; vazia,
+   fica com altura zero (e não display: none), para a região viva da falha já estar lá quando ela chegar.
+   Na faixa de cima, as duas disputavam largura com o destino: a troca apertava em 4 degraus e a meia tela perdia o
+   verbo e a contagem; a falha apertava, cedia e ia para o canto do terminal. Aqui têm a largura inteira. */
+#strip {
   display: flex;
-  flex-shrink: 0;
-  gap: 4px;
-  padding-left: 8px;
-  border-left: 1px solid var(--rule);
+  align-items: center;
+  gap: 16px;
+  height: 0;
+  padding: 0 8px 0 12px;
+  overflow: hidden;
+  background: var(--board);
 }
 
-#actions:not(:has(> .halt:not([hidden], .ceded))) {
-  display: none;
+#strip:has(> #switching:not([hidden]), > #alert:not(:empty)) {
+  height: 36px;
+  border-bottom: 1px solid var(--rule);
 }
 
-/* A troca, do Ctrl+C ao SIGKILL, no cabeçalho, no lugar das ações (que somem numa troca):
-   "Encerrando [4 s] Voltar para X · Forçar". O nome do Voltar trunca; a contagem e o Forçar ficam. */
-/* Cede antes do destino, até o piso (min-content): o nome do Voltar trunca até "Voltar para"; a branch que está subindo
-   é a verdade da faixa. Abaixo do piso, nunca passa por cima da ajuda. */
+/* A troca, do Ctrl+C ao SIGKILL: "Parando [4 s] Voltar para X | Forçar". O nome do Voltar trunca no meio (cutBack). */
 #switching {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 100;
-  /* piso medido em fitStrip */
-  min-width: var(--floor, auto);
-  padding-left: 8px;
-  border-left: 1px solid var(--rule);
+  min-width: 0;
   color: var(--ink-2);
   font-size: 13px;
   white-space: nowrap;
@@ -1191,12 +1287,15 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   outline: none;
 }
 
-#switching:focus-visible {
+/* O foco na faixa (esperar é a ação padrão) marca o verbo, não o grupo: o anel em volta de Voltar e Forçar parecia
+   uma seleção de botões. */
+#switching:focus-visible > .what {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+  border-radius: 2px;
 }
 
-#switching .flap {
+#switching > :not(.back) {
   flex-shrink: 0;
 }
 
@@ -1214,30 +1313,11 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   overflow: hidden;
 }
 
-/* faixa estreita (a meia tela, ~960px de janela): com botões, o verbo sai; "Voltar para X" fica, com o nome truncado no
-   meio (cutBack): no momento destrutivo, a saída diz para onde leva. No SIGKILL não há botão, e o verbo fica:
-   sem ele, a faixa era só a palheta, muda no momento mais tenso. */
-@container (max-width: 720px) {
-  #switching:has(.btn) .what {
+/* Janela pequena (ou zoom alto): o "para" sai antes de o nome do Voltar truncar. "Voltar X" ainda diz para onde leva. */
+@container (max-width: 480px) {
+  #switching .para {
     display: none;
   }
-}
-
-/* apertada (fitHeader, data-tight 1 a 4): a branch de destino ficaria abaixo do piso. Cede um de cada vez: o "para",
-   o nome do Voltar até a cauda (cutBack), o verbo e, por último, a contagem até o SIGKILL, que só a faixa mostra. O Voltar fica com o nome (truncado no meio) e o Forçar fica */
-#switching[data-tight] .para,
-#switching:is([data-tight="3"], [data-tight="4"]) .what,
-#switching[data-tight="4"] .count {
-  display: none;
-}
-
-/* e os botões perdem 2px de respiro de cada lado: a meia tela, é o que faltava para "login-timeout" não truncar */
-#switching[data-tight] {
-  gap: 6px;
-}
-
-#switching[data-tight] .btn {
-  padding: 0 8px;
 }
 
 /* Forçar mata sem o Ctrl+C: entra depois de FORCE_DELAY, depois do Voltar na ordem do Tab, e afastado dele por um fio */
@@ -1255,53 +1335,55 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   border-left: 1px solid var(--rule);
 }
 
-/* "Parou em 1,8 s · feat/x": o fechamento da troca, logo depois das abas; some sozinho (falha fica até a próxima troca).
-   É o primeiro a ceder largura, até o verbo e o tempo; dentro dele só o nome trunca. */
+/* "Parou em 1,8 s · feat/x": o fechamento da troca, depois das ações (e dos outros projetos); some sozinho em 8 s.
+   É o primeiro a quebrar para fora da faixa: aí a cópia vai para o canto do terminal (renderTermNote) e ele continua
+   falando, porque é região viva. */
 #last-stop {
   display: flex;
   align-items: center;
   gap: 0.3em;
-  margin-right: auto;
-  flex-shrink: 1000;
-  /* piso medido em headerNote */
-  min-width: var(--floor, 0);
-  overflow: hidden;
   white-space: nowrap;
   color: var(--ink-2);
   font-size: 13px;
 }
 
-#last-stop > span {
+/* "Parou à força em 5,0 s": rotina, em meia-tinta; "à força" em tinta cheia. Ênfase pela tinta, não pela cor:
+   em fail era a única palavra vermelha de um fecho que o sistema chama de rotina. */
+/* vazio, devolve o vão: a região viva precisa existir antes de falar, mas não ocupa a faixa */
+#last-stop:empty {
+  margin-left: calc(-1 * var(--gap));
+}
+
+#last-stop .forced {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Falha ("Front parou · Ver o terminal ×"), na segunda faixa: o verbo na cor de falha, como a palheta SEM FRONT que ela
+   explica; quem caiu trunca, o verbo e as ações ficam. */
+#alert {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  min-width: 0;
+  white-space: nowrap;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+#alert > span:first-child {
+  flex-shrink: 0;
+  color: var(--fail);
+}
+
+#alert > .who {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-#last-stop > .who {
-  flex-shrink: 1000;
-}
-
-/* Vazio, continua na faixa (região viva precisa existir antes de falar), mas devolve o vão: são 12px a mais para a branch. */
-#last-stop:empty {
-  margin-left: -12px;
-}
-
-/* o verbo e o tempo ("Encerrada à força em 5,0 s") nunca cortam; o piso do recado é medido em headerNote */
-#last-stop > span:first-child {
-  flex-shrink: 0;
-}
-
-/* falha apertada (fitHeader): só o verbo e o tempo garantidos; a ação sai, quem caiu trunca */
-#last-stop.tight {
-  min-width: var(--floor-tight, 0);
-}
-
-#last-stop.tight > .note-act {
-  display: none;
-}
-
-/* "Ver o terminal": a saída da falha, com o contorno dos botões; por dentro, o #last-stop corta o overflow */
-#last-stop > .note-act {
+/* "Ver o terminal": a saída da falha, com o contorno dos botões */
+#alert > .note-act {
   flex-shrink: 0;
   height: 22px;
   margin-left: 4px;
@@ -1314,16 +1396,17 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   cursor: pointer;
 }
 
-#last-stop > .note-act:hover {
+#alert > .note-act:hover {
   background: var(--flap);
 }
 
-#last-stop > .note-act:focus-visible {
-  outline-offset: -2px;
+/* "Subir Front" aqui só quando o do cabeçalho quebrou para fora da faixa */
+#alert:not(.recover) > .note-up {
+  display: none;
 }
 
 /* × da falha: dispensa antes da próxima troca. Alvo de 24px, desenho em meia-tinta, como o lápis */
-#last-stop > .note-x {
+#alert > .note-x {
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -1337,58 +1420,40 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   cursor: pointer;
 }
 
-#last-stop > .note-x:hover {
+#alert > .note-x:hover {
   background: var(--flap);
   color: var(--ink);
 }
 
-#last-stop > .note-x:focus-visible {
+/* a faixa de baixo corta o overflow: os anéis ficam por dentro */
+#alert > :is(.note-act, .note-x):focus-visible {
   outline-offset: -2px;
 }
 
-/* falha (fica até a próxima troca) fala na cor de falha, como a palheta SEM FRONT ou SIGKILL que ela explica */
-#last-stop[data-stay] > span:first-child {
-  color: var(--fail);
+/* Com o painel recolhido, o que roda nos outros projetos vem à direita, depois de um fio. Cada projeto quebra
+   sozinho para fora da faixa, inteiro (nunca uma palheta cortada). */
+#running > .other:first-child {
+  position: relative;
+  margin-left: auto;
 }
 
-/* "Parou à força em 5,0 s": rotina, em meia-tinta; "à força" em tinta cheia. Ênfase pela tinta, não pela cor:
-   em fail era a única palavra vermelha de um fecho que o sistema chama de rotina. */
-#last-stop .forced {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-/* A branch em serviço mostraria menos que o piso (fitHeader): os acessórios saem da faixa, um a um.
-   O recado fica com largura zero em vez de sumir: é região viva e continua falando. */
-#last-stop.ceded {
-  flex: 0 0 0;
-  min-width: 0;
-  margin-left: -12px;
-}
-
-#dev-url.ceded,
-.halt.ceded {
-  display: none;
-}
-
-/* um fio separa o que roda nos outros projetos do endereço desta aba.
-   Cede largura logo depois do recado e antes do destino, das abas e da ajuda: sem isso, com o painel recolhido,
-   o destino e os outros projetos somavam mais que a faixa e empurravam a ajuda para fora da janela.
-   O projeto cuja palheta não cabe sai inteiro (fitRunning). */
-#running {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-  flex-shrink: 100;
-  max-width: 40%;
-  overflow: hidden;
-  padding-left: 12px;
+#running > .other:first-child::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--gap) / -2 - 1px);
+  top: 4px;
+  bottom: 4px;
   border-left: 1px solid var(--rule);
 }
 
-#running:not(:has(> :not([hidden]))) {
-  display: none;
+/* fitHeader mede sem a margem automática: a largura que os acessórios usam, não a que a margem ocupa */
+#flow.measuring #running > .other:first-child {
+  margin-left: 0;
+}
+
+/* o primeiro da linha (que não quebra) passaria da borda: some inteiro, nunca pela metade */
+#flow .cut {
+  visibility: hidden;
 }
 
 #running .other {
@@ -1396,6 +1461,7 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   align-items: center;
   gap: 6px;
   min-width: 0;
+  max-width: 100%;
   height: 28px;
   padding: 0 4px 0 6px;
   border: 0;
@@ -1412,7 +1478,7 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   color: var(--ink);
 }
 
-/* #running corta o overflow (fitRunning mede por ele): o anel fica por dentro, senão sai cortado */
+/* o #flow corta o overflow: o anel fica por dentro, senão sai cortado */
 #running .other:focus-visible {
   outline-offset: -2px;
 }
@@ -1435,6 +1501,7 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
 /* nome de projeto: sempre em caixa-alta espaçada, como nas placas */
 #running .project,
 #last-stop .project,
+#alert .project,
 #term-note .project,
 #palette .note .project {
   font-size: 12px;
@@ -1504,20 +1571,11 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   font-size: 13px;
 }
 
-/* Faixa estreita (janela pequena ou zoom alto): o acessório sai antes do destino e das abas.
-   O recado e os outros projetos em serviço; a porta e a falha ficam a cargo de fitHeader. */
-@container (max-width: 480px) {
-  #last-stop:not([data-stay]),
-  #running {
-    display: none;
-  }
-}
-
 #toggle-sidebar {
   position: relative;
 }
 
-/* falha em outro projeto que a faixa não mostra (fitHeader): quadrado de 6px, como o da aba de um lado caído */
+/* falha em outro projeto que a faixa não mostra (quebrou, ou painel fechado; fitHeader): quadrado de 6px, como o da aba de um lado caído */
 #toggle-sidebar::after {
   content: "";
   display: none;
@@ -1816,6 +1874,11 @@ dialog.form .pick[aria-disabled="true"] {
 
 #help .tab-mark .halting {
   background: var(--wait);
+}
+
+#help .tab-mark .parked {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--ink-2);
 }
 
 #help dl {
