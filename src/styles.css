@@ -348,15 +348,15 @@ kbd {
   color: var(--wait);
 }
 
-/* "SEM FRONT" passa dos 7 caracteres: só estas palhetas alargam, e a falha se destaca na coluna.
-   Parado à mão ("held") tem o mesmo texto e a palheta neutra de INATIVA, nos dois temas: foi pedido, não caiu. */
+/* "SEM FRONT" e "API PARADA" passam dos 7 caracteres: só estas palhetas alargam, e a falha se destaca na coluna.
+   Parado à mão ("held") tem a palheta neutra de INATIVA, nos dois temas: foi pedido, não caiu. */
 .flap:is([data-state="part"], [data-state="held"]) {
   width: auto;
   min-width: calc(7ch + 20px);
   padding: 0 7px;
 }
 
-/* Os dois "SEM X" se separam pela forma, não só pela cor (à noite, vermelho e meia-tinta ficam a ~1,2:1 de luminância):
+/* SEM X e X PARADA se separam também pela forma, não só pela palavra e pela cor (à noite, vermelho e meia-tinta ficam a ~1,2:1 de luminância):
    o quadrado das abas vem para dentro da palheta, cheio no que caiu, vazado no parado à mão. */
 .flap:is([data-state="part"], [data-state="held"]) > span:first-child::before {
   content: "";
@@ -375,20 +375,24 @@ kbd {
 }
 
 /* Prévia da troca: com o cursor (ou o foco) em outra linha do projeto, a que está em serviço mostra ENCERRA.
+   "Parar tudo" (ou "Parar API" numa solo) acende a mesma prévia na linha atual: só o destino e as abas acendiam.
    Não vira (o estado não mudou) e espera 120ms: o cursor só de passagem pelo painel não faz a palheta piscar. */
 .flap .ends {
   visibility: hidden;
 }
 
-.platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap {
+.platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap,
+body:has(header :is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) .line.live[aria-current="true"] .flap {
   animation: ends-ink 0s 120ms forwards;
 }
 
-.platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap > span:first-child {
+.platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap > span:first-child,
+body:has(header :is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) .line.live[aria-current="true"] .flap > span:first-child {
   animation: ends-off 0s 120ms forwards;
 }
 
-.platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap .ends {
+.platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap .ends,
+body:has(header :is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) .line.live[aria-current="true"] .flap .ends {
   animation: ends-on 0s 120ms forwards;
 }
 
@@ -1059,6 +1063,15 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   display: none;
 }
 
+/* A meia tela (960 num monitor de 1920, ao lado do editor) é o caso base. Com o painel aberto ao lado, a placa do projeto
+   e a linha atual já estão à vista: o projeto sai do destino e os ~75px vão para "Parar API" e "Parar tudo", que iam
+   para o ⋯. O leitor de tela ouve o projeto (.sr). Com o painel por cima (narrow) ou recolhido, ele fica. */
+@container (max-width: 800px) {
+  body:not(.sidebar-off, .narrow) #destination .where > :is(.project, .sep) {
+    display: none;
+  }
+}
+
 #destination .where > .project,
 #destination .where > .branch-name {
   min-width: 0;
@@ -1299,6 +1312,14 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   flex-shrink: 0;
 }
 
+/* "depois sobe X" no SIGKILL: é o único que trunca */
+#switching > .then {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 #switching .btn {
   flex-shrink: 0;
   height: 26px;
@@ -1354,6 +1375,11 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   margin-left: calc(-1 * var(--gap));
 }
 
+/* a branch em serviço não coube inteira ao lado dele (fitHeader): quebra para fora da faixa e vai para o canto do terminal */
+#last-stop.out {
+  flex-basis: 100%;
+}
+
 #last-stop .forced {
   color: var(--ink);
   font-weight: 600;
@@ -1382,10 +1408,18 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   text-overflow: ellipsis;
 }
 
+/* a causa, lida do terminal: em mono, como a saída de onde veio; trunca antes do verbo e das ações */
+#alert > .why {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 12px var(--mono);
+}
+
 /* "Ver o terminal": a saída da falha, com o contorno dos botões */
 #alert > .note-act {
   flex-shrink: 0;
-  height: 22px;
+  height: 24px;
   margin-left: 4px;
   padding: 0 8px;
   border: 1px solid var(--rule);
@@ -1456,12 +1490,13 @@ header:has(:is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) #
   visibility: hidden;
 }
 
+/* Sem max-width: primeiro da linha (numa troca, sem as ações antes dele), ele era espremido até "LEILAO /", sem
+   branch nem palheta, e cabia, então não cedia. Inteiro, passa da borda e some (.cut). */
 #running .other {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-  max-width: 100%;
   height: 28px;
   padding: 0 4px 0 6px;
   border: 0;

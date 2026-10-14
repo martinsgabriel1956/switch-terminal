@@ -27,8 +27,8 @@ const TABS: Tab[] = ["api", "front"];
 const TAB_LABEL: Record<Tab, string> = { api: "API", front: "Front" };
 const FLAP: Record<LineState, string> = {
   run: "RODANDO",
-  part: "SEM LADO", // flapText diz qual: "SEM FRONT"
-  held: "SEM LADO", // parado à mão; flapText diz qual
+  part: "SEM LADO", // caiu; flapText diz qual: "SEM FRONT"
+  held: "PARADO", // parado à mão; flapText diz qual: "API PARADA"
   start: "SUBINDO",
   wait: "AGUARDA",
   stop: "PARANDO",
@@ -36,7 +36,7 @@ const FLAP: Record<LineState, string> = {
   idle: "INATIVA",
   none: "",
 };
-// SEM API / SEM FRONT falam qual lado e por quê (say): "só Front rodando, API parada à mão".
+// SEM FRONT e API PARADA falam qual lado e por quê (say): "só Front rodando, API parada à mão".
 const SPOKEN: Record<Exclude<LineState, "part" | "held">, string> = {
   run: "rodando",
   start: "subindo",
@@ -189,6 +189,15 @@ moreMenu.addEventListener("toggle", (e) => {
   moreMenu.querySelector<HTMLElement>("button")?.focus();
 });
 
+// Setas andam pelos itens, como no painel e nas abas (só o Tab andava).
+moreMenu.addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  e.preventDefault();
+  const items = [...moreMenu.querySelectorAll<HTMLElement>("button")];
+  const at = items.indexOf(document.activeElement as HTMLElement);
+  items[(at + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length]?.focus();
+});
+
 urlEl.addEventListener("click", (e) => {
   e.preventDefault();
   invoke("open_url", { url: urlEl.href });
@@ -263,6 +272,18 @@ function seeTerminal(project: string, id: string, side: Tab) {
 function upHere(project: string, id: string, down: Tab[]) {
   if (key(project, id) !== currentKey()) return null;
   return el("button", { type: "button", className: "note-act note-up", textContent: `Subir ${down.map((t) => TAB_LABEL[t]).join(" e ")}`, onclick: () => toggleRun(false, "start") });
+}
+/** "· Error: listen EADDRINUSE: address already in use :::3000": a primeira linha de erro no fim do terminal do lado
+ *  que caiu ou não subiu. A falha dizia o quê, não por quê; para saber era preciso abrir o terminal.
+ *  ponytail: palavra-chave nas últimas 15 linhas; sem casar, o recado fica sem causa. */
+function errorWhy(project: string, id: string, side: Tab) {
+  const buf = envs.get(key(project, id))?.panes[side]?.term.buffer.active;
+  if (!buf) return null;
+  for (let y = Math.max(0, buf.baseY + buf.cursorY - 15); y <= buf.baseY + buf.cursorY; y++) {
+    const text = buf.getLine(y)?.translateToString(true).trim();
+    if (text && /\b(error|err!|eaddrinuse|exception|fatal|failed)\b/i.test(text)) return el("span", { className: "why", textContent: `· ${text}`, title: text });
+  }
+  return null;
 }
 /** "Parou em 1,8 s" ou "Parou à força em 5,0 s": encerrar à força é rotina (o alvo subiu, a anterior parou como pedido),
  *  então o recado é neutro e expira; só "à força" fala na cor do SIGKILL. */
@@ -341,11 +362,14 @@ function flap(state: LineState, id: string, text = FLAP[state]) {
   return f;
 }
 
-/** Texto da palheta de uma worktree; no parcial, o lado que caiu ("SEM FRONT"): "1 LADO" não dizia qual. */
+/** Texto da palheta de uma worktree; no parcial, o lado que caiu ("SEM FRONT"): "1 LADO" não dizia qual. Parado à mão,
+ *  o particípio do botão que o parou ("Parar API" → "API PARADA"): com "SEM API" nos dois, a mesma palavra dizia caiu e
+ *  foi pedido, e só um quadrado de 6px os separava. */
 function flapText(project: string, wt: Worktree, state: LineState) {
   const s = sides(key(project, wt.id));
-  const off = state === "part" ? s.down : state === "held" ? s.held : null;
-  return off ? `SEM ${off.map((t) => TAB_LABEL[t].toUpperCase()).join(" E ")}` : FLAP[state];
+  if (state === "part") return `SEM ${s.down.map((t) => TAB_LABEL[t].toUpperCase()).join(" E ")}`;
+  if (state === "held") return s.held.map((t) => (t === "api" ? "API PARADA" : "FRONT PARADO")).join(" E ");
+  return FLAP[state];
 }
 
 const findWt = (project: string, id: string) => config.projects.find((p) => p.name === project)?.worktrees.find((w) => w.id === id);
@@ -386,7 +410,7 @@ function lineState(project: string, wt: Worktree): LineState {
   if (h && h.tabs.length >= Object.keys(envs.get(k)?.panes ?? {}).length) return h.forcing ? "kill" : "stop";
   if (starting.has(k)) return "start";
   const { up, down, held } = sides(k);
-  // Um lado parado à mão com o outro de pé: SEM API em palheta neutra (nunca vermelha: foi pedido, não caiu).
+  // Um lado parado à mão com o outro de pé: API PARADA em palheta neutra (nunca vermelha: foi pedido, não caiu).
   if (up.length) return down.length ? "part" : held.length ? "held" : "run";
   if (envs.has(k)) return "idle";
   return "none";
@@ -430,6 +454,11 @@ function proseName(label: string) {
 }
 /** O mesmo rótulo para atributos (aria-label), onde não cabe nó. */
 const spokenLabel = (label: string) => label.replace(" ↔ ", " pareada com ");
+/** Etiqueta SÓ API / SÓ FRONT da worktree de um lado só, no painel e na paleta. */
+function soloTag(wt: Worktree) {
+  const [api, front] = wt.id.split("|");
+  return !api ? el("span", { className: "tag", textContent: "SÓ FRONT" }) : !front ? el("span", { className: "tag", textContent: "SÓ API" }) : null;
+}
 /** ", só API" / ", só front" para a worktree de um lado só (o id é "api|front"). */
 function soloSay(wt: Worktree) {
   const [api, front] = wt.id.split("|");
@@ -741,11 +770,10 @@ function render(focus = false) {
     if (dir) f.firstElementChild!.prepend(icon(dir, "dir"));
     // "Parar tudo" com o cursor ou o foco mostra a mesma prévia ENCERRA das linhas (CSS).
     if (LIVE.includes(state)) f.append(el("span", { className: "ends", textContent: "ENCERRA" }));
-    destEl.replaceChildren(
-      el("span", { className: "where" }, el("span", { className: project.length <= 8 ? "project short" : "project", textContent: project }), el("span", { className: "sep", textContent: "/", ariaHidden: "true" }), el("span", { className: "branch-name" }, ...labelNodes(wt.label))),
-      f,
-      el("span", { className: "sr", textContent: `: ${say(project, wt, state)}` }),
-    );
+    // O visível trunca (cutDest) e perde o projeto; quem fala é o .sr, inteiro. Truncado dentro da região viva, o leitor
+    // de tela ouvia "feat/agrupador-de-lotes-…leilao".
+    const where = el("span", { className: "where", title: `${project} / ${wt.label}`, ariaHidden: "true" }, el("span", { className: project.length <= 8 ? "project short" : "project", textContent: project }), el("span", { className: "sep", textContent: "/" }), el("span", { className: "branch-name" }, ...labelNodes(wt.label)));
+    destEl.replaceChildren(where, f, el("span", { className: "sr", textContent: `${project} / ${spokenLabel(wt.label)}: ${say(project, wt, state)}` }));
   }
   // Endereço do dev server da aba aberta, enquanto ele está de pé. Fica à direita: aparecer não empurra as abas.
   const shownPane = env?.panes[tab];
@@ -760,7 +788,7 @@ function render(focus = false) {
   renderHalt(haltTabEl, false);
   renderHalt(haltAllEl, true);
   const down = state === "part" ? sides(ck!).down : [];
-  // Parado à mão (Parar API) com o outro lado de pé: a palheta diz SEM API em neutro, e a aba leva o quadrado vazado.
+  // Parado à mão (Parar API) com o outro lado de pé: a palheta diz API PARADA em neutro, e a aba leva o quadrado vazado.
   // Em ink-2, não em fail: foi pedido, não caiu.
   const parked = ck ? sides(ck).held : [];
   // Parando um lado só: a palheta segue com o estado da worktree e a aba que para fica âmbar.
@@ -982,6 +1010,9 @@ function renderWait(project: string, wt: Worktree) {
     el("span", { className: "what", textContent: goingBack ? "Voltando" : "Parando" }),
     // A contagem entra com o Forçar: na troca típica (1–2 s), contar até um SIGKILL que não vem era ansiedade à toa.
     ...[st.forcing ? flap("kill", `strip:${project}`) : late ? countFlap(project, st) : null, back, force].filter((b) => b !== null),
+    // No SIGKILL não sobra botão: o que vem depois fica escrito, não só no title. Era o momento de mais risco e o de
+    // menos reasseguramento à vista.
+    ...(st.forcing ? [el("span", { className: "then", textContent: goingBack ? "reinicia em seguida" : `depois sobe ${next}` })] : []),
   );
   if (had) (switchingEl.querySelector<HTMLElement>(`[data-act="${had}"]`) ?? switchingEl).focus();
   // A faixa cresceu ou mudou (contagem e Forçar aos 2 s): a branch de destino pode ter ficado abaixo do piso.
@@ -1021,12 +1052,17 @@ function cutBack() {
   to.textContent = w(name) <= avail ? name : middleCut(name, avail, w);
 }
 
-/** A branch do destino, sem espaço, trunca no meio como no painel: o fim do nome é o que distingue ("…agrupados").
+/** A branch do destino, sem espaço, trunca como no painel (fitBranches): o meio do nome primeiro, o prefixo ("feat/") e o
+ *  fim ("…leilao") ficam; o prefixo só sai inteiro quando o começo do nome ficaria com menos de 3em ("fe…leilao" a 480).
  *  Só o nome sozinho; o par de prefixos diferentes ("a ⇄ b") fica com a reticência do CSS. */
 function cutDest(branch: HTMLElement | null, name: Text | null) {
   if (!branch || !name || !overflows(branch)) return;
   if (branch.childNodes.length > 1 && !destEl.classList.contains("bare")) return;
-  name.data = middleCut(branch.dataset.full!, branch.getBoundingClientRect().width, fontWidth(branch));
+  const avail = branch.getBoundingClientRect().width;
+  const w = fontWidth(branch);
+  const [prefix, rest] = splitBranch(branch.dataset.full!);
+  const keep = prefix && avail - w(prefix) - w(`…${nameTail(rest)}`) >= 3 * parseFloat(getComputedStyle(branch).fontSize);
+  name.data = keep ? prefix + middleCut(rest, avail - w(prefix), w) : middleCut(rest || prefix, avail, w);
 }
 
 /** Erro de git do projeto em uma linha legível; o texto cru fica no detalhe. */
@@ -1047,7 +1083,7 @@ function lineButton(project: string, wt: Worktree) {
   const state = lineState(project, wt);
   const [api, front] = wt.id.split("|");
   // Solo: a etiqueta vai para a segunda linha, como o par; na primeira ela roubava largura do nome.
-  const tag = !api ? el("span", { className: "tag", textContent: "SÓ FRONT" }) : !front ? el("span", { className: "tag", textContent: "SÓ API" }) : null;
+  const tag = soloTag(wt);
   let top = branchText(api || front);
   let pair: HTMLElement | null = null;
   if (api && front && api !== front) {
@@ -1341,12 +1377,14 @@ function renderRunning() {
 
 /** Piso da branch em serviço na faixa: o nome inteiro ou, se for longo, uns 17 caracteres. */
 const BRANCH_FLOOR = 160;
-/** Abaixo disso o projeto sai do destino: a placa do painel ou a paleta dizem qual é; a branch é o que está em serviço. */
-const BRANCH_MIN = 48;
+/** Abaixo disso o projeto sai do destino: a placa do painel ou a paleta dizem qual é; a branch é o que está em serviço.
+ *  Com 48px, a 480 ficava "INTERNO /" inteiro ao lado de "fe…leilao". */
+const BRANCH_MIN = 112;
 
 /** A faixa é CSS (#flow em styles.css): o destino tem um piso (projeto, a branch até BRANCH_FLOOR e a palheta) e, acima
  *  dele, os acessórios vêm antes do resto da branch. O que não cabe quebra para uma segunda linha do #flow, fora da
- *  faixa, de trás para a frente: o recado, os outros projetos, "Parar tudo", "Parar API" e por último a porta. Antes,
+ *  faixa, de trás para a frente: o recado (que só fica se a branch couber inteira), os outros projetos, "Parar tudo",
+ *  "Parar API" e por último a porta. Antes,
  *  ~15 degraus medidos em JS decidiam isso, e cada regressão de largura saía de uma medida errada.
  *  Aqui só o que o CSS não sabe: o piso (depende do texto), a largura que o #flow usa de fato (o vão do que quebrou volta
  *  para a branch), quem quebrou (fica inert e entra no ⋯), o sufixo do par e o projeto que saem do destino, e o corte no meio. */
@@ -1356,18 +1394,29 @@ function fitHeader() {
   // O nome inteiro antes de medir: cutDest o trunca no meio no fim.
   const nameNode = branch?.firstChild instanceof Text ? branch.firstChild : null;
   if (nameNode) nameNode.data = branch!.dataset.full ??= nameNode.data;
-  if (branch) {
-    const project = destEl.querySelector<HTMLElement>(".project")!;
-    const sep = getComputedStyle(destEl.querySelector(".sep")!);
-    // Projeto de até 8 letras não trunca; o longo, até "INT…" (2.5em, o min-width do CSS).
-    const projectMin = project.classList.contains("short") ? project.scrollWidth : Math.min(project.scrollWidth, 2.5 * parseFloat(getComputedStyle(project).fontSize));
-    const floor = projectMin + parseFloat(sep.width) + parseFloat(sep.marginLeft) + parseFloat(sep.marginRight) + Math.min(textWidth(branch), BRANCH_FLOOR) + parseFloat(getComputedStyle(destEl).columnGap) + destEl.querySelector<HTMLElement>(".flap")!.offsetWidth;
-    destEl.style.setProperty("--floor", `${Math.ceil(floor)}px`);
-  }
-
   // O #flow com toda a largura que pede: o que não cabe quebra. Algo quebrou: o ⋯ entra, e ele mesmo ocupa largura.
   flowEl.style.removeProperty("--flow-w");
   moreBtn.hidden = true;
+  lastStopEl.classList.remove("out");
+  if (branch) {
+    const project = destEl.querySelector<HTMLElement>(".project")!;
+    // Meia tela com o painel aberto ao lado, o projeto não está no destino (CSS): a placa do painel já diz qual é.
+    let head = 0;
+    if (project.offsetParent) {
+      const sep = getComputedStyle(destEl.querySelector(".sep")!);
+      // Projeto de até 8 letras não trunca; o longo, até "INT…" (2.5em, o min-width do CSS).
+      head = (project.classList.contains("short") ? project.scrollWidth : Math.min(project.scrollWidth, 2.5 * parseFloat(getComputedStyle(project).fontSize))) + parseFloat(sep.width) + parseFloat(sep.marginLeft) + parseFloat(sep.marginRight);
+    }
+    const tail = parseFloat(getComputedStyle(destEl).columnGap) + destEl.querySelector<HTMLElement>(".flap")!.offsetWidth;
+    const floor = (b: number) => destEl.style.setProperty("--floor", `${Math.ceil(head + b + tail)}px`);
+    // O recado de rotina ("Parou à força em 5,7 s · …") só fica na faixa se a branch em serviço couber inteira ao lado
+    // dele; senão vai para o canto do terminal. Ele encolhia a branch recém-trocada por 8 s: a verdade da tela cedia ao fecho.
+    if (lastStopEl.childElementCount) {
+      floor(textWidth(branch));
+      lastStopEl.classList.toggle("out", ceded(lastStopEl));
+    }
+    floor(Math.min(textWidth(branch), BRANCH_FLOOR));
+  }
   if (cededActions().length) moreBtn.hidden = false;
   // A largura que o que ficou usa de fato: o vão deixado pelo que quebrou volta para a branch (a 600 sobravam 89px
   // vazios ao lado de uma branch truncada). Sem a margem automática que empurra os outros projetos para a direita.
@@ -1566,7 +1615,7 @@ function announceDrops() {
     wasUp.set(k, up);
     const wt = findWt(project, id);
     if (!lost.length || !wt) continue;
-    headerNote(true, project, `${lost.map((t) => TAB_LABEL[t]).join(" e ")} ${lost.length > 1 ? "pararam" : "parou"}`, noteWho(project, id, wt.label), upHere(project, id, lost), seeTerminal(project, id, lost[0]));
+    headerNote(true, project, `${lost.map((t) => TAB_LABEL[t]).join(" e ")} ${lost.length > 1 ? "pararam" : "parou"}`, noteWho(project, id, wt.label), errorWhy(project, id, lost[0]), upHere(project, id, lost), seeTerminal(project, id, lost[0]));
   }
 }
 
@@ -1589,7 +1638,7 @@ async function pollStatus() {
       changed = true;
       const [project, id] = k.split("\u0000");
       const wt = down.length && findWt(project, id);
-      if (wt) headerNote(true, project, `${down.map((t) => TAB_LABEL[t]).join(" e ")} ${down.length > 1 ? "não subiram" : "não subiu"} em 15 s`, noteWho(project, id, wt.label), upHere(project, id, down), seeTerminal(project, id, down[0]));
+      if (wt) headerNote(true, project, `${down.map((t) => TAB_LABEL[t]).join(" e ")} ${down.length > 1 ? "não subiram" : "não subiu"} em 15 s`, noteWho(project, id, wt.label), errorWhy(project, id, down[0]), upHere(project, id, down), seeTerminal(project, id, down[0]));
     }
   }
   if (changed) render();
@@ -1671,7 +1720,7 @@ function renderPalette(reset = false) {
       ? items.map((it, i) => {
           const state = lineState(it.project, it.wt);
           const isCurrent = currentKey() === key(it.project, it.wt.id);
-          const label = el("span", { className: "label" }, ...labelNodes(it.wt.label), isCurrent ? el("span", { className: "tag", textContent: "ATUAL" }) : null);
+          const label = el("span", { className: "label" }, ...labelNodes(it.wt.label), soloTag(it.wt), isCurrent ? el("span", { className: "tag", textContent: "ATUAL" }) : null);
           const project = el("span", { className: "project", textContent: it.project });
           markHits(label, terms, it.wt.label.toLowerCase(), it.project.toLowerCase());
           markHits(project, terms, it.project.toLowerCase(), it.wt.label.toLowerCase());
