@@ -1,0 +1,86 @@
+name: Release
+
+# Toda versão nova que chega na main vira um release com o .deb. A versão mora no tauri.conf.json (o "chore: versão X"
+# muda ele junto com package.json e Cargo.toml); se a tag v<versão> já existe, o release já foi feito e nada roda.
+on:
+  push:
+    branches: [main]
+    paths: [src-tauri/tauri.conf.json]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Dois pushes seguidos não criam o mesmo release duas vezes.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      exists: ${{ steps.v.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: v
+        run: |
+          version=$(jq -r .version src-tauri/tauri.conf.json)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "v$version já tem release; nada a fazer."
+          fi
+
+  release:
+    needs: check
+    if: needs.check.outputs.exists != 'true'
+    # 22.04: o .deb linka contra a glibc mais antiga e instala também nas distros mais novas.
+    runs-on: ubuntu-22.04
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # O que o Tauri v2 pede no Linux; o appindicator é da bandeja (tray-icon).
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run tauri build -- --bundles deb
+
+      # Notas: os commits desde a última tag, sem o próprio "chore: versão".
+      - name: Notas
+        run: |
+          prev=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          {
+            echo "## Instalar"
+            echo
+            echo '```bash'
+            echo "sudo apt install ./hotswap_${VERSION}_amd64.deb"
+            echo '```'
+            echo
+            echo "## Mudanças"
+            echo
+            git log --no-merges --format='- %s' ${prev:+$prev..}HEAD | grep -v '^- chore: versão' || true
+          } > notes.md
+          cat notes.md
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" src-tauri/target/release/bundle/deb/hotswap_${VERSION}_amd64.deb \
+            --target "$GITHUB_SHA" --title "Hotswap $VERSION" --notes-file notes.md
