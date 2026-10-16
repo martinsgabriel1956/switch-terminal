@@ -10,6 +10,7 @@ import "./styles.css";
 import { asPm, isPm, joinStart, PREFIX, rewrite, splitStart, switchPm, type Pm } from "./pm";
 import { endCut, middleCut, nameTail } from "./branch";
 import { matchAt, matchItem, projectTerms } from "./match";
+import { mergePrs, prLabel, type GhPr, type PrEntry } from "./prs";
 
 /** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto. */
 type Side = { path: string; startCommand: string | null; setupCommand: string | null; projectStart: string | null };
@@ -2024,6 +2025,7 @@ function worktreeErrorSummary(message: string): { field: "dir" | "base" | "branc
     return { field: "base", text: "A branch de origem não existe neste repositório." };
   if (raw.includes("branch de origem")) return { field: "base", text: "Escolha a branch de origem." };
   if (raw.includes("not a valid branch name")) return { field: "branch", text: "Nome de branch inválido." };
+  if (raw.includes("couldn't find remote ref")) return { field: "branch", text: "Essa branch não existe mais no origin." };
   if (raw.includes("already checked out") || raw.includes("already used by worktree"))
     return { field: "branch", text: "Essa branch já está aberta em outra worktree." };
   if (raw.includes("already exists")) return { field: "dir", text: "Já existe uma pasta com esse nome no diretório." };
@@ -2085,7 +2087,14 @@ const sideMsg = (t: Tab) => sideBox(t).querySelector<HTMLElement>(".side-error")
 const openNow = field<HTMLInputElement>("open");
 const openHint = addForm.querySelector<HTMLElement>(".open-hint")!;
 const addSubmit = addForm.querySelector<HTMLButtonElement>("button.primary")!;
+const prRow = addForm.querySelector<HTMLElement>(".pr-row")!;
+const prSel = field<HTMLSelectElement>("pr");
+const prHint = $("#pr-hint");
 let defaultsReq = 0;
+/** PRs abertas do projeto do diálogo; o valor de cada opção do "Da PR" é o índice aqui. */
+let prs: PrEntry[] = [];
+/** Número da PR aberta neste lado com a branch do campo (escolhida no "Da PR" ou digitada): ela é buscada antes de criar. */
+const prNumber = (t: Tab) => prs.find((p) => !p.fork && p.branch === branchInput.value.trim())?.sides[t];
 
 /** Depois de um erro parcial, o botão diz o lado que ainda falta criar. */
 function addSubmitLabel() {
@@ -2124,6 +2133,7 @@ async function loadDefaults() {
   }
   addSubmit.textContent = addSubmitLabel();
   syncSides();
+  loadPrs(req);
   let defaults: Defaults;
   try {
     defaults = await invoke<Defaults>("worktree_defaults", { project: projectSel.value });
@@ -2149,8 +2159,52 @@ async function loadDefaults() {
   syncSides();
 }
 
+/** PRs abertas da API e do Front, juntas pela branch. Sem gh instalado ou logado, o campo some (como os de GitHub do Novo projeto);
+ *  outro erro fica numa linha embaixo, com a saída crua no detalhe. Não segura o diálogo: a lista chega quando o gh responde. */
+async function loadPrs(req: number) {
+  prs = [];
+  prSel.replaceChildren(el("option", { value: "", textContent: "Carregando as PRs abertas…" }));
+  prSel.disabled = true;
+  prHint.hidden = true;
+  type Lists = Record<Tab, { Ok: GhPr[] } | { Err: string }>;
+  let got: Lists;
+  try {
+    got = await invoke<Lists>("pull_requests", { project: projectSel.value });
+  } catch (err) {
+    got = { api: { Err: String(err) }, front: { Err: String(err) } };
+  }
+  if (req !== defaultsReq) return; // trocou de projeto ou reabriu no meio
+  const errs = TABS.flatMap((t) => { const r = got[t]; return "Err" in r ? [{ t, err: r.Err }] : []; });
+  // Enquanto carrega, o campo fica como a última resposta o deixou: sem gh, não pisca a cada abertura.
+  prRow.hidden = errs.some((e) => /^(Instale|Entre no GitHub)/.test(e.err));
+  if (prRow.hidden) return;
+  prs = mergePrs(Object.fromEntries(TABS.flatMap((t) => { const r = got[t]; return "Ok" in r ? [[t, r.Ok]] : []; })));
+  prSel.replaceChildren(
+    el("option", { value: "", textContent: prs.length ? "Nenhuma" : "Nenhuma PR aberta" }),
+    ...prs.map((p, i) => el("option", { value: String(i), textContent: prLabel(p), disabled: p.fork })),
+  );
+  // Depois de um erro parcial a branch fica travada: a PR também.
+  prSel.disabled = !prs.length || branchInput.readOnly;
+  if (errs.length) {
+    const who = errs.map((e) => (e.t === "api" ? "da API" : "do Front")).join(" e ");
+    prHint.replaceChildren(`Não consegui listar as PRs ${who}.`, el("details", {}, el("summary", { textContent: "Detalhe" }), ...errs.map((e) => el("code", { textContent: e.err }))));
+    prHint.hidden = false;
+  }
+  syncSides();
+}
+
+/** Escolher a PR preenche a branch e marca os lados que têm a branch dela. */
+prSel.addEventListener("change", () => {
+  const p = prs[Number(prSel.value)];
+  if (!prSel.value || !p) return;
+  branchInput.value = p.branch;
+  for (const t of TABS) if (!sideCheck(t).disabled) sideCheck(t).checked = !!p.sides[t];
+});
+
 /** Lado desmarcado: fieldset desabilitado (o checkbox da legend continua clicável) e sem validação. */
 function syncSides() {
+  // A branch digitada deixou de ser a da PR escolhida: o "Da PR" volta a Nenhuma.
+  if (prSel.value && prs[Number(prSel.value)]?.branch !== branchInput.value.trim()) prSel.value = "";
   const branch = branchInput.value.trim() || "<branch>";
   const ends = openNow.checked ? wouldStop(projectSel.value, null) : undefined;
   openHint.hidden = !ends;
@@ -2158,7 +2212,9 @@ function syncSides() {
   for (const t of TABS) {
     sideBox(t).disabled = !sideCheck(t).checked;
     const dir = sideDir(t).value.trim().replace(/\/+$/, "");
-    const base = sideBase(t).value;
+    // Da PR, a origem é a branch dela no origin, não o "A partir de".
+    const pr = prNumber(t);
+    const base = pr ? `PR #${pr}` : sideBase(t).value;
     sideBox(t)
       .querySelector(".preview")!
       .replaceChildren(...(dir ? [...pathNodes(`${dir}/${branch}`), ...(base ? [icon(FROM_ICON, "inline"), base] : [])] : ["Carregando…"]));
@@ -2184,7 +2240,7 @@ addForm.addEventListener("submit", async (e) => {
   if (isBusy(e.submitter as HTMLButtonElement)) return; // já criando: Enter de novo não envia duas vezes
   const project = projectSel.value;
   const branch = branchInput.value.trim();
-  const side = (t: Tab) => (sideCheck(t).checked ? { dir: sideDir(t).value, base: sideBase(t).value } : null);
+  const side = (t: Tab) => (sideCheck(t).checked ? { dir: sideDir(t).value, base: sideBase(t).value, fetch: !!prNumber(t) } : null);
   const api = side("api");
   const front = side("front");
   addError.textContent = "";
@@ -2204,7 +2260,7 @@ addForm.addEventListener("submit", async (e) => {
     const fe = asFormError(err);
     // O que já foi criado sai do próximo envio: desmarcado e travado, com aviso.
     // Um lado já existe com esta branch: trocar o nome agora criaria o outro lado com outra, e o primeiro ficaria solo.
-    if (fe.created.length) branchInput.readOnly = true;
+    if (fe.created.length) branchInput.readOnly = prSel.disabled = true;
     for (const t of fe.created) {
       sideCheck(t).checked = false;
       sideCheck(t).disabled = true;

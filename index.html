@@ -134,6 +134,11 @@
           </label>
           <p class="side-error" id="add-branch-error" role="alert"></p>
         </div>
+        <label class="pr-row">
+          Da PR
+          <select name="pr" aria-describedby="pr-hint"></select>
+        </label>
+        <div class="hint" id="pr-hint" hidden></div>
         <p class="hint">Se a branch já existir, ela é usada e a origem é ignorada.</p>
         <fieldset class="side" data-side="api">
           <legend><label><input type="checkbox" name="api" checked /> API</label></legend>
