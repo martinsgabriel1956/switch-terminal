@@ -127,6 +127,7 @@ pub fn run() {
             worktrees::worktree_info,
             worktrees::edit_worktree,
             worktrees::list_worktrees,
+            worktrees::git_status,
             worktrees::github_repos,
             worktrees::clone_github_repo,
         ])

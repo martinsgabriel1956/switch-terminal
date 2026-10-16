@@ -10,6 +10,7 @@ import "./styles.css";
 import { asPm, isPm, joinStart, PREFIX, rewrite, splitStart, switchPm, type Pm } from "./pm";
 import { endCut, middleCut, nameTail } from "./branch";
 import { matchAt, matchItem, projectTerms } from "./match";
+import { gitSummary, type GitState } from "./git";
 
 /** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto. */
 type Side = { path: string; startCommand: string | null; setupCommand: string | null; projectStart: string | null };
@@ -368,6 +369,8 @@ const halting = new Map<string, { forcing: boolean; tabs: Tab[] }>();
 const halted = new Set<number>();
 let current: { project: string; wt: Worktree } | null = null;
 let tab: Tab = "api";
+// Estado do git por pasta de lado (mudanças, commits à frente/atrás), relido junto com a lista, não no ciclo do pty_status.
+let gitStates = new Map<string, GitState>();
 
 const key = (project: string, id: string) => `${project}\u0000${id}`;
 const currentKey = () => (current ? key(current.project, current.wt.id) : null);
@@ -1215,6 +1218,7 @@ function lineButton(project: string, wt: Worktree) {
   const endsProcs = ends && procs(project, ends).length ? ` (${procs(project, ends).join(", ")})` : "";
   const endsText = ends ? `Encerra ${ends.label}${endsProcs}` : "";
   const f = flap(state, `line:${k}`, flapText(project, wt, state));
+  const git = gitSummary(TABS.flatMap((t) => (wt[t] ? [[TAB_LABEL[t], gitStates.get(wt[t]!.path)] as [string, GitState | undefined]] : [])));
   // A linha em serviço mostra ENCERRA enquanto o cursor (ou o foco) está em outra do mesmo projeto: o clique é destrutivo.
   if (live) f.append(el("span", { className: "ends", textContent: "ENCERRA" }));
   const b = el(
@@ -1223,21 +1227,31 @@ function lineButton(project: string, wt: Worktree) {
       type: "button",
       className: `line${live ? " live" : ""}`,
       tabIndex: -1,
-      title: ends ? `${wt.label}\n${endsText}` : wt.label,
-      ariaLabel: `${spokenLabel(wt.label)}${soloSay(wt)}: ${say(project, wt, state)}`,
+      title: [wt.label, git.text, endsText].filter(Boolean).join("\n"),
+      ariaLabel: `${spokenLabel(wt.label)}${soloSay(wt)}: ${say(project, wt, state)}${git.text ? `; ${git.text}` : ""}`,
       // Busca a worktree na hora do clique: o botão pode ter sobrevivido a um refresh do config.
       onclick: () => {
         const fresh = findWt(project, wt.id);
         if (fresh) select(project, fresh);
       },
     },
-    el("span", { className: "name" }, el("span", { className: "top" }, el("span", { className: "branch" }, ...top)), pair, tag),
+    el("span", { className: "name" }, el("span", { className: "top" }, el("span", { className: "branch" }, ...top), gitBadge(git)), pair, tag),
     // A palheta fica à direita, como a coluna de situação de um painel de partidas; nunca aberta, ela não ocupa a coluna (CSS) e o nome usa a largura.
     f,
   );
   if (ends) b.setAttribute("aria-description", `Encerra ${spokenLabel(ends.label)}${endsProcs}`);
   b.dataset.key = k;
   if (currentKey() === k) b.setAttribute("aria-current", "true");
+  return b;
+}
+
+/** Depois do nome, na primeira linha: um ponto se há mudança não commitada ou arquivo não rastreado, e ↑2 ↓1 com os
+ *  commits à frente/atrás do upstream, só quando não são zero. As setas são desenhadas; o texto vai no nome da linha. */
+function gitBadge(g: ReturnType<typeof gitSummary>) {
+  if (!g.dirty && !g.ahead && !g.behind) return null;
+  const ab = (n: number, d: string) => (n ? el("span", {}, icon(d), String(n)) : null);
+  const b = el("span", { className: "git" }, g.dirty ? el("span", { className: "dirty" }) : null, ab(g.ahead, DIR.start!), ab(g.behind, DIR.stop!));
+  b.setAttribute("aria-hidden", "true");
   return b;
 }
 
@@ -1743,6 +1757,7 @@ async function refresh() {
     loaded.add(p.name);
     for (const wt of p.worktrees) alive.set(key(p.name, wt.id), wt);
   }
+  void readGit();
   // Worktree que sumiu (git worktree remove): mata os PTYs dela. Projeto com erro de git fica intacto.
   for (const [k, env] of envs) if (loaded.has(env.project) && !alive.has(k)) disposeEnv(k, env);
   for (const p of loaded) if (active[p] && !alive.has(key(p, active[p]))) delete active[p];
@@ -1753,6 +1768,19 @@ async function refresh() {
     if (freshWt) current.wt = freshWt;
     else if (loaded.has(current.project)) current = null;
   }
+  render();
+}
+
+let gitRead = 0;
+
+/** `git status` de todas as pastas, em paralelo no backend. Sem esperar: o painel aparece com a leitura anterior e o
+ *  marcador entra quando ela chega. Só a última leitura vale (focos seguidos disparam várias). */
+async function readGit() {
+  const n = ++gitRead;
+  const paths = config.projects.flatMap((p) => p.worktrees.flatMap((wt) => TABS.flatMap((t) => (wt[t] ? [wt[t]!.path] : []))));
+  const res = await invoke<(GitState | null)[]>("git_status", { paths }).catch(() => null);
+  if (!res || n !== gitRead) return;
+  gitStates = new Map(paths.flatMap((p, i) => (res[i] ? [[p, res[i]!] as const] : [])));
   render();
 }
 

@@ -180,6 +180,49 @@ pub fn list_worktrees(repo: String) -> Result<Vec<Wt>, String> {
     git_worktrees(&repo)
 }
 
+/// Estado do git de uma pasta: arquivos alterados (rastreados), não rastreados e commits à frente/atrás do upstream.
+#[derive(Serialize, Default, Debug, PartialEq)]
+pub struct GitStatus {
+    changed: u32,
+    untracked: u32,
+    ahead: u32,
+    behind: u32,
+}
+
+/// Saída de `git status --porcelain=v2 --branch`: cabeçalhos `# branch.*` e uma linha por arquivo
+/// (`1`/`2` alterado ou renomeado, `u` em conflito, `?` não rastreado). Sem upstream não há `# branch.ab`.
+fn parse_status(out: &str) -> GitStatus {
+    let mut s = GitStatus::default();
+    for line in out.lines() {
+        match line.split_once(' ') {
+            Some(("1" | "2" | "u", _)) => s.changed += 1,
+            Some(("?", _)) => s.untracked += 1,
+            Some(("#", h)) => {
+                if let Some((a, b)) = h.strip_prefix("branch.ab ").and_then(|ab| ab.split_once(' ')) {
+                    s.ahead = a.trim_start_matches('+').parse().unwrap_or(0);
+                    s.behind = b.trim_start_matches('-').parse().unwrap_or(0);
+                }
+            }
+            _ => {}
+        }
+    }
+    s
+}
+
+/// Estado do git de cada pasta, na ordem pedida (`None` onde o git falhou). Um processo por pasta, em paralelo: com
+/// muitas worktrees a releitura leva o tempo da mais lenta. `--no-optional-locks`: ler não disputa o index.lock com o
+/// git do terminal.
+#[tauri::command]
+pub async fn git_status(paths: Vec<String>) -> Vec<Option<GitStatus>> {
+    std::thread::scope(|s| {
+        let runs: Vec<_> = paths
+            .iter()
+            .map(|p| s.spawn(move || git(p, &["--no-optional-locks", "status", "--porcelain=v2", "--branch"]).ok().map(|o| parse_status(&o))))
+            .collect();
+        runs.into_iter().map(|r| r.join().ok().flatten()).collect()
+    })
+}
+
 fn side(w: &Option<Wt>, cfg: &SideCfg) -> Option<SideView> {
     w.as_ref().map(|w| SideView {
         path: w.path.clone(),
@@ -877,6 +920,14 @@ mod tests {
     }
 
     #[test]
+    fn parses_status() {
+        let out = "# branch.oid abc\n# branch.head feat/x\n# branch.upstream origin/feat/x\n# branch.ab +2 -1\n1 .M N... 100644 100644 100644 a b src/a.ts\n2 R. N... 100644 100644 100644 a b R100 novo.ts\tvelho.ts\nu UU N... 1 2 3 4 a b c conflito.ts\n? solto.txt\n? pasta/\n! ignorado\n";
+        assert_eq!(parse_status(out), GitStatus { changed: 3, untracked: 2, ahead: 2, behind: 1 });
+        // Sem upstream: nada de # branch.ab, e limpa.
+        assert_eq!(parse_status("# branch.oid abc\n# branch.head main"), GitStatus::default());
+    }
+
+    #[test]
     fn pairs_manual_then_by_name_then_solos() {
         let manual = vec![Pair { api: "feat/x".into(), front: "feature/x".into() }];
         let got = pair(
@@ -925,6 +976,11 @@ mod tests {
         let branches_of = |r: &str| list_worktrees(path(r)).unwrap().into_iter().map(|w| w.branch).collect::<Vec<_>>();
         assert_eq!(branches_of("bare"), vec!["feat/x", "old"]);
         assert!(list_worktrees(tmp.to_str().unwrap().into()).is_err(), "pasta que não é repo");
+        std::fs::write(tmp.join("normal/solto.txt"), "").unwrap();
+        assert_eq!(
+            tauri::async_runtime::block_on(git_status(vec![path("normal"), path("nao-existe")])),
+            vec![Some(GitStatus { untracked: 1, ..Default::default() }), None]
+        );
 
         assert!(add_one(&path("bare"), &path("bare"), "../fora", "main").is_err());
         assert!(add_one(&path("bare"), "relativo", "feat/z", "main").is_err());

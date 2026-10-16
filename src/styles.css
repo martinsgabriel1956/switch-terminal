@@ -748,6 +748,39 @@ body:has(header:not(.acted) :is(.halt, .more-item)[data-ends="all"]:is(:hover, :
   color: var(--ink-2);
 }
 
+/* Estado do git logo depois do nome, na primeira linha: ponto (mudança não commitada ou arquivo não rastreado) e as
+   setas com os commits à frente/atrás do upstream. Meia-tinta: não é estado da palheta, e nenhuma cor entra. Não encolhe:
+   o nome cede (fitBranches mede o que sobra ao lado dele) e a palheta fica na coluna dela. */
+.git {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: 6px;
+  color: var(--ink-2);
+  font: 600 12px/1 var(--ui);
+}
+
+.git > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.git .icon {
+  width: 10px;
+  height: 10px;
+}
+
+/* redondo: os quadrados de 6px são das abas e da palheta (caiu, parando, parado à mão) */
+.git .dirty {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 /* branch do front de um par: mesma truncagem da branch de cima (o prefixo sai inteiro antes do nome) */
 .line .pair {
   display: flex;
@@ -1988,6 +2021,10 @@ dialog.form .pick[aria-disabled="true"] {
 #help .tab-mark .parked {
   background: none;
   box-shadow: inset 0 0 0 1.5px var(--ink-2);
+}
+
+#help .git {
+  margin-left: 0;
 }
 
 #help dl {
