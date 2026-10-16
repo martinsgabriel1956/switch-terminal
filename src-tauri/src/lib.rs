@@ -116,6 +116,7 @@ pub fn run() {
             pty::pty_force,
             pty::pty_status,
             pty::open_url,
+            pty::notify,
             worktrees::load_config,
             worktrees::add_worktree,
             worktrees::worktree_defaults,

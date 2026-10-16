@@ -1810,8 +1810,18 @@ function announceDrops() {
     wasUp.set(k, up);
     const wt = findWt(project, id);
     if (!lost.length || !wt) continue;
-    headerNote(true, project, `${lost.map((t) => TAB_LABEL[t]).join(" e ")} ${lost.length > 1 ? "caíram" : "caiu"}`, noteWho(project, id, wt.label), errorWhy(project, id, lost[0]), upHere(project, id, lost), seeTerminal(project, id, lost[0]));
+    const what = `${lost.map((t) => TAB_LABEL[t]).join(" e ")} ${lost.length > 1 ? "caíram" : "caiu"}`;
+    const why = errorWhy(project, id, lost[0]);
+    headerNote(true, project, what, noteWho(project, id, wt.label), why, upHere(project, id, lost), seeTerminal(project, id, lost[0]));
+    notifyAway(project, wt.label, what, why);
   }
+}
+
+/** Falha com a janela na bandeja ou sem foco: notificação do sistema com o texto da segunda faixa. Uma por falha, como
+ *  o recado: announceDrops e o fim do SUBINDO disparam uma vez por evento, não a cada consulta. */
+function notifyAway(project: string, label: string, what: string, why: HTMLElement | null) {
+  if (!document.hidden && document.hasFocus()) return;
+  invoke("notify", { summary: `${what} · ${project} / ${label}`, body: why?.title ?? "" });
 }
 
 /** Consulta quais terminais têm processo rodando; só redesenha quando algo muda. */
@@ -1833,7 +1843,12 @@ async function pollStatus() {
       changed = true;
       const [project, id] = k.split("\u0000");
       const wt = down.length && findWt(project, id);
-      if (wt) headerNote(true, project, `${down.map((t) => TAB_LABEL[t]).join(" e ")} ${down.length > 1 ? "não subiram" : "não subiu"} em 15 s`, noteWho(project, id, wt.label), errorWhy(project, id, down[0]), upHere(project, id, down), seeTerminal(project, id, down[0]));
+      if (wt) {
+        const what = `${down.map((t) => TAB_LABEL[t]).join(" e ")} ${down.length > 1 ? "não subiram" : "não subiu"} em 15 s`;
+        const why = errorWhy(project, id, down[0]);
+        headerNote(true, project, what, noteWho(project, id, wt.label), why, upHere(project, id, down), seeTerminal(project, id, down[0]));
+        notifyAway(project, wt.label, what, why);
+      }
     }
   }
   if (changed) render();
