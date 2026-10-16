@@ -194,8 +194,16 @@ const cededActions = () => [haltTabEl, haltAllEl, urlEl].filter((a) => !a.hidden
 /** Outros projetos em serviço que quebraram para fora da faixa: vão para o ⋯ também. Sumiam sem rastro (painel recolhido
  *  a 960, e sempre a 600), e nada dizia que o LEILAO seguia de pé. */
 const cededOthers = () => [...runningEl.querySelectorAll<HTMLElement>(".other")].filter(ceded);
+/** O ⋯ aberto pelo "Abrir com…" (ou pelo Ctrl+Shift+O sem editor): mostra a lista de editores, não as ações. */
+let editorsMode = false;
 moreMenu.addEventListener("toggle", (e) => {
-  if ((e as ToggleEvent).newState !== "open") return;
+  if ((e as ToggleEvent).newState !== "open") return void (editorsMode = false);
+  // Sem ancoragem CSS no WebKitGTK: o menu desce do botão, alinhado pela direita.
+  const r = moreBtn.getBoundingClientRect();
+  moreMenu.style.top = `${r.bottom + 4}px`;
+  moreMenu.style.right = `${innerWidth - r.right}px`;
+  if (editorsMode) return void renderEditors();
+  moreMenu.setAttribute("aria-label", "Mais ações");
   moreMenu.replaceChildren(
     ...cededOthers().map((o) => {
       const project = o.dataset.key!;
@@ -239,13 +247,10 @@ moreMenu.addEventListener("toggle", (e) => {
             el("span", { textContent: "Abrir no editor" }),
             el("span", { className: "keys", textContent: "Ctrl+Shift+O" }),
           ),
+          el("button", { type: "button", className: "more-item", title: "Escolher o editor (fica para o Ctrl+Shift+O)", onclick: openWith }, el("span", { textContent: "Abrir com…" })),
         ]
       : []),
   );
-  // Sem ancoragem CSS no WebKitGTK: o menu desce do botão, alinhado pela direita.
-  const r = moreBtn.getBoundingClientRect();
-  moreMenu.style.top = `${r.bottom + 4}px`;
-  moreMenu.style.right = `${innerWidth - r.right}px`;
   // Os outros projetos vêm antes das ações: com eles no menu, o foco abre num que só leva até lá, não num que para.
   moreMenu.querySelector<HTMLElement>("button")?.focus();
 });
@@ -268,21 +273,60 @@ urlEl.addEventListener("click", (e) => {
 function editorSide(wt: Worktree): Tab {
   return wt[tab] ? tab : wt.api ? "api" : "front";
 }
-/** Ctrl+Shift+O e o ⋯: abre a pasta da aba visível no `editorCommand` do config (o backend o lê na hora). Sem ele, ou
- *  se o comando não inicia, a segunda faixa diz o que fazer e oferece o config. */
+/** Ctrl+Shift+O e o ⋯: abre a pasta da aba visível no editor escolhido em "Abrir com…", senão no `editorCommand` (o
+ *  backend lê o config na hora). Sem nenhum, abre a lista; se o editor não abre, a segunda faixa oferece outro. */
 function openInEditor() {
   if (!current) return headerNote(false, null, "Escolha uma worktree primeiro.");
   const { project, wt } = current;
   const side = editorSide(wt);
-  const openConfig = () => el("button", { type: "button", className: "note-act", textContent: "Abrir config", onclick: () => invoke("open_config") });
   invoke<boolean>("open_in_editor", { path: wt[side]!.path }).then(
     (ok) => {
       if (alertEl.querySelector(".editor")) clearNote(alertEl);
       if (ok) headerNote(false, project, `Abrindo ${TAB_LABEL[side]} no editor`);
-      else headerNote(true, project, el("span", { className: "editor setup", textContent: "Defina editorCommand no config" }), openConfig());
+      else openWith();
     },
-    (err) => headerNote(true, project, el("span", { className: "editor", textContent: "Editor não abriu" }), el("span", { className: "why", textContent: `· ${err}`, title: String(err) }), openConfig()),
+    (err) =>
+      headerNote(
+        true,
+        project,
+        el("span", { className: "editor", textContent: "Editor não abriu" }),
+        el("span", { className: "why", textContent: `· ${err}`, title: String(err) }),
+        el("button", { type: "button", className: "note-act", textContent: "Abrir com…", onclick: openWith }),
+      ),
   );
+}
+
+/** "Abrir com…": o ⋯ passa a listar os editores. */
+function openWith() {
+  if (!current) return;
+  editorsMode = true;
+  if (moreMenu.matches(":popover-open")) renderEditors();
+  else moreMenu.showPopover();
+}
+
+type Editors = { editors: { id: string; name: string }[]; chosen: string | null; command: string | null };
+/** Os editores instalados (relidos a cada vez) e o `editorCommand`, se houver; o que o Ctrl+Shift+O abre leva o atalho.
+ *  Escolher grava a escolha e abre. */
+async function renderEditors() {
+  moreMenu.setAttribute("aria-label", "Abrir com");
+  let list: Editors;
+  try {
+    list = await invoke<Editors>("list_editors");
+  } catch (err) {
+    list = { editors: [], chosen: null, command: null };
+    headerNote(true, current?.project ?? null, el("span", { className: "editor", textContent: "Não consegui listar os editores" }), el("span", { className: "why", textContent: `· ${err}`, title: String(err) }));
+  }
+  if (!editorsMode) return;
+  const pick = (id: string | null) => () => {
+    moreMenu.hidePopover();
+    invoke("set_editor", { id }).then(openInEditor, (err) => headerNote(true, current?.project ?? null, el("span", { className: "editor", textContent: "Não gravei o editor" }), el("span", { className: "why", textContent: `· ${err}`, title: String(err) })));
+  };
+  const keys = (on: boolean) => (on ? [el("span", { className: "keys", textContent: "Ctrl+Shift+O" })] : []);
+  const items = list.editors.map((e) => el("button", { type: "button", className: "more-item", title: e.id, onclick: pick(e.id) }, el("span", { textContent: e.name }), ...keys(e.id === list.chosen)));
+  if (list.command) items.push(el("button", { type: "button", className: "more-item", title: "editorCommand do config", onclick: pick(null) }, el("span", { className: "mono", textContent: list.command }), ...keys(!list.chosen)));
+  if (!items.length) items.push(el("button", { type: "button", className: "more-item", title: "Defina editorCommand no config", onclick: () => (moreMenu.hidePopover(), invoke("open_config")) }, el("span", { textContent: "Nenhum editor encontrado · Abrir config" })));
+  moreMenu.replaceChildren(el("p", { className: "more-head", textContent: "Abrir com" }), ...items);
+  (moreMenu.querySelector<HTMLElement>("button:has(.keys)") ?? moreMenu.querySelector<HTMLElement>("button"))?.focus();
 }
 
 /** Falhas ("não subiu", "caiu") na segunda faixa, embaixo do cabeçalho, até a próxima troca ou o ×. Na faixa de cima elas

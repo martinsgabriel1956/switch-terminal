@@ -14,6 +14,8 @@ struct Config {
     screen_reader: bool,
     /// "code", "zed", "code -n": roda com a pasta da aba visível no fim (Ctrl+Shift+O).
     editor_command: Option<String>,
+    /// Escolhido em "Abrir com…": o id do .desktop ("dev.zed.Zed.desktop"). Vale antes do `editor_command`.
+    editor: Option<String>,
     projects: Vec<ProjectCfg>,
 }
 
@@ -122,12 +124,68 @@ fn editor_argv(cmd: &str, dir: &str) -> Option<(String, Vec<String>)> {
     Some((program, parts.map(String::from).chain([dir.to_string()]).collect()))
 }
 
-/// Ctrl+Shift+O: abre a pasta no `editorCommand`, solto do app (grupo de processos próprio, sem esperar). Lê o config na
-/// hora: quem acabou de definir o campo não precisa reler. Ok(false): o config não tem editor.
+/// Editor de interface gráfica pelas categorias do .desktop; os de terminal (Vim) ficam de fora.
+fn is_editor(categories: &str, terminal: bool) -> bool {
+    !terminal && categories.split(';').any(|c| c == "TextEditor" || c == "IDE")
+}
+
+#[derive(Serialize)]
+pub struct Editor {
+    id: String,
+    name: String,
+}
+
+#[derive(Serialize)]
+pub struct Editors {
+    editors: Vec<Editor>,
+    chosen: Option<String>,
+    command: Option<String>,
+}
+
+/// "Abrir com…": os editores instalados, relidos a cada abertura (o que foi instalado depois aparece sem reiniciar).
+/// O GIO lê os .desktop das pastas do XDG (Flatpak e Snap inclusos), já sem os ocultos, e dá o nome no idioma do sistema.
+#[tauri::command]
+pub fn list_editors() -> Result<Editors, String> {
+    use gio::prelude::*;
+    let cfg = read_config()?;
+    let mut editors: Vec<Editor> = gio::AppInfo::all()
+        .into_iter()
+        .filter(|a| a.should_show())
+        .filter_map(|a| a.downcast::<gio::DesktopAppInfo>().ok())
+        .filter(|d| is_editor(d.categories().as_deref().unwrap_or(""), d.boolean("Terminal")))
+        .filter_map(|d| Some(Editor { id: d.id()?.to_string(), name: d.name().to_string() }))
+        .collect();
+    editors.sort_by_key(|e| e.name.to_lowercase());
+    let command = cfg.editor_command.filter(|c| !c.trim().is_empty());
+    Ok(Editors { editors, chosen: cfg.editor, command })
+}
+
+/// Grava a escolha do "Abrir com…" (None: volta ao `editorCommand`) sem mexer no resto do config.
+#[tauri::command]
+pub fn set_editor(id: Option<String>) -> Result<(), String> {
+    let path = config_path();
+    let mut cfg = read_config_json(&path)?;
+    let root = cfg.as_object_mut().ok_or(format!("{path}: a raiz precisa ser um objeto."))?;
+    match id {
+        Some(id) => root.insert("editor".into(), id.into()),
+        None => root.remove("editor"),
+    };
+    write_config_json(&path, &cfg)
+}
+
+/// Ctrl+Shift+O: abre a pasta no editor escolhido em "Abrir com…" (pelo GIO, como o menu do sistema), senão no
+/// `editorCommand`, solto do app (grupo de processos próprio, sem esperar). Lê o config na hora: quem acabou de definir
+/// o campo não precisa reler. Ok(false): nenhum dos dois.
 #[tauri::command]
 pub fn open_in_editor(path: String) -> Result<bool, String> {
+    use gio::prelude::*;
     use std::os::unix::process::CommandExt;
     let cfg = read_config()?;
+    if let Some(id) = cfg.editor.as_deref() {
+        let app = gio::DesktopAppInfo::new(id).ok_or(format!("{id}: não está mais instalado"))?;
+        app.launch(&[gio::File::for_path(&path)], None::<&gio::AppLaunchContext>).map_err(|e| format!("{}: {e}", app.name()))?;
+        return Ok(true);
+    }
     let Some((program, args)) = editor_argv(cfg.editor_command.as_deref().unwrap_or(""), &path) else { return Ok(false) };
     let mut child = Command::new(&program).args(args).process_group(0).spawn().map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound => format!("{program}: não encontrado"),
@@ -1105,6 +1163,15 @@ pub async fn clone_github_repo(full_name: String, parent: String) -> Result<Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn is_editor_by_category() {
+        assert!(is_editor("TextEditor;Development;IDE;", false));
+        assert!(is_editor("Development;IDE", false));
+        assert!(!is_editor("TextEditor;", true));
+        assert!(!is_editor("Development;Database;", false));
+        assert!(!is_editor("", false));
+    }
 
     #[test]
     fn editor_argv_splits_program_and_args() {

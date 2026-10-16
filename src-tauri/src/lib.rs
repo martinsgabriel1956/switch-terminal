@@ -123,6 +123,8 @@ pub fn run() {
             worktrees::add_project,
             worktrees::open_config,
             worktrees::open_in_editor,
+            worktrees::list_editors,
+            worktrees::set_editor,
             worktrees::set_screen_reader,
             worktrees::missing_deps_install,
             worktrees::lockfile_pm,

@@ -1484,11 +1484,6 @@ body:not(.sidebar-off, .narrow) header.tight #destination .where > :is(.project,
   color: var(--fail);
 }
 
-/* "Defina editorCommand no config": falta configurar, não é falha */
-#alert > span.setup {
-  color: var(--ink);
-}
-
 /* Onde caiu vem antes de por quê: a causa crua cede primeiro ("LEILAO / m…" a 960), e ela está inteira em "Ver o terminal" */
 #alert > .who {
   flex-shrink: 0;
@@ -1710,6 +1705,22 @@ body:not(.sidebar-off, .narrow) header.tight #destination .where > :is(.project,
   position: absolute;
   inset: -5px 0 auto;
   border-top: 1px solid var(--rule);
+}
+
+/* "Abrir com": o título da lista de editores, em rótulo como o projeto */
+.more-head {
+  margin: 0;
+  padding: 6px 10px 4px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.more-item .mono {
+  font-family: var(--mono);
+  font-size: 13px;
 }
 
 .more-item .keys {
