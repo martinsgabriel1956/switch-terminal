@@ -121,6 +121,7 @@ pub fn run() {
             worktrees::worktree_defaults,
             worktrees::add_project,
             worktrees::open_config,
+            worktrees::open_in_editor,
             worktrees::set_screen_reader,
             worktrees::missing_deps_install,
             worktrees::lockfile_pm,

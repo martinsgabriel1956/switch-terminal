@@ -12,6 +12,8 @@ struct Config {
     /// Liga o modo leitor de tela do xterm (a saída dos terminais vira texto acessível; custa desempenho).
     #[serde(default)]
     screen_reader: bool,
+    /// "code", "zed", "code -n": roda com a pasta da aba visível no fim (Ctrl+Shift+O).
+    editor_command: Option<String>,
     projects: Vec<ProjectCfg>,
 }
 
@@ -110,6 +112,30 @@ pub fn open_config() -> Result<(), String> {
     // Recolhe o xdg-open quando ele sair, senão fica um zumbi por clique.
     std::thread::spawn(move || child.wait());
     Ok(())
+}
+
+/// "code -n" + pasta → ("code", ["-n", pasta]). Vazio = sem editor.
+/// ponytail: separa por espaço, sem aspas nem `$VAR`; programa com espaço no caminho precisa de um link sem espaço.
+fn editor_argv(cmd: &str, dir: &str) -> Option<(String, Vec<String>)> {
+    let mut parts = cmd.split_whitespace();
+    let program = expand(parts.next()?);
+    Some((program, parts.map(String::from).chain([dir.to_string()]).collect()))
+}
+
+/// Ctrl+Shift+O: abre a pasta no `editorCommand`, solto do app (grupo de processos próprio, sem esperar). Lê o config na
+/// hora: quem acabou de definir o campo não precisa reler. Ok(false): o config não tem editor.
+#[tauri::command]
+pub fn open_in_editor(path: String) -> Result<bool, String> {
+    use std::os::unix::process::CommandExt;
+    let cfg = read_config()?;
+    let Some((program, args)) = editor_argv(cfg.editor_command.as_deref().unwrap_or(""), &path) else { return Ok(false) };
+    let mut child = Command::new(&program).args(args).process_group(0).spawn().map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => format!("{program}: não encontrado"),
+        _ => format!("{program}: {e}"),
+    })?;
+    // Recolhe o processo quando ele sair, senão fica um zumbi por abertura.
+    std::thread::spawn(move || child.wait());
+    Ok(true)
 }
 
 /// Saída de `git worktree list --porcelain`: blocos separados por linha em branco.
@@ -836,6 +862,15 @@ pub async fn clone_github_repo(full_name: String, parent: String) -> Result<Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn editor_argv_splits_program_and_args() {
+        assert_eq!(editor_argv("code", "/w/x"), Some(("code".into(), vec!["/w/x".into()])));
+        assert_eq!(editor_argv("  code   -n ", "/w/x"), Some(("code".into(), vec!["-n".into(), "/w/x".into()])));
+        assert_eq!(editor_argv("~/bin/ed", "/w"), Some((format!("{}/bin/ed", home()), vec!["/w".into()])));
+        assert_eq!(editor_argv("", "/w"), None);
+        assert_eq!(editor_argv("   ", "/w"), None);
+    }
 
     fn wt(b: &str) -> Wt {
         Wt { branch: b.into(), path: format!("/r/{b}") }
