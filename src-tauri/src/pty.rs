@@ -148,6 +148,15 @@ pub fn open_url(url: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Notificação do sistema (um lado caiu com a janela escondida ou sem foco). Sem `notify-send`, não faz nada.
+#[tauri::command]
+pub fn notify(summary: String, body: String) {
+    let cmd = std::process::Command::new("notify-send").args(["--app-name=Hotswap", "--icon=hotswap", "--", &summary, &body]).spawn();
+    if let Ok(mut child) = cmd {
+        std::thread::spawn(move || child.wait());
+    }
+}
+
 /// "Forçar agora" no aviso de troca: SIGKILL no que estiver rodando, sem esperar o prazo.
 #[tauri::command]
 pub fn pty_force(ptys: State<Ptys>, id: u32) {
