@@ -128,6 +128,7 @@ pub fn run() {
             worktrees::edit_worktree,
             worktrees::remove_worktree,
             worktrees::list_worktrees,
+            worktrees::git_status,
             worktrees::github_repos,
             worktrees::pull_requests,
             worktrees::clone_github_repo,
