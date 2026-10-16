@@ -374,11 +374,22 @@ pub struct SideInfo {
     dir: Option<String>,
 }
 
+/// Pasta principal de um repo não-bare: o git não a move nem a remove.
+fn is_main(path: &str) -> Result<bool, String> {
+    let abs = |what: &str| git(path, &["rev-parse", "--path-format=absolute", what]);
+    Ok(abs("--git-dir")? == abs("--git-common-dir")?)
+}
+
+/// `git worktree lock`: o git não move nem remove sem forçar.
+fn is_locked(repo: &str, path: &str) -> Result<bool, String> {
+    let porcelain = git(repo, &["worktree", "list", "--porcelain"])?;
+    Ok(porcelain.split("\n\n").any(|b| b.lines().next() == Some(&format!("worktree {path}")) && b.lines().any(|l| l.starts_with("locked"))))
+}
+
 /// O que o diálogo de edição precisa saber de um lado antes de abrir.
 #[tauri::command]
 pub async fn worktree_info(path: String, branch: String) -> Result<SideInfo, String> {
-    let abs = |what: &str| git(&path, &["rev-parse", "--path-format=absolute", what]);
-    let main = abs("--git-dir")? == abs("--git-common-dir")?;
+    let main = is_main(&path)?;
     let upstream = git(&path, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", &format!("{branch}@{{upstream}}")]).ok();
     let dir = path.strip_suffix(&format!("/{branch}")).filter(|d| !d.is_empty()).map(str::to_string);
     Ok(SideInfo { main, upstream, dir })
@@ -477,9 +488,7 @@ fn check_side(repo: &str, s: &EditSide) -> Result<Option<PathBuf>, String> {
     if dest.exists() {
         return Err(format!("Já existe {}.", dest.display()));
     }
-    let porcelain = git(repo, &["worktree", "list", "--porcelain"])?;
-    let locked = porcelain.split("\n\n").any(|b| b.lines().next() == Some(&format!("worktree {}", s.path)) && b.lines().any(|l| l.starts_with("locked")));
-    if locked {
+    if is_locked(repo, &s.path)? {
         return Err("A worktree está travada (git worktree lock): o git não a move.".into());
     }
     Ok(Some(dest))
@@ -620,6 +629,136 @@ fn edit_worktree_in(config: &str, req: &EditRequest) -> Result<(), FormError> {
 #[tauri::command]
 pub async fn edit_worktree(req: EditRequest) -> Result<(), FormError> {
     edit_worktree_in(&config_path(), &req)
+}
+
+// ---------- remover worktree ----------
+
+#[derive(Deserialize)]
+pub struct RemoveSide {
+    path: String,
+    branch: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveRequest {
+    project: String,
+    api: Option<RemoveSide>,
+    front: Option<RemoveSide>,
+    /// `git branch -d` depois de remover; a branch não mergeada fica, com um aviso.
+    delete_branch: bool,
+}
+
+/// O que impede `git worktree remove` sem `--force`, dito antes de mexer em qualquer lado.
+fn check_remove(repo: &str, path: &str) -> Result<(), String> {
+    if is_main(path)? {
+        return Err(format!("{path} é a pasta principal do repositório: o git não a remove."));
+    }
+    if is_locked(repo, path)? {
+        return Err("A worktree está travada (git worktree lock): o git não a remove.".into());
+    }
+    if !git(path, &["status", "--porcelain"])?.is_empty() {
+        return Err(format!("{path} tem mudanças não commitadas ou arquivos não rastreados: commite, guarde (git stash -u) ou apague antes de remover."));
+    }
+    Ok(())
+}
+
+/// Tira do projeto o que era das branches removidas (`(lado, branch)`): o comando próprio e o par manual.
+fn forget_branches(proj: &mut serde_json::Value, removed: &[(usize, &str)]) {
+    let Some(obj) = proj.as_object_mut() else { return };
+    for &(i, branch) in removed {
+        if let Some(side) = obj.get_mut(KEYS[i]).and_then(|s| s.as_object_mut()) {
+            if let Some(cmds) = side.get_mut("branchCommands").and_then(|c| c.as_object_mut()) {
+                cmds.remove(branch);
+                if cmds.is_empty() {
+                    side.remove("branchCommands");
+                }
+            }
+        }
+    }
+    if let Some(pairs) = obj.get_mut("manualPairs").and_then(|v| v.as_array_mut()) {
+        pairs.retain(|m| !removed.iter().any(|&(i, b)| m[KEYS[i]] == b));
+        if pairs.is_empty() {
+            obj.remove("manualPairs");
+        }
+    }
+}
+
+/// Remove os lados existentes da worktree: valida os dois antes, remove (sem `--force`), apaga a pasta-mãe vazia,
+/// limpa o config e, se pedido, a branch. Devolve os avisos (branch que ficou) sem falhar o resto.
+/// No erro, `created` lista os lados que já foram removidos.
+fn remove_worktree_in(config: &str, req: &RemoveRequest) -> Result<Vec<String>, FormError> {
+    let side_err = |key: &'static str| move |message: String| FormError { side: Some(key), message, created: vec![] };
+    let cfg: Config = serde_json::from_str(&std::fs::read_to_string(config).map_err(|e| FormError::general(e.to_string()))?).map_err(|e| FormError::general(e.to_string()))?;
+    let p = cfg.projects.iter().find(|p| p.name == req.project).ok_or(FormError::general("Projeto não encontrado."))?;
+    let sides = [(expand(&p.api.repo), &req.api), (expand(&p.front.repo), &req.front)];
+
+    // 1. Valida tudo antes de mexer.
+    for (i, (repo, s)) in sides.iter().enumerate() {
+        if let Some(s) = s {
+            check_remove(repo, &s.path).map_err(side_err(KEYS[i]))?;
+        }
+    }
+
+    // 2. Remove; um lado que falha depois do outro removido para aí, e o erro diz qual já foi.
+    let mut removed = vec![];
+    let mut failed = None;
+    for (i, (repo, s)) in sides.iter().enumerate() {
+        let Some(s) = s else { continue };
+        if let Err(e) = git(repo, &["worktree", "remove", &s.path]) {
+            failed = Some((i, e));
+            break;
+        }
+        // "feat/" vazia depois de remover a última worktree dela; remove_dir só apaga pasta vazia.
+        if let Some(parent) = Path::new(&s.path).parent() {
+            let _ = std::fs::remove_dir(parent);
+        }
+        removed.push((i, s.branch.as_str()));
+    }
+
+    // 3. O que é do lado removido sai mesmo num erro parcial: o config e, se pedido, a branch.
+    let mut notes = vec![];
+    if req.delete_branch {
+        for &(i, b) in &removed {
+            let repo = &sides[i].0;
+            // HEAD destacado: o "nome" é o da pasta, não há branch para apagar.
+            if git(repo, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{b}")]).is_err() {
+                continue;
+            }
+            if let Err(e) = git(repo, &["branch", "-d", b]) {
+                let side = if i == 0 { "API" } else { "Front" };
+                notes.push(if e.contains("not fully merged") {
+                    format!("{side}: a branch {b} não está mergeada e ficou (git branch -D {b} apaga)")
+                } else {
+                    format!("{side}: a branch {b} ficou: {e}")
+                });
+            }
+        }
+    }
+    let done: Vec<&'static str> = removed.iter().map(|&(i, _)| KEYS[i]).collect();
+    let mut json = read_config_json(config).map_err(FormError::general)?;
+    if let Some(proj) = json.get_mut("projects").and_then(|ps| ps.as_array_mut()).and_then(|ps| ps.iter_mut().find(|x| x["name"] == req.project.as_str())) {
+        let before = proj.clone();
+        forget_branches(proj, &removed);
+        if *proj != before {
+            write_config_json(config, &json).map_err(|e| FormError { side: None, message: e, created: done.clone() })?;
+        }
+    }
+
+    match failed {
+        None => Ok(notes),
+        Some((i, e)) => Err(FormError {
+            side: Some(KEYS[i]),
+            message: if done.is_empty() { e } else { format!("A API já foi removida; o Front falhou: {e}") },
+            created: done,
+        }),
+    }
+}
+
+/// "Remover" do diálogo de edição. async: apagar a pasta (node_modules) pode demorar e não deve travar a UI.
+#[tauri::command]
+pub async fn remove_worktree(req: RemoveRequest) -> Result<Vec<String>, FormError> {
+    remove_worktree_in(&config_path(), &req)
 }
 
 // ---------- novo projeto ----------
@@ -1006,6 +1145,56 @@ mod tests {
         let req = EditRequest { project: "p".into(), api: Some(side("api", "solo-api", "solo-api", None, "")), front: None, pair: PairChange::Create { dir: path("web"), base: "main".into() } };
         edit_worktree_in(&config, &req).unwrap();
         assert_eq!(branch_of("web", "solo-api"), "solo-api");
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn removes_worktree_without_force() {
+        let tmp = std::env::temp_dir().join(format!("hotswap-rm-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let sh = |cmd: &str| assert!(Command::new("sh").arg("-c").arg(cmd).current_dir(&tmp).status().unwrap().success(), "{cmd}");
+        std::fs::create_dir_all(&tmp).unwrap();
+        for r in ["api", "web"] {
+            sh(&format!("git init -q -b main src-{r} && git -C src-{r} -c user.name=t -c user.email=t@t commit -q --allow-empty -m init"));
+            sh(&format!("mkdir {r} && git clone -q --bare src-{r} {r}/.bare && echo 'gitdir: ./.bare' > {r}/.git"));
+        }
+        let path = |d: &str| tmp.join(d).to_str().unwrap().to_string();
+        add_one(&path("api"), &path("api"), "feat/x", "main").unwrap();
+        add_one(&path("web"), &path("web"), "feat/x", "main").unwrap();
+        let config = path("config.json");
+        let raw = format!(
+            r#"{{"projects":[{{"name":"p","api":{{"repo":"{}","branchCommands":{{"feat/x":"npm run dev:mock","outra":"make"}}}},"front":{{"repo":"{}","branchCommands":{{"feat/x":"x"}}}},"manualPairs":[{{"api":"feat/x","front":"feat/x"}},{{"api":"a","front":"b"}}]}}]}}"#,
+            path("api"),
+            path("web")
+        );
+        std::fs::write(&config, &raw).unwrap();
+        let side = |r: &str| Some(RemoveSide { path: path(&format!("{r}/feat/x")), branch: "feat/x".into() });
+        let req = RemoveRequest { project: "p".into(), api: side("api"), front: side("web"), delete_branch: true };
+
+        // Arquivo não rastreado no Front: recusa antes de mexer na API.
+        std::fs::write(tmp.join("web/feat/x/novo.txt"), "").unwrap();
+        let err = remove_worktree_in(&config, &req).unwrap_err();
+        assert_eq!((err.side, err.created.len()), (Some("front"), 0));
+        assert!(tmp.join("api/feat/x").exists(), "API intocada");
+        assert_eq!(std::fs::read_to_string(&config).unwrap(), raw, "config intocado");
+        std::fs::remove_file(tmp.join("web/feat/x/novo.txt")).unwrap();
+
+        // Remove os dois; a branch do Front tem commit fora da main: fica, com aviso, e o resto segue.
+        sh("git -C web/feat/x -c user.name=t -c user.email=t@t commit -q --allow-empty -m wip");
+        let notes = remove_worktree_in(&config, &req).unwrap();
+        assert_eq!(notes.len(), 1);
+        assert!(notes[0].starts_with("Front: a branch feat/x não está mergeada"), "{}", notes[0]);
+        assert!(!tmp.join("api/feat").exists() && !tmp.join("web/feat").exists(), "pasta-mãe vazia apagada");
+        assert!(git(&path("api"), &["rev-parse", "--verify", "--quiet", "refs/heads/feat/x"]).is_err(), "branch mergeada apagada");
+        assert!(git(&path("web"), &["rev-parse", "--verify", "--quiet", "refs/heads/feat/x"]).is_ok(), "branch não mergeada fica");
+        let cfg = read_config_json(&config).unwrap();
+        let p = &cfg["projects"][0];
+        assert_eq!(p["api"]["branchCommands"], serde_json::json!({ "outra": "make" }));
+        assert!(p["front"].get("branchCommands").is_none());
+        assert_eq!(p["manualPairs"], serde_json::json!([{ "api": "a", "front": "b" }]));
+
+        // A pasta principal de um repo não-bare não sai.
+        assert!(check_remove(&path("src-api"), &path("src-api")).unwrap_err().contains("principal"));
         std::fs::remove_dir_all(&tmp).unwrap();
     }
 

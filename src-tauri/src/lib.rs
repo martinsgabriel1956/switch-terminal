@@ -126,6 +126,7 @@ pub fn run() {
             worktrees::lockfile_pm,
             worktrees::worktree_info,
             worktrees::edit_worktree,
+            worktrees::remove_worktree,
             worktrees::list_worktrees,
             worktrees::github_repos,
             worktrees::clone_github_repo,

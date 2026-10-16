@@ -2628,6 +2628,11 @@ dialog.form menu {
   background: var(--rail);
 }
 
+/* "Remover…" do editar: à esquerda, longe do Salvar (row-reverse: a margem da direita empurra para a borda) */
+dialog.form menu .remove {
+  margin-right: auto;
+}
+
 /* Pasta local | Clonar do GitHub: a mesma forma das abas API | FRONT; só o caminho escolhido aparece */
 dialog.form .source {
   display: flex;

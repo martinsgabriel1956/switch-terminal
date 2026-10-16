@@ -42,7 +42,7 @@ Estado persistido no `localStorage` do webview: `{ "<projeto>": "<id da worktree
 - A lista vem de `git worktree list --porcelain` em cada repo.
 - Pareamento automático pelo **nome exato da branch**, com `manualPairs` como override.
 - Worktrees sem par aparecem como **solo** (uma aba só).
-- O app **cria** e **edita** worktrees (veja abaixo), mas não remove.
+- O app **cria**, **edita** e **remove** worktrees (veja abaixo).
 - A lista é relida ao abrir a paleta, quando a janela ganha foco e no botão de reler (ícone no rodapé da sidebar, `Ctrl+Shift+L`), que diz no cabeçalho o que mudou ("nada mudou", "nova: projeto / branch"). Sem projeto, o rodapé some.
 - Worktree que sumiu: os PTYs dela são mortos e ela sai da sidebar.
 
@@ -75,6 +75,14 @@ Estado persistido no `localStorage` do webview: `{ "<projeto>": "<id da worktree
 - **Par:** na solo, o lado que falta pode ficar vazio, ser criado com o nome da branch (diretório e origem, como na criação) ou parear com uma solo do outro lado (grava `manualPairs`). Um par manual pode ser desfeito; par de nome igual não (o pareamento automático juntaria de novo).
 - **Tudo ou nada:** valida antes de mexer (nome válido, branch nova livre, pasta de destino livre, worktree não travada, solo ainda solo); se um passo falhar mesmo assim, desfaz os anteriores na ordem inversa (renomeia de volta, move de volta, remove o lado criado e a branch que ele criou) e o config não é gravado.
 - Ao salvar, os terminais dela (e os da solo que entrou no par) fecham; o "ativa" e as recentes passam para o id novo; se era a atual, abre só o shell, sem o start. O cabeçalho diz "Editada: feat/x → feat/y".
+
+## Remover worktree
+
+- "Remover…" no rodapé do diálogo de editar (à esquerda, longe do Salvar): vale a mesma regra do lápis, só a worktree parada.
+- Abre uma confirmação por cima com as pastas de cada lado existente que serão apagadas (inclusive o que o git ignora, como `node_modules` e `.env`) e, se ela foi aberta nesta sessão, "Os terminais dela fecham." O foco começa no Cancelar; Cancelar volta ao editar.
+- Caixa "Apagar também a branch local" (desmarcada): `git branch -d`, nunca `-D`. Branch não mergeada fica, e o cabeçalho diz isso junto do "Removida: feat/x" ("Front: a branch feat/x não está mergeada e ficou (git branch -D feat/x apaga)"); o resto da remoção não falha por isso. HEAD destacado não tem branch para apagar.
+- `git worktree remove` em cada lado, sem `--force`. Valida os dois antes de mexer e recusa, no lado culpado: a pasta principal de um repo não-bare, worktree travada (`git worktree lock`) e mudanças não commitadas ou arquivos não rastreados (`git status --porcelain`). Se um lado falhar depois do outro removido, o erro diz qual já foi ("A API já foi removida; o Front falhou: …"), e o que saiu é limpo mesmo assim.
+- Limpeza: a pasta-mãe que ficou vazia (`feat/`) é apagada; os PTYs dela morrem; as entradas da branch em `branchCommands` e os `manualPairs` com ela saem do config (escrita atômica, só se algo mudou); o "ativa" e as recentes esquecem o id. O foco vai para o painel.
 
 ## Terminais e ciclo de vida
 
@@ -120,7 +128,6 @@ Identidade visual: **painel de partidas** (split-flap). Tokens, tipografia e reg
 
 ## Fora da v1
 
-- Remover worktrees pelo app.
 - Editar ou remover projetos pela tela.
 - Injeção de porta por variável de ambiente.
 - Detecção ou notificação de crash do dev server.
