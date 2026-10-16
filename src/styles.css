@@ -2366,13 +2366,15 @@ dialog.form p.preview {
   overflow-wrap: anywhere;
 }
 
-#gh-hint summary {
+#gh-hint summary,
+#pr-hint summary {
   width: fit-content;
   margin-top: 4px;
   cursor: pointer;
 }
 
-#gh-hint details > code {
+#gh-hint details > code,
+#pr-hint details > code {
   display: block;
   margin-top: 6px;
   font: 12px/1.45 var(--mono);

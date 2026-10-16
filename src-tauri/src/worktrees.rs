@@ -320,9 +320,14 @@ fn add_one(repo: &str, dir: &str, branch: &str, base: &str) -> Result<bool, Stri
     let path = Path::new(&dir).join(branch);
     let path = path.to_str().ok_or("caminho inválido")?;
     let has = |r: &str| git(repo, &["rev-parse", "--verify", "--quiet", r]).is_ok();
-    if has(&format!("refs/heads/{branch}")) || has(&format!("refs/remotes/origin/{branch}")) {
+    if has(&format!("refs/heads/{branch}")) {
         git(repo, &["worktree", "add", path, branch])?;
         Ok(false)
+    } else if has(&format!("refs/remotes/origin/{branch}")) {
+        // Explícito: o palpite do git (`worktree add <path> <branch>`) e o `--track` precisam do fetch das remotas
+        // configurado no origin, e um bare clonado fora do app não tem. Com ele, o upstream vem do autoSetupMerge.
+        git(repo, &["worktree", "add", "-b", branch, path, &format!("origin/{branch}")])?;
+        Ok(true)
     } else {
         if base.is_empty() {
             return Err("escolha a branch de origem".into());
@@ -332,10 +337,20 @@ fn add_one(repo: &str, dir: &str, branch: &str, base: &str) -> Result<bool, Stri
     }
 }
 
+/// `origin/<branch>` atualizada (refspec explícito: um bare clonado fora do app não tem o fetch das remotas configurado).
+fn fetch_branch(repo: &str, branch: &str) -> Result<String, String> {
+    // Valida antes: o nome entra no refspec.
+    git(repo, &["check-ref-format", "--branch", branch])?;
+    git(repo, &["fetch", "-q", "origin", &format!("+refs/heads/{branch}:refs/remotes/origin/{branch}")])
+}
+
 #[derive(Deserialize)]
 pub struct SideRequest {
     dir: String,
     base: String,
+    /// A branch é de uma PR aberta neste lado: busca `origin/<branch>` antes, para ela ser reaproveitada.
+    #[serde(default)]
+    fetch: bool,
 }
 
 /// Cria a worktree na API, no front ou nos dois. async: o checkout pode demorar e não deve travar a UI.
@@ -353,7 +368,9 @@ pub async fn add_worktree(project: String, branch: String, api: Option<SideReque
     let mut created = vec![];
     for (req, key, side) in [(api, "api", &p.api), (front, "front", &p.front)] {
         let Some(req) = req else { continue };
-        if let Err(message) = add_one(&expand(&side.repo), &req.dir, branch, req.base.trim()) {
+        let repo = expand(&side.repo);
+        let fetched = if req.fetch { fetch_branch(&repo, branch).map(|_| ()) } else { Ok(()) };
+        if let Err(message) = fetched.and_then(|_| add_one(&repo, &req.dir, branch, req.base.trim())) {
             return Err(FormError { side: Some(key), message, created });
         }
         created.push(key);
@@ -927,6 +944,50 @@ pub async fn github_repos() -> Result<GithubRepos, String> {
     Ok(GithubRepos { login, repos: list.lines().map(str::to_string).collect() })
 }
 
+/// `HOST/OWNER/REPO` para o `--repo` do gh, a partir da URL do origin (https, ssh ou scp `git@host:dono/repo.git`):
+/// no bare (`.bare`) não dá para contar com o gh achando o remoto sozinho.
+fn gh_repo_of(url: &str) -> Option<String> {
+    let url = url.trim().trim_end_matches('/');
+    let url = url.strip_suffix(".git").unwrap_or(url);
+    let rest = match url.split_once("://") {
+        Some((_, r)) => r.to_string(),
+        None => url.replacen(':', "/", 1),
+    };
+    let rest = rest.rsplit_once('@').map_or(rest.as_str(), |(_, r)| r);
+    let parts: Vec<&str> = rest.split('/').collect();
+    match parts.as_slice() {
+        [host, owner, name] if !host.is_empty() && !owner.is_empty() && !name.is_empty() => Some(parts.join("/")),
+        _ => None,
+    }
+}
+
+fn side_prs(side: &SideCfg) -> Result<serde_json::Value, String> {
+    let url = git(&expand(&side.repo), &["remote", "get-url", "origin"])?;
+    let repo = gh_repo_of(&url).ok_or(format!("o origin não é um repositório do GitHub: {url}"))?;
+    let out = gh(&["pr", "list", "--repo", &repo, "--limit", "100", "--json", "number,title,headRefName,author,isCrossRepository"])?;
+    serde_json::from_str(&out).map_err(|e| e.to_string())
+}
+
+#[derive(Serialize)]
+pub struct PullRequests {
+    api: Result<serde_json::Value, String>,
+    front: Result<serde_json::Value, String>,
+}
+
+/// PRs abertas na API e no Front do projeto, como o `gh pr list --json` devolve; o front junta pela branch.
+#[tauri::command]
+pub async fn pull_requests(project: String) -> Result<PullRequests, String> {
+    let cfg = read_config()?;
+    let p = cfg.projects.iter().find(|p| p.name == project).ok_or("projeto não encontrado")?;
+    // Em paralelo: cada gh leva cerca de 1 s.
+    let (api, front) = std::thread::scope(|s| {
+        let api = s.spawn(|| side_prs(&p.api));
+        let front = side_prs(&p.front);
+        (api.join().unwrap_or_else(|_| Err("falha ao listar as PRs da API".into())), front)
+    });
+    Ok(PullRequests { api, front })
+}
+
 /// "dono/repo" do GitHub: só letras, números, ".", "-" e "_"; o nome vira pasta no disco.
 fn valid_full_name(full: &str) -> bool {
     let ok = |p: &str| !p.is_empty() && p != "." && p != ".." && p.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c));
@@ -1064,6 +1125,13 @@ mod tests {
         let branches_of = |r: &str| list_worktrees(path(r)).unwrap().into_iter().map(|w| w.branch).collect::<Vec<_>>();
         assert_eq!(branches_of("bare"), vec!["feat/x", "old"]);
         assert!(list_worktrees(tmp.to_str().unwrap().into()).is_err(), "pasta que não é repo");
+
+        // Branch de PR: só no origin; o bare clonado fora do app não rastreia as remotas. Buscada, é reaproveitada.
+        sh(&format!("git -C normal {git_id} commit -q --allow-empty -m pr && git -C normal branch pr/z && git -C normal reset -q --hard HEAD~1"));
+        fetch_branch(&path("bare"), "pr/z").unwrap();
+        add_one(&path("bare"), &path("bare"), "pr/z", "").unwrap();
+        assert_eq!(git(&path("bare/pr/z"), &["log", "-1", "--format=%s"]).unwrap(), "pr");
+        assert!(fetch_branch(&path("bare"), "nao-existe").is_err());
 
         assert!(add_one(&path("bare"), &path("bare"), "../fora", "main").is_err());
         assert!(add_one(&path("bare"), "relativo", "feat/z", "main").is_err());
@@ -1213,6 +1281,11 @@ mod tests {
         assert_eq!(default_dir(&dest).unwrap(), tmp.join("dest"), "o app lê como bare");
         let (_, remote) = branches(&dest).unwrap();
         assert!(remote.contains(&"origin/dev".to_string()), "branches remotas rastreadas");
+
+        for url in ["git@github.com:dono/repo.git", "https://github.com/dono/repo", "ssh://git@github.com/dono/repo.git", "https://github.com/dono/repo.git/"] {
+            assert_eq!(gh_repo_of(url).as_deref(), Some("github.com/dono/repo"), "{url}");
+        }
+        assert_eq!(gh_repo_of("/tmp/origem"), None, "remoto local");
 
         assert!(valid_full_name("goldtech-dev/gtech-api"));
         assert!(valid_full_name("me/repo.js"));
