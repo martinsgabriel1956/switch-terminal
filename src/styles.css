@@ -1484,6 +1484,11 @@ body:not(.sidebar-off, .narrow) header.tight #destination .where > :is(.project,
   color: var(--fail);
 }
 
+/* "Defina editorCommand no config": falta configurar, não é falha */
+#alert > span.setup {
+  color: var(--ink);
+}
+
 /* Onde caiu vem antes de por quê: a causa crua cede primeiro ("LEILAO / m…" a 960), e ela está inteira em "Ver o terminal" */
 #alert > .who {
   flex-shrink: 0;

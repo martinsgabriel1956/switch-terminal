@@ -178,7 +178,8 @@ headerEl.addEventListener("pointerleave", releaseHold);
 addEventListener("resize", releaseHold);
 
 /** ⋯ do cabeçalho: o que não coube na faixa (Parar API, Parar tudo, a porta) vai para cá em vez de sumir sem rastro.
- *  Existe só enquanto algo cedeu (fitHeader); cada item repete o atalho e a prévia ENCERRA do botão que substitui. */
+ *  Cada item repete o atalho e a prévia ENCERRA do botão que substitui. Com uma worktree em serviço ele sempre existe:
+ *  "Abrir no editor" mora só nele (fitHeader). */
 const moreBtn = $<HTMLButtonElement>("#more");
 const moreMenu = $("#more-menu");
 const flowEl = $("#flow");
@@ -230,6 +231,16 @@ moreMenu.addEventListener("toggle", (e) => {
       if (src.getAttribute("aria-disabled")) b.setAttribute("aria-disabled", "true");
       return b;
     }),
+    ...(current
+      ? [
+          el(
+            "button",
+            { type: "button", className: "more-item", title: current.wt[editorSide(current.wt)]!.path, ariaKeyShortcuts: "Control+Shift+O", onclick: () => (moreMenu.hidePopover(), openInEditor()) },
+            el("span", { textContent: "Abrir no editor" }),
+            el("span", { className: "keys", textContent: "Ctrl+Shift+O" }),
+          ),
+        ]
+      : []),
   );
   // Sem ancoragem CSS no WebKitGTK: o menu desce do botão, alinhado pela direita.
   const r = moreBtn.getBoundingClientRect();
@@ -252,6 +263,27 @@ urlEl.addEventListener("click", (e) => {
   e.preventDefault();
   invoke("open_url", { url: urlEl.href });
 });
+
+/** A pasta da aba visível (na solo, a do único lado). */
+function editorSide(wt: Worktree): Tab {
+  return wt[tab] ? tab : wt.api ? "api" : "front";
+}
+/** Ctrl+Shift+O e o ⋯: abre a pasta da aba visível no `editorCommand` do config (o backend o lê na hora). Sem ele, ou
+ *  se o comando não inicia, a segunda faixa diz o que fazer e oferece o config. */
+function openInEditor() {
+  if (!current) return headerNote(false, null, "Escolha uma worktree primeiro.");
+  const { project, wt } = current;
+  const side = editorSide(wt);
+  const openConfig = () => el("button", { type: "button", className: "note-act", textContent: "Abrir config", onclick: () => invoke("open_config") });
+  invoke<boolean>("open_in_editor", { path: wt[side]!.path }).then(
+    (ok) => {
+      if (alertEl.querySelector(".editor")) clearNote(alertEl);
+      if (ok) headerNote(false, project, `Abrindo ${TAB_LABEL[side]} no editor`);
+      else headerNote(true, project, el("span", { className: "editor setup", textContent: "Defina editorCommand no config" }), openConfig());
+    },
+    (err) => headerNote(true, project, el("span", { className: "editor", textContent: "Editor não abriu" }), el("span", { className: "why", textContent: `· ${err}`, title: String(err) }), openConfig()),
+  );
+}
 
 /** Falhas ("não subiu", "caiu") na segunda faixa, embaixo do cabeçalho, até a próxima troca ou o ×. Na faixa de cima elas
  *  disputavam largura com o destino e as ações: apertavam, cediam, iam para o canto do terminal. */
@@ -1547,9 +1579,10 @@ function fitHeaderOnce() {
   // O nome inteiro antes de medir: cutDest o trunca no meio no fim.
   const nameNode = branch?.firstChild instanceof Text ? branch.firstChild : null;
   if (nameNode) nameNode.data = branch!.dataset.full ??= nameNode.data;
-  // O #flow com toda a largura que pede: o que não cabe quebra. Algo quebrou: o ⋯ entra, e ele mesmo ocupa largura.
+  // O #flow com toda a largura que pede: o que não cabe quebra. O ⋯ fica com uma worktree em serviço (Abrir no editor);
+  // sem ela, entra quando algo quebrou, e ele mesmo ocupa largura.
   flowEl.style.removeProperty("--flow-w");
-  moreBtn.hidden = true;
+  moreBtn.hidden = !current;
   lastStopEl.classList.remove("out", "short");
   lastStopEl.removeAttribute("title");
   if (branch) {
@@ -1618,7 +1651,7 @@ function fitHeaderOnce() {
     i.classList.toggle("cut", gone && i.offsetTop <= flowEl.clientHeight / 2);
     if (i !== lastStopEl) i.inert = gone || i.classList.contains("hold");
   }
-  moreBtn.hidden = !cededActions().length && !cededOthers().length;
+  moreBtn.hidden = !current && !cededActions().length && !cededOthers().length;
   alertEl.classList.toggle("recover", haltTabEl.inert && !haltTabEl.hidden);
 
   // Falha em outro projeto que a faixa não mostra (quebrou, painel fechado): o botão do painel leva um quadrado
@@ -3167,11 +3200,12 @@ window.addEventListener(
     else if (e.code === "KeyB") toggleAndFocus();
     else if (e.code === "KeyE") focusBoard();
     else if (e.code === "KeyH") helpEl.togglePopover();
-    else if (e.code === "KeyN" || e.code === "KeyL") {
+    else if (e.code === "KeyN" || e.code === "KeyL" || e.code === "KeyO") {
       if (!config.projects.length) {
         headerNote(false, null, "Sem projeto ainda: crie um primeiro.");
         emptyEl.querySelector<HTMLButtonElement>(".btn.primary")?.focus();
       } else if (e.code === "KeyN") openAddDialog(current?.project);
+      else if (e.code === "KeyO") openInEditor();
       else reload();
     } else if (e.code === "KeyJ") {
       if (current?.wt.api && current.wt.front) setTab(tab === "api" ? "front" : "api", true);
