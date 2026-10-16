@@ -317,6 +317,26 @@
         <menu>
           <button value="ok" class="primary">Salvar</button>
           <button value="cancel" formnovalidate>Cancelar</button>
+          <button type="button" class="remove">Remover…</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="remove-dialog" class="form" aria-labelledby="remove-title" aria-describedby="remove-what">
+      <form method="dialog" novalidate>
+        <h2 id="remove-title">Remover worktree</h2>
+        <p class="hint where"></p>
+        <div id="remove-what">
+          <p class="hint">Apaga estas pastas, inclusive o que o git ignora (node_modules, .env):</p>
+          <div class="paths"></div>
+          <p class="hint closes">Os terminais dela fecham.</p>
+        </div>
+        <label class="check"><input type="checkbox" name="branch" /> <span>Apagar também a branch local <code class="branch-name"></code></span></label>
+        <p class="hint">Só se já estiver mergeada (git branch -d); senão, ela fica e o app avisa.</p>
+        <p class="error" id="remove-error" role="alert"></p>
+        <menu>
+          <button value="ok" class="primary">Remover</button>
+          <button value="cancel" formnovalidate>Cancelar</button>
         </menu>
       </form>
     </dialog>

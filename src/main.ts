@@ -2565,6 +2565,87 @@ editDialog.addEventListener("close", () => {
   pencil ? pencil.focus() : render(true);
 });
 
+// ---------- remover worktree ----------
+
+const removeDialog = $<HTMLDialogElement>("#remove-dialog");
+const removeForm = removeDialog.querySelector("form")!;
+const removeError = removeDialog.querySelector<HTMLElement>(".error")!;
+const removeBranch = removeForm.elements.namedItem("branch") as HTMLInputElement;
+const removeOk = removeForm.querySelector<HTMLButtonElement>('button[value="ok"]')!;
+const removeCancel = removeForm.querySelector<HTMLButtonElement>('button[value="cancel"]')!;
+const removeOpen = editForm.querySelector<HTMLButtonElement>("button.remove")!;
+
+// Por cima do editar (que só abre com a worktree parada): diz as pastas que somem antes de apagar.
+removeOpen.addEventListener("click", () => {
+  const { project, wt, branches } = editing!;
+  const sides = TABS.filter((t) => wt[t]);
+  removeForm.querySelector(".where")!.replaceChildren(el("span", { className: "project", textContent: project }), " / ", ...labelNodes(wt.label));
+  removeForm.querySelector(".paths")!.replaceChildren(...sides.map((t) => el("p", { className: "preview" }, el("strong", { textContent: `${TAB_LABEL[t]}: ` }), ...pathNodes(wt[t]!.path))));
+  removeForm.querySelector<HTMLElement>(".closes")!.hidden = !envs.has(key(project, wt.id));
+  removeForm.querySelector(".branch-name")!.textContent = [...new Set(sides.map((t) => branches[t]))].join(" e ");
+  removeBranch.checked = false;
+  removeError.textContent = "";
+  removeOk.disabled = false;
+  removeDialog.showModal();
+  // Destrutivo: o foco começa no Cancelar, para um Enter de reflexo não apagar nada.
+  removeCancel.focus();
+});
+
+removeForm.addEventListener("submit", async (e) => {
+  if ((e.submitter as HTMLButtonElement | null)?.value !== "ok" || !editing) return;
+  e.preventDefault();
+  if (isBusy(removeOk)) return;
+  const ed = editing;
+  const { project, wt } = ed;
+  removeError.textContent = "";
+  const state = lineState(project, wt);
+  if (BUSY.includes(state)) {
+    removeError.textContent = `${wt.label}, ${say(project, wt, state)}: troque para outra worktree do projeto antes de remover.`;
+    return;
+  }
+  const side = (t: Tab) => (wt[t] ? { path: wt[t]!.path, branch: ed.branches[t] } : null);
+  setBusy(removeOk, "Removendo…");
+  let notes: string[];
+  try {
+    notes = await invoke<string[]>("remove_worktree", { req: { project, api: side("api"), front: side("front"), deleteBranch: removeBranch.checked } });
+  } catch (err) {
+    const fe = asFormError(err);
+    removeError.textContent = fe.side && !fe.created.length ? `${TAB_LABEL[fe.side]}: ${fe.message}` : fe.message;
+    // Um lado já saiu: a worktree mudou (virou solo), então não há o que repetir aqui.
+    if (fe.created.length) {
+      removeCancel.focus();
+      removeOk.disabled = true;
+      await forgetWorktree(project, wt);
+    }
+    return;
+  } finally {
+    clearBusy(removeOk, "Remover");
+  }
+  await forgetWorktree(project, wt);
+  headerNote(false, null, [`Removida: ${wt.label}`, ...notes].join(" · "));
+  render();
+  removeDialog.close();
+});
+
+/** Depois de remover: mata os terminais dela, tira do "ativa" e das recentes e relê o painel sem ela. */
+async function forgetWorktree(project: string, wt: Worktree) {
+  const k = key(project, wt.id);
+  const env = envs.get(k);
+  if (env) disposeEnv(k, env);
+  fresh.delete(k);
+  if (active[project] === wt.id) delete active[project];
+  saveActive();
+  recent = recent.filter((r) => r !== k);
+  save("recent", recent);
+  if (currentKey() === k) current = null;
+  editing = null;
+  editDialog.close();
+  await refresh();
+}
+
+// Cancelar volta ao editar, no botão que abriu; removida (o editar já fechou), o foco vai para o painel.
+removeDialog.addEventListener("close", () => (editDialog.open ? removeOpen.focus() : focusBoard()));
+
 // ---------- novo projeto ----------
 
 const projectDialog = $<HTMLDialogElement>("#project-dialog");
