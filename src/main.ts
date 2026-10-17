@@ -2,6 +2,8 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
+import { SearchAddon } from "@xterm/addon-search";
 import "@xterm/xterm/css/xterm.css";
 import "@fontsource/barlow-semi-condensed/latin-500.css";
 import "@fontsource/barlow-semi-condensed/latin-600.css";
@@ -12,6 +14,8 @@ import { endCut, middleCut, nameTail } from "./branch";
 import { matchAt, matchItem, projectTerms } from "./match";
 import { mergePrs, prLabel, type GhPr, type PrEntry } from "./prs";
 import { gitSummary, type GitState } from "./git";
+import { searchKey } from "./search";
+import { restartRefusal } from "./restart";
 
 /** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto. */
 type Side = { path: string; startCommand: string | null; setupCommand: string | null; projectStart: string | null };
@@ -21,7 +25,7 @@ type Config = { stopTimeoutMs: number; screenReader: boolean; projects: Project[
 type Tab = "api" | "front";
 /** `url`: endereço do dev server lido da saída do terminal ("Local: http://localhost:3000").
  *  `follow`: desliga o acompanhamento até o fim que fitPane liga depois de um resize. */
-type Pane = { term: Terminal; fit: FitAddon; el: HTMLElement; ptyId: number; side: Side; url: string | null; follow?: () => void };
+type Pane = { term: Terminal; fit: FitAddon; search: SearchAddon; el: HTMLElement; ptyId: number; side: Side; url: string | null; follow?: () => void };
 type Env = { project: string; root: HTMLElement; panes: Partial<Record<Tab, Pane>>; ready: Promise<void> };
 /** Estado de uma linha do painel: o que a palheta mostra. */
 type LineState = "run" | "part" | "held" | "start" | "wait" | "stop" | "kill" | "idle" | "none";
@@ -145,6 +149,9 @@ const paletteEnter = $("#palette-enter");
 const urlEl = $<HTMLAnchorElement>("#dev-url");
 const lastStopEl = $("#last-stop");
 const termNoteEl = $("#term-note");
+const searchEl = $("#term-search");
+const searchInput = $<HTMLInputElement>("#term-search input");
+const searchSay = $("#term-search-say");
 const headerEl = $("header");
 const haltTabEl = $<HTMLButtonElement>("#halt-tab");
 const haltAllEl = $<HTMLButtonElement>("#halt-all");
@@ -204,6 +211,8 @@ moreMenu.addEventListener("toggle", (e) => {
   moreMenu.style.right = `${innerWidth - r.right}px`;
   if (editorsMode) return void renderEditors();
   moreMenu.setAttribute("aria-label", "Mais ações");
+  const ck = currentKey();
+  const restartPane = ck && current?.wt[tab]?.startCommand ? envs.get(ck)?.panes[tab] : undefined;
   moreMenu.replaceChildren(
     ...cededOthers().map((o) => {
       const project = o.dataset.key!;
@@ -239,6 +248,25 @@ moreMenu.addEventListener("toggle", (e) => {
       if (src.getAttribute("aria-disabled")) b.setAttribute("aria-disabled", "true");
       return b;
     }),
+    // Reiniciar a aba aberta: só no ⋯ (o encaixe do cabeçalho é delicado) e só no lado com start. Fora de hora (nada
+    // rodando, troca ou parada em andamento) fica aria-disabled; o clique diz por quê no cabeçalho, como o atalho.
+    ...(restartPane
+      ? [
+          el(
+            "button",
+            {
+              type: "button",
+              className: "more-item",
+              title: `Parar ${TAB_LABEL[tab]} e subir de novo (Ctrl+Shift+R; com Alt, os dois lados)`,
+              ariaKeyShortcuts: "Control+Shift+R",
+              ariaDisabled: stopping.has(current!.project) || halting.has(ck!) || !(starting.has(ck!) || busy.has(restartPane.ptyId)) ? "true" : null,
+              onclick: () => (moreMenu.hidePopover(), toggleRun(false, "restart"))
+            },
+            el("span", { textContent: `Reiniciar ${TAB_LABEL[tab]}` }),
+            el("span", { className: "keys", textContent: "Ctrl+Shift+R" })
+          )
+        ]
+      : []),
     ...(current
       ? [
           el(
@@ -634,6 +662,11 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
+  // Clique numa URL abre no navegador do sistema, pelo mesmo caminho da porta (xdg-open): o window.open do webview não sai
+  // do app. Só http(s); caminhos como src/x.ts:42 ficam de fora.
+  term.loadAddon(new WebLinksAddon((_, uri) => invoke("open_url", { url: uri })));
+  const search = new SearchAddon();
+  term.loadAddon(search);
   term.open(paneEl);
   // O recado no terminal acompanha a saída: o prompt desce o cursor, uma linha longa ocupa o canto.
   term.onWriteParsed(() => termNoteEl.hidden || renderTermNote());
@@ -641,7 +674,7 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
   term.textarea?.setAttribute("aria-description", "Tab vai para o shell; Ctrl+Shift+E volta ao painel, Ctrl+Shift+K troca de worktree");
   fit.fit();
 
-  const pane: Pane = { term, fit, el: paneEl, ptyId: -1, side, url: null };
+  const pane: Pane = { term, fit, search, el: paneEl, ptyId: -1, side, url: null };
   const dec = new TextDecoder();
   let tail = "";
   const onData = new Channel<ArrayBuffer>();
@@ -738,13 +771,14 @@ async function writeStart(k: string, pane: Pane, isFresh: boolean) {
 /** Ctrl+C → espera → SIGKILL; resolve `true` se precisou forçar. */
 const stopPane = (pane: Pane) => invoke<boolean>("pty_stop", { id: pane.ptyId, timeoutMs: config.stopTimeoutMs });
 
-type Verb = "stop" | "start";
+// restart: Ctrl+Shift+R, a parada à mão e depois o start de novo, como o Subir.
+type Verb = "stop" | "start" | "restart";
 
 /** Lados do botão de um lado só ("Parar API", Ctrl+Shift+X; "Subir API", Ctrl+Shift+S). Parar age na aba aberta, como o
  *  atalho promete: com a API parada à mão e o Front de pé, olhando o Front, Ctrl+Shift+X dizia "Nada rodando em API".
  *  Subir age no lado caído (SEM FRONT) ou parado à mão seja qual for a aba, para "Subir Front" estar à mão olhando a API. */
 function sideTabs(verb: Verb): Tab[] {
-  if (!current || verb === "stop") return [tab];
+  if (!current || verb !== "start") return [tab];
   const state = lineState(current.project, current.wt);
   const s = sides(key(current.project, current.wt.id));
   return state === "part" ? s.down : state === "held" ? s.held : [tab];
@@ -752,7 +786,7 @@ function sideTabs(verb: Verb): Tab[] {
 
 /** O verbo do botão: Parar se algo roda (ou acabou de subir) nos lados dele, senão Subir. O de um lado olha a aba aberta,
  *  menos com um lado caído: aí é "Subir Front", a saída da falha, seja qual for a aba. */
-function haltVerb(all: boolean): Verb {
+function haltVerb(all: boolean): "stop" | "start" {
   const k = currentKey()!;
   if (!all && lineState(current!.project, current!.wt) === "part") return "start";
   const panes = (all ? TABS : [tab]).flatMap((t) => envs.get(k)?.panes[t] ?? []);
@@ -773,10 +807,16 @@ async function toggleRun(all: boolean, want?: Verb) {
   if (stopping.has(project)) return headerNote(false, project, "Troca em andamento · Voltar ou Forçar na faixa");
   if (halting.has(k)) return headerNote(false, project, "Parando · espere os processos saírem");
   // Sem verbo (o clique), o do botão: ele diz o que vai fazer.
-  const tabs = (all ? TABS : sideTabs(want ?? haltVerb(all))).filter((t) => env.panes[t]);
+  const asked = (all ? TABS : sideTabs(want ?? haltVerb(all))).filter((t) => env.panes[t]);
+  // Reiniciar só mexe nos lados com start: o sem start não reinicia (nem para).
+  const tabs = want === "restart" ? asked.filter(t => env.panes[t]!.side.startCommand) : asked;
   const panes = tabs.map((t) => env.panes[t]!);
   const running = starting.has(k) || panes.some((p) => busy.has(p.ptyId));
-  const what = tabs.map((t) => TAB_LABEL[t]).join(" e ");
+  const what = asked.map((t) => TAB_LABEL[t]).join(" e ");
+  if (want === "restart") {
+    const why = restartRefusal({ what, all, hasStart: tabs.length > 0, running });
+    if (why) return headerNote(false, project, why);
+  }
   if (want === "stop" && !running) return headerNote(false, project, `Nada rodando ${all ? "na worktree" : `em ${what}`} · Ctrl+Shift+${all ? "Alt+" : ""}S sobe`);
   if (want === "start" && running) return headerNote(false, project, `${all ? "A worktree" : what} já está rodando · Ctrl+Shift+${all ? "Alt+" : ""}X para`);
   if (want === "start" && !panes.some((p) => p.side.startCommand)) return headerNote(false, project, `${what}: sem comando de start`);
@@ -803,6 +843,9 @@ async function toggleRun(all: boolean, want?: Verb) {
   for (const p of panes) busy.delete(p.ptyId);
   const secs = ((Date.now() - t0) / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   headerNote(false, project, stoppedIn(secs, forced),noteWho(project, wt.id, wt.label, tabs.map((t) => TAB_LABEL[t]).join(" e "), " · "));
+  // Reiniciar: com os processos fora, o start de novo, como o Subir. Só se ela ainda é a ativa do projeto e nada a
+  // trocou ou fechou no meio: subir a anterior de uma troca deixaria duas worktrees de pé.
+  if (want === "restart" && active[project] === wt.id && !stopping.has(project) && envs.get(k) === env) for (const p of panes) writeStart(k, p, false);
   render();
 }
 
@@ -918,6 +961,7 @@ function render(focus = false) {
     urlEl.hidden = true;
     haltTabEl.hidden = haltAllEl.hidden = true;
     switchingEl.hidden = true;
+    searchEl.hidden = true;
     renderEmpty();
     fitHeader();
     return;
@@ -3244,12 +3288,13 @@ window.addEventListener(
     else if (e.code === "KeyB") toggleAndFocus();
     else if (e.code === "KeyE") focusBoard();
     else if (e.code === "KeyH") helpEl.togglePopover();
-    else if (e.code === "KeyN" || e.code === "KeyL" || e.code === "KeyO") {
+    else if (e.code === "KeyN" || e.code === "KeyL" || e.code === "KeyO" || e.code === "KeyF") {
       if (!config.projects.length) {
         headerNote(false, null, "Sem projeto ainda: crie um primeiro.");
         emptyEl.querySelector<HTMLButtonElement>(".btn.primary")?.focus();
       } else if (e.code === "KeyN") openAddDialog(current?.project);
       else if (e.code === "KeyO") openInEditor();
+      else if (e.code === "KeyF") openSearch();
       else reload();
     } else if (e.code === "KeyJ") {
       if (current?.wt.api && current.wt.front) setTab(tab === "api" ? "front" : "api", true);
@@ -3257,12 +3302,52 @@ window.addEventListener(
       else if (current) headerNote(false, current.project, `${current.wt.api ? "Só API" : "Só Front"}: nada para alternar`);
     } else if (e.code === "KeyX") toggleRun(e.altKey, "stop");
     else if (e.code === "KeyS") toggleRun(e.altKey, "start");
+    // Ctrl+Shift+R não recarrega o webview (a recarga mataria todos os PTYs): o preventDefault na captura, aqui embaixo.
+    else if (e.code === "KeyR") toggleRun(e.altKey, "restart");
     else return;
     e.preventDefault();
     e.stopPropagation();
   },
   true,
 );
+
+// ---------- busca no terminal ----------
+
+/** Ctrl+Shift+F: a barra sobre o terminal visível, com o foco nela (aberta, o texto fica selecionado para trocar). */
+function openSearch() {
+  if (!current) return headerNote(false, null, "Escolha uma worktree primeiro.");
+  searchEl.hidden = false;
+  searchInput.select();
+  searchInput.focus();
+}
+
+/** Procura no terminal visível (a aba aberta agora). A ocorrência fica selecionada, na seleção do terminal (--selection);
+ *  sem nenhuma, a barra diz. `incremental`: digitando, fica na mesma ocorrência enquanto ela ainda casa. */
+function find(dir: "next" | "prev", incremental = false) {
+  const ck = currentKey();
+  const pane = ck ? envs.get(ck)?.panes[tab] : undefined;
+  const q = searchInput.value;
+  if (!pane || !q) return void (searchSay.textContent = "");
+  const found = dir === "next" ? pane.search.findNext(q, { incremental }) : pane.search.findPrevious(q);
+  searchSay.textContent = found ? "" : "Nada encontrado";
+}
+
+/** Esc ou o x: fecha e devolve o foco ao terminal. A ocorrência segue selecionada, para copiar. */
+function closeSearch() {
+  searchEl.hidden = true;
+  searchSay.textContent = "";
+  render(true);
+}
+
+searchInput.addEventListener("input", () => find("next", true));
+searchInput.addEventListener("keydown", e => {
+  const act = searchKey(e);
+  if (!act) return;
+  e.preventDefault();
+  if (act === "close") closeSearch();
+  else find(act);
+});
+searchEl.querySelector("button")!.addEventListener("click", closeSearch);
 
 const helpEl = $("#help");
 // Aberta, a ajuda recebe o foco: o leitor de tela a anuncia e o Esc chega nela (no xterm, o Esc iria para o shell).
