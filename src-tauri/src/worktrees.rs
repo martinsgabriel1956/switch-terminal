@@ -307,6 +307,39 @@ pub async fn git_status(paths: Vec<String>) -> Vec<Option<GitStatus>> {
     })
 }
 
+/// A saída do `git pull` diz se avançou: "Already up to date." quando não (antes do git 2.17, "Already up-to-date.").
+fn pulled(stdout: &str) -> bool {
+    !stdout.contains("Already up to date") && !stdout.contains("Already up-to-date")
+}
+
+/// `git pull --ff-only` numa pasta: `Ok(true)` se avançou, `Ok(false)` se já estava em dia, `Err` com a saída crua.
+/// `LC_ALL=C`: a saída é lida (`pulled`) e o front resume o erro pelo texto em inglês. `GIT_TERMINAL_PROMPT=0`: sem
+/// terminal, um pedido de senha do https seguraria o pull para sempre.
+fn pull_one(path: &str) -> Result<bool, String> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(path)
+        .args(["pull", "--ff-only"])
+        .env("LC_ALL", "C")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(if err.is_empty() { String::from_utf8_lossy(&out.stdout).trim().to_string() } else { err });
+    }
+    Ok(pulled(&String::from_utf8_lossy(&out.stdout)))
+}
+
+/// "Atualizar (pull)": um pull por lado da worktree, em paralelo (cada um espera a rede), na ordem pedida.
+#[tauri::command]
+pub async fn pull_worktree(paths: Vec<String>) -> Vec<Result<bool, String>> {
+    std::thread::scope(|s| {
+        let runs: Vec<_> = paths.iter().map(|p| s.spawn(move || pull_one(p))).collect();
+        runs.into_iter().map(|r| r.join().unwrap_or_else(|_| Err("o git pull não terminou".into()))).collect()
+    })
+}
+
 fn side(w: &Option<Wt>, cfg: &SideCfg) -> Option<SideView> {
     w.as_ref().map(|w| SideView {
         path: w.path.clone(),
@@ -1421,6 +1454,36 @@ mod tests {
 
         // A pasta principal de um repo não-bare não sai.
         assert!(check_remove(&path("src-api"), &path("src-api")).unwrap_err().contains("principal"));
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn pulls_fast_forward_only() {
+        let tmp = std::env::temp_dir().join(format!("hotswap-pull-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let sh = |cmd: &str| assert!(Command::new("sh").arg("-c").arg(cmd).current_dir(&tmp).status().unwrap().success(), "{cmd}");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let git_id = "-c user.name=t -c user.email=t@t";
+        sh(&format!("git init -q -b main up && git -C up {git_id} commit -q --allow-empty -m init && git clone -q up down"));
+        let path = |d: &str| tmp.join(d).to_str().unwrap().to_string();
+        let pull = |d: &str| tauri::async_runtime::block_on(pull_worktree(vec![path(d)])).remove(0);
+
+        assert_eq!(pull("down"), Ok(false), "já estava em dia");
+        sh(&format!("git -C up {git_id} commit -q --allow-empty -m novo"));
+        assert_eq!(pull("down"), Ok(true), "avançou");
+        assert_eq!(git(&path("down"), &["log", "-1", "--format=%s"]).unwrap(), "novo");
+
+        // Divergiu: commit dos dois lados. Não faz merge; o erro cru volta para o front resumir.
+        sh(&format!("git -C up {git_id} commit -q --allow-empty -m remoto && git -C down {git_id} commit -q --allow-empty -m local"));
+        let err = pull("down").unwrap_err();
+        assert!(err.contains("Not possible to fast-forward"), "{err}");
+        assert_eq!(git(&path("down"), &["log", "-1", "--format=%s"]).unwrap(), "local", "nada mudou");
+
+        // Branch sem upstream.
+        sh("git -C down checkout -q -b solta");
+        assert!(pull("down").unwrap_err().contains("no tracking information"));
+        assert!(pulled("Updating abc..def\nFast-forward\n a.ts | 2 +-\n"));
+        assert!(!pulled("Already up to date.\n"));
         std::fs::remove_dir_all(&tmp).unwrap();
     }
 

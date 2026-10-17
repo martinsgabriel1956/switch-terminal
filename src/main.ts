@@ -13,6 +13,7 @@ import { matchAt, matchItem, projectTerms } from "./match";
 import { mergePrs, prLabel, type GhPr, type PrEntry } from "./prs";
 import { gitSummary, type GitState } from "./git";
 import { deafSides, lateText, startEnd } from "./start";
+import { pullErrorLine, pullErrorSummary } from "./pull";
 
 /** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto. */
 type Side = { path: string; startCommand: string | null; setupCommand: string | null; projectStart: string | null };
@@ -243,6 +244,7 @@ moreMenu.addEventListener("toggle", (e) => {
     }),
     ...(current
       ? [
+          pullItem(current.project, current.wt),
           el(
             "button",
             { type: "button", className: "more-item", title: current.wt[editorSide(current.wt)]!.path, ariaKeyShortcuts: "Control+Shift+O", onclick: () => (moreMenu.hidePopover(), openInEditor()) },
@@ -295,6 +297,67 @@ function openInEditor() {
         el("span", { className: "why", textContent: `· ${err}`, title: String(err) }),
         el("button", { type: "button", className: "note-act", textContent: "Abrir com…", onclick: openWith }),
       ),
+  );
+}
+
+/** Por que a worktree não pode ser atualizada agora, ou null: só parada, a regra do lápis (puxar commits embaixo de um
+ *  dev server o recompila no meio, e numa troca a pasta está sendo largada ou assumida). */
+function pullBlocked(project: string, wt: Worktree) {
+  const state = lineState(project, wt);
+  return BUSY.includes(state) ? `${wt.label}, ${say(project, wt, state)}: pare a worktree antes de atualizar` : null;
+}
+
+/** "Atualizar (pull)" no ⋯, para a worktree em serviço. Indisponível, fica aria-disabled com o motivo, e o clique o diz. */
+function pullItem(project: string, wt: Worktree) {
+  const blocked = pullBlocked(project, wt);
+  const paths = TABS.flatMap(t => (wt[t] ? [wt[t]!.path] : []));
+  const b = el(
+    "button",
+    {
+      type: "button",
+      className: "more-item",
+      title: blocked ?? `git pull --ff-only em ${paths.join(" e ")}`,
+      ariaLabel: blocked ? `Atualizar (pull): indisponível; ${blocked}` : "Atualizar (pull)",
+      onclick: () => (moreMenu.hidePopover(), pullWorktree(project, wt))
+    },
+    el("span", { textContent: "Atualizar (pull)" })
+  );
+  if (blocked) b.setAttribute("aria-disabled", "true");
+  return b;
+}
+
+/** `git pull --ff-only` em cada lado, em paralelo (backend). "Atualizada: feat/x" ou "Já estava em dia" como recado de
+ *  rotina; um lado que falha vira falha na segunda faixa, com uma frase por lado e o erro cru no detalhe. Depois relê o
+ *  estado do git do painel (↑/↓). */
+async function pullWorktree(project: string, wt: Worktree) {
+  const blocked = pullBlocked(project, wt);
+  if (blocked) return headerNote(false, project, blocked);
+  const tabs = TABS.filter(t => wt[t]);
+  headerNote(false, project, `Atualizando ${wt.label}…`);
+  type Pulled = { Ok: boolean } | { Err: string };
+  const res = await invoke<Pulled[]>("pull_worktree", { paths: tabs.map(t => wt[t]!.path) }).catch((err): Pulled[] => tabs.map(() => ({ Err: String(err) })));
+  void readGit();
+  const failed = tabs.flatMap((t, i) => {
+    const r = res[i];
+    return "Err" in r ? [{ t, err: r.Err }] : [];
+  });
+  if (!failed.length) return headerNote(false, project, res.some(r => "Ok" in r && r.Ok) ? `Atualizada: ${wt.label}` : "Já estava em dia");
+  if (lastStopEl.dataset.project === project) clearNote(lastStopEl);
+  // "API: a branch divergiu da remota, não é fast-forward; Front: atualizada". Na solo, sem o nome do lado.
+  const said = tabs
+    .map((t, i) => {
+      const r = res[i];
+      const text = "Err" in r ? pullErrorSummary(r.Err) : r.Ok ? "atualizada" : "já estava em dia";
+      return tabs.length > 1 ? `${TAB_LABEL[t]}: ${text}` : text;
+    })
+    .join("; ");
+  const raw = failed.map(f => (tabs.length > 1 ? `${TAB_LABEL[f.t]}: ${f.err}` : f.err)).join("\n\n");
+  headerNote(
+    true,
+    project,
+    "Pull falhou",
+    el("span", { className: "who", textContent: `· ${said}`, title: said }),
+    el("span", { className: "why", textContent: `· ${pullErrorLine(failed[0].err)}`, title: raw })
   );
 }
 
