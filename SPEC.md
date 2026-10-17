@@ -6,7 +6,7 @@ App desktop para trocar rapidamente entre worktrees de projetos com **API e fron
 
 - **Tauri v2**
 - **Backend (Rust):** `portable-pty` para os PTYs; saída enviada ao front via `tauri::ipc::Channel`.
-- **Front:** TypeScript puro + Vite + xterm.js (`@xterm/xterm`, `@xterm/addon-fit`). Sem framework.
+- **Front:** TypeScript puro + Vite + xterm.js (`@xterm/xterm`, `@xterm/addon-fit`, `@xterm/addon-web-links`). Sem framework.
 - **Shell:** `$SHELL` (fallback `/bin/sh`), aberto no diretório da worktree.
 
 ## Configuração
@@ -92,6 +92,7 @@ Estado persistido no `localStorage` do webview: `{ "<projeto>": "<id da worktree
 
 - Os PTYs são criados **sob demanda**, na primeira seleção da worktree.
 - O shell **continua vivo** nas trocas.
+- **Links:** URLs `http(s)://` na saída do terminal são clicáveis e abrem no navegador padrão pelo mesmo caminho da porta do dev server (`xdg-open`; o `window.open` do webview não sai do app). Só URLs: caminhos de arquivo (`src/x.ts:42`) não viram link.
 - **Uma worktree ativa por projeto.** Projetos diferentes podem rodar ao mesmo tempo.
 - Na troca de worktree dentro de um projeto:
   1. Para cada PTY da worktree anterior com processo em primeiro plano (`tcgetpgrp` ≠ PID do shell): envia `\x03`.

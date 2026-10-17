@@ -2,6 +2,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import "@fontsource/barlow-semi-condensed/latin-500.css";
 import "@fontsource/barlow-semi-condensed/latin-600.css";
@@ -634,6 +635,9 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
+  // Clique numa URL abre no navegador do sistema, pelo mesmo caminho da porta (xdg-open): o window.open do webview não sai
+  // do app. Só http(s); caminhos como src/x.ts:42 ficam de fora.
+  term.loadAddon(new WebLinksAddon((_, uri) => invoke("open_url", { url: uri })));
   term.open(paneEl);
   // O recado no terminal acompanha a saída: o prompt desce o cursor, uma linha longa ocupa o canto.
   term.onWriteParsed(() => termNoteEl.hidden || renderTermNote());

@@ -136,7 +136,7 @@ pub fn pty_status(ptys: State<Ptys>, ids: Vec<u32>) -> Vec<Option<String>> {
         .collect()
 }
 
-/// Abre o endereço do dev server no navegador padrão. Só http(s): o resto não sai do app.
+/// Abre o endereço do dev server, ou um link clicado no terminal, no navegador padrão. Só http(s): o resto não sai do app.
 #[tauri::command]
 pub fn open_url(url: String) -> Result<(), String> {
     if !url.starts_with("http://") && !url.starts_with("https://") {
