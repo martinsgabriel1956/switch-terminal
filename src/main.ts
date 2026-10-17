@@ -3,6 +3,7 @@ import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { SearchAddon } from "@xterm/addon-search";
 import "@xterm/xterm/css/xterm.css";
 import "@fontsource/barlow-semi-condensed/latin-500.css";
 import "@fontsource/barlow-semi-condensed/latin-600.css";
@@ -13,6 +14,7 @@ import { endCut, middleCut, nameTail } from "./branch";
 import { matchAt, matchItem, projectTerms } from "./match";
 import { mergePrs, prLabel, type GhPr, type PrEntry } from "./prs";
 import { gitSummary, type GitState } from "./git";
+import { searchKey } from "./search";
 
 /** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto. */
 type Side = { path: string; startCommand: string | null; setupCommand: string | null; projectStart: string | null };
@@ -22,7 +24,7 @@ type Config = { stopTimeoutMs: number; screenReader: boolean; projects: Project[
 type Tab = "api" | "front";
 /** `url`: endereço do dev server lido da saída do terminal ("Local: http://localhost:3000").
  *  `follow`: desliga o acompanhamento até o fim que fitPane liga depois de um resize. */
-type Pane = { term: Terminal; fit: FitAddon; el: HTMLElement; ptyId: number; side: Side; url: string | null; follow?: () => void };
+type Pane = { term: Terminal; fit: FitAddon; search: SearchAddon; el: HTMLElement; ptyId: number; side: Side; url: string | null; follow?: () => void };
 type Env = { project: string; root: HTMLElement; panes: Partial<Record<Tab, Pane>>; ready: Promise<void> };
 /** Estado de uma linha do painel: o que a palheta mostra. */
 type LineState = "run" | "part" | "held" | "start" | "wait" | "stop" | "kill" | "idle" | "none";
@@ -146,6 +148,9 @@ const paletteEnter = $("#palette-enter");
 const urlEl = $<HTMLAnchorElement>("#dev-url");
 const lastStopEl = $("#last-stop");
 const termNoteEl = $("#term-note");
+const searchEl = $("#term-search");
+const searchInput = $<HTMLInputElement>("#term-search input");
+const searchSay = $("#term-search-say");
 const headerEl = $("header");
 const haltTabEl = $<HTMLButtonElement>("#halt-tab");
 const haltAllEl = $<HTMLButtonElement>("#halt-all");
@@ -638,6 +643,8 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
   // Clique numa URL abre no navegador do sistema, pelo mesmo caminho da porta (xdg-open): o window.open do webview não sai
   // do app. Só http(s); caminhos como src/x.ts:42 ficam de fora.
   term.loadAddon(new WebLinksAddon((_, uri) => invoke("open_url", { url: uri })));
+  const search = new SearchAddon();
+  term.loadAddon(search);
   term.open(paneEl);
   // O recado no terminal acompanha a saída: o prompt desce o cursor, uma linha longa ocupa o canto.
   term.onWriteParsed(() => termNoteEl.hidden || renderTermNote());
@@ -645,7 +652,7 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
   term.textarea?.setAttribute("aria-description", "Tab vai para o shell; Ctrl+Shift+E volta ao painel, Ctrl+Shift+K troca de worktree");
   fit.fit();
 
-  const pane: Pane = { term, fit, el: paneEl, ptyId: -1, side, url: null };
+  const pane: Pane = { term, fit, search, el: paneEl, ptyId: -1, side, url: null };
   const dec = new TextDecoder();
   let tail = "";
   const onData = new Channel<ArrayBuffer>();
@@ -922,6 +929,7 @@ function render(focus = false) {
     urlEl.hidden = true;
     haltTabEl.hidden = haltAllEl.hidden = true;
     switchingEl.hidden = true;
+    searchEl.hidden = true;
     renderEmpty();
     fitHeader();
     return;
@@ -3248,12 +3256,13 @@ window.addEventListener(
     else if (e.code === "KeyB") toggleAndFocus();
     else if (e.code === "KeyE") focusBoard();
     else if (e.code === "KeyH") helpEl.togglePopover();
-    else if (e.code === "KeyN" || e.code === "KeyL" || e.code === "KeyO") {
+    else if (e.code === "KeyN" || e.code === "KeyL" || e.code === "KeyO" || e.code === "KeyF") {
       if (!config.projects.length) {
         headerNote(false, null, "Sem projeto ainda: crie um primeiro.");
         emptyEl.querySelector<HTMLButtonElement>(".btn.primary")?.focus();
       } else if (e.code === "KeyN") openAddDialog(current?.project);
       else if (e.code === "KeyO") openInEditor();
+      else if (e.code === "KeyF") openSearch();
       else reload();
     } else if (e.code === "KeyJ") {
       if (current?.wt.api && current.wt.front) setTab(tab === "api" ? "front" : "api", true);
@@ -3267,6 +3276,44 @@ window.addEventListener(
   },
   true,
 );
+
+// ---------- busca no terminal ----------
+
+/** Ctrl+Shift+F: a barra sobre o terminal visível, com o foco nela (aberta, o texto fica selecionado para trocar). */
+function openSearch() {
+  if (!current) return headerNote(false, null, "Escolha uma worktree primeiro.");
+  searchEl.hidden = false;
+  searchInput.select();
+  searchInput.focus();
+}
+
+/** Procura no terminal visível (a aba aberta agora). A ocorrência fica selecionada, na seleção do terminal (--selection);
+ *  sem nenhuma, a barra diz. `incremental`: digitando, fica na mesma ocorrência enquanto ela ainda casa. */
+function find(dir: "next" | "prev", incremental = false) {
+  const ck = currentKey();
+  const pane = ck ? envs.get(ck)?.panes[tab] : undefined;
+  const q = searchInput.value;
+  if (!pane || !q) return void (searchSay.textContent = "");
+  const found = dir === "next" ? pane.search.findNext(q, { incremental }) : pane.search.findPrevious(q);
+  searchSay.textContent = found ? "" : "Nada encontrado";
+}
+
+/** Esc ou o x: fecha e devolve o foco ao terminal. A ocorrência segue selecionada, para copiar. */
+function closeSearch() {
+  searchEl.hidden = true;
+  searchSay.textContent = "";
+  render(true);
+}
+
+searchInput.addEventListener("input", () => find("next", true));
+searchInput.addEventListener("keydown", e => {
+  const act = searchKey(e);
+  if (!act) return;
+  e.preventDefault();
+  if (act === "close") closeSearch();
+  else find(act);
+});
+searchEl.querySelector("button")!.addEventListener("click", closeSearch);
 
 const helpEl = $("#help");
 // Aberta, a ajuda recebe o foco: o leitor de tela a anuncia e o Esc chega nela (no xterm, o Esc iria para o shell).

@@ -1822,6 +1822,85 @@ body:not(.sidebar-off) #running {
   font-weight: 600;
 }
 
+/* Busca no terminal (Ctrl+Shift+F): superfície flutuante pequena no canto de cima, sobre o recado do canto. Como na paleta,
+   a barra é o campo: sem contorno no input, o anel de foco fica na barra inteira. */
+#term-search {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 28px);
+  height: 36px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--rail);
+  box-shadow: var(--float-shadow);
+  color: var(--ink-2);
+}
+
+#term-search[hidden] {
+  display: none;
+}
+
+#term-search:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+#term-search input {
+  width: 220px;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 500;
+  outline: none;
+  appearance: none;
+}
+
+#term-search input::placeholder {
+  color: var(--ink-2);
+}
+
+/* o × é o nosso, ao lado */
+#term-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+/* região viva sempre no lugar (vazia, só o vão): com display: none, o "Nada encontrado" podia não ser dito */
+#term-search-say {
+  flex-shrink: 0;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* × de 24px, desenho em meia-tinta, como o da falha */
+#term-search button {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+#term-search button:hover {
+  background: var(--flap);
+  color: var(--ink);
+}
+
 /* O xterm.css pinta o viewport de preto; a borda vazava 1px ao redor do terminal. */
 .xterm .xterm-viewport {
   background-color: var(--term-bg) !important;
