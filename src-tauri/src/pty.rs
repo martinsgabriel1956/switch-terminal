@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpStream};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -123,7 +124,7 @@ pub fn pty_kill(ptys: State<Ptys>, id: u32) {
 }
 
 
-/// O que roda em primeiro plano em cada terminal (o estado RODANDO do painel): o nome do processo,
+/// O que roda em primeiro plano em cada terminal (o estado RODANDO do painel; no SUBINDO, a porta vem do `ports_open`): o nome do processo,
 /// para a troca dizer o que vai encerrar ("npm run dev", "psql"). Só o shell, ou id desconhecido = None.
 #[tauri::command]
 pub fn pty_status(ptys: State<Ptys>, ids: Vec<u32>) -> Vec<Option<String>> {
@@ -134,6 +135,25 @@ pub fn pty_status(ptys: State<Ptys>, ids: Vec<u32>) -> Vec<Option<String>> {
             Some(std::fs::read_to_string(format!("/proc/{pg}/comm")).map(|s| s.trim_end().to_owned()).unwrap_or_default())
         })
         .collect()
+}
+
+/// A porta aceita conexão TCP em localhost? IPv4 e depois IPv6: o Node 17+ resolve "localhost" para ::1, e o dev server
+/// pode escutar só nele. Recusa em localhost é imediata; o timeout curto cobre o resto.
+fn port_open(port: u16) -> bool {
+    let timeout = Duration::from_millis(150);
+    [SocketAddr::from((Ipv4Addr::LOCALHOST, port)), SocketAddr::from((Ipv6Addr::LOCALHOST, port))]
+        .iter()
+        .any(|addr| TcpStream::connect_timeout(addr, timeout).is_ok())
+}
+
+/// O SUBINDO de um lado com porta conhecida só vira RODANDO quando ela atende. Uma thread por porta, fora da thread
+/// principal (comando async) e fora do `pty_status`, que não espera por isso.
+#[tauri::command]
+pub async fn ports_open(ports: Vec<u16>) -> Vec<bool> {
+    std::thread::scope(|s| {
+        let checks: Vec<_> = ports.iter().map(|&p| s.spawn(move || port_open(p))).collect();
+        checks.into_iter().map(|c| c.join().unwrap_or(false)).collect()
+    })
 }
 
 /// Abre o endereço do dev server no navegador padrão. Só http(s): o resto não sai do app.
@@ -200,4 +220,19 @@ pub async fn pty_stop(ptys: State<'_, Ptys>, id: u32, timeout_ms: u64) -> Result
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn port_open_only_while_listening() {
+        let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        assert!(port_open(port));
+        assert_eq!(tauri::async_runtime::block_on(ports_open(vec![port, port])), vec![true, true]);
+        drop(listener);
+        assert!(!port_open(port));
+    }
 }

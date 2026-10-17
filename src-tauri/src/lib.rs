@@ -115,6 +115,7 @@ pub fn run() {
             pty::pty_kill_all,
             pty::pty_force,
             pty::pty_status,
+            pty::ports_open,
             pty::open_url,
             pty::notify,
             worktrees::load_config,
