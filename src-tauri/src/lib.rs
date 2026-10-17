@@ -137,6 +137,7 @@ pub fn run() {
             worktrees::pull_worktree,
             worktrees::github_repos,
             worktrees::pull_requests,
+            worktrees::open_pr,
             worktrees::clone_github_repo,
         ])
         .build(tauri::generate_context!())

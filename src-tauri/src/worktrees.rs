@@ -1075,8 +1075,10 @@ pub fn add_project(project: NewProject) -> Result<(), FormError> {
 // ---------- GitHub ----------
 
 /// Roda o `gh` (GitHub CLI) com a conta já logada nele; erro de instalação ou login vira o próximo passo.
+/// Grupo de processos próprio, fora do PTY: o navegador que o `gh pr view --web` abre fica solto do app.
 fn gh(args: &[&str]) -> Result<String, String> {
-    let out = Command::new("gh").args(args).output().map_err(|e| match e.kind() {
+    use std::os::unix::process::CommandExt;
+    let out = Command::new("gh").args(args).process_group(0).output().map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound => "Instale o GitHub CLI (gh) para clonar do GitHub.".to_string(),
         _ => e.to_string(),
     })?;
@@ -1126,6 +1128,29 @@ fn side_prs(side: &SideCfg) -> Result<serde_json::Value, String> {
     let repo = gh_repo_of(&url).ok_or(format!("o origin não é um repositório do GitHub: {url}"))?;
     let out = gh(&["pr", "list", "--repo", &repo, "--limit", "100", "--json", "number,title,headRefName,author,isCrossRepository"])?;
     serde_json::from_str(&out).map_err(|e| e.to_string())
+}
+
+/// `gh pr view <branch> --web --repo HOST/OWNER/REPO`: o repo vem do origin, como no "Da PR".
+fn pr_view_args<'a>(repo: &'a str, branch: &'a str) -> [&'a str; 6] {
+    ["pr", "view", branch, "--web", "--repo", repo]
+}
+
+/// O gh diz `No pull requests found for branch "feat/x"` quando a branch não tem PR.
+fn no_pr(err: &str) -> bool {
+    err.to_lowercase().contains("no pull requests found")
+}
+
+/// "Ver PR": abre no navegador a PR da branch da aba visível, no repositório do origin da pasta dela (no bare o gh não
+/// acha o remoto sozinho). Ok(false): a branch não tem PR. Sem gh instalado ou logado, o erro diz o próximo passo.
+#[tauri::command]
+pub async fn open_pr(path: String, branch: String) -> Result<bool, String> {
+    let url = git(&path, &["remote", "get-url", "origin"])?;
+    let repo = gh_repo_of(&url).ok_or(format!("o origin não é um repositório do GitHub: {url}"))?;
+    match gh(&pr_view_args(&repo, &branch)) {
+        Ok(_) => Ok(true),
+        Err(e) if no_pr(&e) => Ok(false),
+        Err(e) => Err(e),
+    }
 }
 
 #[derive(Serialize)]
@@ -1507,6 +1532,12 @@ mod tests {
             assert_eq!(gh_repo_of(url).as_deref(), Some("github.com/dono/repo"), "{url}");
         }
         assert_eq!(gh_repo_of("/tmp/origem"), None, "remoto local");
+        // "Ver PR": o repo do origin vai no --repo; origin local nem chega no gh.
+        assert_eq!(pr_view_args("github.com/dono/repo", "feat/x"), ["pr", "view", "feat/x", "--web", "--repo", "github.com/dono/repo"]);
+        assert!(no_pr("No pull requests found for branch \"feat/x\""));
+        assert!(!no_pr("To get started with GitHub CLI, please run:  gh auth login"));
+        let err = tauri::async_runtime::block_on(open_pr(tmp.join("dest/main").to_str().unwrap().into(), "main".into())).unwrap_err();
+        assert!(err.contains("não é um repositório do GitHub"), "{err}");
 
         assert!(valid_full_name("goldtech-dev/gtech-api"));
         assert!(valid_full_name("me/repo.js"));

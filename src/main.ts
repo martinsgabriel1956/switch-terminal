@@ -245,6 +245,7 @@ moreMenu.addEventListener("toggle", (e) => {
     ...(current
       ? [
           pullItem(current.project, current.wt),
+          el("button", { type: "button", className: "more-item", title: `gh pr view ${tabBranch(current.wt)} --web`, onclick: () => (moreMenu.hidePopover(), viewPr()) }, el("span", { textContent: "Ver PR" })),
           el(
             "button",
             { type: "button", className: "more-item", title: current.wt[editorSide(current.wt)]!.path, ariaKeyShortcuts: "Control+Shift+O", onclick: () => (moreMenu.hidePopover(), openInEditor()) },
@@ -358,6 +359,29 @@ async function pullWorktree(project: string, wt: Worktree) {
     "Pull falhou",
     el("span", { className: "who", textContent: `· ${said}`, title: said }),
     el("span", { className: "why", textContent: `· ${pullErrorLine(failed[0].err)}`, title: raw })
+  );
+}
+
+/** A branch da aba visível (na solo, a do único lado): o id é "<branch da API>|<branch do Front>". */
+function tabBranch(wt: Worktree) {
+  return wt.id.split("|")[editorSide(wt) === "api" ? 0 : 1];
+}
+
+/** "Ver PR" no ⋯: abre no navegador a PR da branch da aba visível (`gh pr view --web`, solto do app e fora do PTY, com o
+ *  --repo do origin, como o "Da PR"). Sem PR, sem gh ou sem login, o cabeçalho diz. */
+function viewPr() {
+  if (!current) return;
+  const { project, wt } = current;
+  const side = editorSide(wt);
+  const branch = tabBranch(wt);
+  invoke<boolean>("open_pr", { path: wt[side]!.path, branch }).then(
+    found => headerNote(false, project, found ? `Abrindo a PR de ${branch} no navegador` : `Sem PR aberta para ${branch}`),
+    err => {
+      const raw = String(err);
+      // Sem gh instalado ou logado: o próximo passo, inteiro (o do backend fala em clonar).
+      const step = raw.startsWith("Instale") ? "Instale o GitHub CLI (gh) e entre com gh auth login" : raw.startsWith("Entre no GitHub") ? raw : null;
+      headerNote(true, project, "PR não abriu", step ? el("span", { textContent: `· ${step}` }) : el("span", { className: "why", textContent: `· ${raw.split("\n")[0]}`, title: raw }));
+    }
   );
 }
 
