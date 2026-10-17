@@ -115,6 +115,7 @@ pub fn run() {
             pty::pty_kill_all,
             pty::pty_force,
             pty::pty_status,
+            pty::ports_open,
             pty::open_url,
             pty::notify,
             worktrees::load_config,
@@ -133,8 +134,10 @@ pub fn run() {
             worktrees::remove_worktree,
             worktrees::list_worktrees,
             worktrees::git_status,
+            worktrees::pull_worktree,
             worktrees::github_repos,
             worktrees::pull_requests,
+            worktrees::open_pr,
             worktrees::clone_github_repo,
         ])
         .build(tauri::generate_context!())

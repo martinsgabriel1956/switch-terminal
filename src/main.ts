@@ -16,6 +16,8 @@ import { mergePrs, prLabel, type GhPr, type PrEntry } from "./prs";
 import { gitSummary, type GitState } from "./git";
 import { searchKey } from "./search";
 import { restartRefusal } from "./restart";
+import { deafSides, lateText, startEnd } from "./start";
+import { pullErrorLine, pullErrorSummary } from "./pull";
 
 /** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto. */
 type Side = { path: string; startCommand: string | null; setupCommand: string | null; projectStart: string | null };
@@ -23,9 +25,10 @@ type Worktree = { id: string; label: string; api: Side | null; front: Side | nul
 type Project = { name: string; error: string | null; worktrees: Worktree[] };
 type Config = { stopTimeoutMs: number; screenReader: boolean; projects: Project[] };
 type Tab = "api" | "front";
-/** `url`: endereço do dev server lido da saída do terminal ("Local: http://localhost:3000").
+/** `url`: endereço do dev server lido da saída do terminal ("Local: http://localhost:3000"), só enquanto o processo vive.
+ *  `port`: a última porta lida, que fica entre as subidas: o SUBINDO espera por ela (pollStatus).
  *  `follow`: desliga o acompanhamento até o fim que fitPane liga depois de um resize. */
-type Pane = { term: Terminal; fit: FitAddon; search: SearchAddon; el: HTMLElement; ptyId: number; side: Side; url: string | null; follow?: () => void };
+type Pane = { term: Terminal; fit: FitAddon; search: SearchAddon; el: HTMLElement; ptyId: number; side: Side; url: string | null; port: number | null; follow?: () => void };
 type Env = { project: string; root: HTMLElement; panes: Partial<Record<Tab, Pane>>; ready: Promise<void> };
 /** Estado de uma linha do painel: o que a palheta mostra. */
 type LineState = "run" | "part" | "held" | "start" | "wait" | "stop" | "kill" | "idle" | "none";
@@ -269,6 +272,8 @@ moreMenu.addEventListener("toggle", (e) => {
       : []),
     ...(current
       ? [
+          pullItem(current.project, current.wt),
+          el("button", { type: "button", className: "more-item", title: `gh pr view ${tabBranch(current.wt)} --web`, onclick: () => (moreMenu.hidePopover(), viewPr()) }, el("span", { textContent: "Ver PR" })),
           el(
             "button",
             { type: "button", className: "more-item", title: current.wt[editorSide(current.wt)]!.path, ariaKeyShortcuts: "Control+Shift+O", onclick: () => (moreMenu.hidePopover(), openInEditor()) },
@@ -321,6 +326,90 @@ function openInEditor() {
         el("span", { className: "why", textContent: `· ${err}`, title: String(err) }),
         el("button", { type: "button", className: "note-act", textContent: "Abrir com…", onclick: openWith }),
       ),
+  );
+}
+
+/** Por que a worktree não pode ser atualizada agora, ou null: só parada, a regra do lápis (puxar commits embaixo de um
+ *  dev server o recompila no meio, e numa troca a pasta está sendo largada ou assumida). */
+function pullBlocked(project: string, wt: Worktree) {
+  const state = lineState(project, wt);
+  return BUSY.includes(state) ? `${wt.label}, ${say(project, wt, state)}: pare a worktree antes de atualizar` : null;
+}
+
+/** "Atualizar (pull)" no ⋯, para a worktree em serviço. Indisponível, fica aria-disabled com o motivo, e o clique o diz. */
+function pullItem(project: string, wt: Worktree) {
+  const blocked = pullBlocked(project, wt);
+  const paths = TABS.flatMap(t => (wt[t] ? [wt[t]!.path] : []));
+  const b = el(
+    "button",
+    {
+      type: "button",
+      className: "more-item",
+      title: blocked ?? `git pull --ff-only em ${paths.join(" e ")}`,
+      ariaLabel: blocked ? `Atualizar (pull): indisponível; ${blocked}` : "Atualizar (pull)",
+      onclick: () => (moreMenu.hidePopover(), pullWorktree(project, wt))
+    },
+    el("span", { textContent: "Atualizar (pull)" })
+  );
+  if (blocked) b.setAttribute("aria-disabled", "true");
+  return b;
+}
+
+/** `git pull --ff-only` em cada lado, em paralelo (backend). "Atualizada: feat/x" ou "Já estava em dia" como recado de
+ *  rotina; um lado que falha vira falha na segunda faixa, com uma frase por lado e o erro cru no detalhe. Depois relê o
+ *  estado do git do painel (↑/↓). */
+async function pullWorktree(project: string, wt: Worktree) {
+  const blocked = pullBlocked(project, wt);
+  if (blocked) return headerNote(false, project, blocked);
+  const tabs = TABS.filter(t => wt[t]);
+  headerNote(false, project, `Atualizando ${wt.label}…`);
+  type Pulled = { Ok: boolean } | { Err: string };
+  const res = await invoke<Pulled[]>("pull_worktree", { paths: tabs.map(t => wt[t]!.path) }).catch((err): Pulled[] => tabs.map(() => ({ Err: String(err) })));
+  void readGit();
+  const failed = tabs.flatMap((t, i) => {
+    const r = res[i];
+    return "Err" in r ? [{ t, err: r.Err }] : [];
+  });
+  if (!failed.length) return headerNote(false, project, res.some(r => "Ok" in r && r.Ok) ? `Atualizada: ${wt.label}` : "Já estava em dia");
+  if (lastStopEl.dataset.project === project) clearNote(lastStopEl);
+  // "API: a branch divergiu da remota, não é fast-forward; Front: atualizada". Na solo, sem o nome do lado.
+  const said = tabs
+    .map((t, i) => {
+      const r = res[i];
+      const text = "Err" in r ? pullErrorSummary(r.Err) : r.Ok ? "atualizada" : "já estava em dia";
+      return tabs.length > 1 ? `${TAB_LABEL[t]}: ${text}` : text;
+    })
+    .join("; ");
+  const raw = failed.map(f => (tabs.length > 1 ? `${TAB_LABEL[f.t]}: ${f.err}` : f.err)).join("\n\n");
+  headerNote(
+    true,
+    project,
+    "Pull falhou",
+    el("span", { className: "who", textContent: `· ${said}`, title: said }),
+    el("span", { className: "why", textContent: `· ${pullErrorLine(failed[0].err)}`, title: raw })
+  );
+}
+
+/** A branch da aba visível (na solo, a do único lado): o id é "<branch da API>|<branch do Front>". */
+function tabBranch(wt: Worktree) {
+  return wt.id.split("|")[editorSide(wt) === "api" ? 0 : 1];
+}
+
+/** "Ver PR" no ⋯: abre no navegador a PR da branch da aba visível (`gh pr view --web`, solto do app e fora do PTY, com o
+ *  --repo do origin, como o "Da PR"). Sem PR, sem gh ou sem login, o cabeçalho diz. */
+function viewPr() {
+  if (!current) return;
+  const { project, wt } = current;
+  const side = editorSide(wt);
+  const branch = tabBranch(wt);
+  invoke<boolean>("open_pr", { path: wt[side]!.path, branch }).then(
+    found => headerNote(false, project, found ? `Abrindo a PR de ${branch} no navegador` : `Sem PR aberta para ${branch}`),
+    err => {
+      const raw = String(err);
+      // Sem gh instalado ou logado: o próximo passo, inteiro (o do backend fala em clonar).
+      const step = raw.startsWith("Instale") ? "Instale o GitHub CLI (gh) e entre com gh auth login" : raw.startsWith("Entre no GitHub") ? raw : null;
+      headerNote(true, project, "PR não abriu", step ? el("span", { textContent: `· ${step}` }) : el("span", { className: "why", textContent: `· ${raw.split("\n")[0]}`, title: raw }));
+    }
   );
 }
 
@@ -674,7 +763,7 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
   term.textarea?.setAttribute("aria-description", "Tab vai para o shell; Ctrl+Shift+E volta ao painel, Ctrl+Shift+K troca de worktree");
   fit.fit();
 
-  const pane: Pane = { term, fit, search, el: paneEl, ptyId: -1, side, url: null };
+  const pane: Pane = { term, fit, search, el: paneEl, ptyId: -1, side, url: null, port: null };
   const dec = new TextDecoder();
   let tail = "";
   const onData = new Channel<ArrayBuffer>();
@@ -689,6 +778,7 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
     const port = [...text.matchAll(PORT_RE)].pop()?.[1];
     if (port) {
       pane.url = `localhost:${port}`;
+      pane.port = Number(port);
       render();
     }
   };
@@ -1956,21 +2046,30 @@ async function pollStatus() {
   announceDrops();
   // Processo saiu: o endereço dele não vale mais, e o próximo start lê o novo.
   for (const e of envs.values()) for (const p of Object.values(e.panes)) if (!busy.has(p.ptyId)) p.url = null;
+  // No SUBINDO, o lado de pé com porta conhecida só sobe quando ela aceita conexão em localhost (ports_open: em paralelo,
+  // 150 ms no máximo, fora da thread principal; o pty_status já respondeu). Só consulta enquanto algo sobe.
+  const probing = [...starting.keys()].flatMap(k => Object.values(envs.get(k)?.panes ?? {})).filter(p => busy.has(p.ptyId) && p.port !== null);
+  const ports = [...new Set(probing.map(p => p.port!))];
+  const answers = ports.length ? await invoke<boolean[]>("ports_open", { ports }).catch(() => []) : [];
+  const open = new Set(ports.filter((_, i) => answers[i]));
   for (const [k, t] of starting) {
-    // Start enviado: vira RODANDO quando todos os lados sobem, ou desiste depois de 15 s (e mostra o que subiu).
-    const { down } = sides(k);
-    if (!down.length || Date.now() - t > 15000) {
-      starting.delete(k);
-      changed = true;
-      const [project, id] = k.split("\u0000");
-      const wt = down.length && findWt(project, id);
-      if (wt) {
-        const what = `${down.map((t) => TAB_LABEL[t]).join(" e ")} ${down.length > 1 ? "não subiram" : "não subiu"} em 15 s`;
-        const why = errorWhy(project, id, down[0]);
-        headerNote(true, project, what, noteWho(project, id, wt.label), why, upHere(project, id, down), seeTerminal(project, id, down[0]));
-        notifyAway(project, wt.label, what, why);
-      }
-    }
+    // Start enviado: vira RODANDO quando todos os lados sobem (e atendem, com porta conhecida), ou desiste depois de 15 s
+    // e diz quem ficou para trás. Aí a palheta segue o processo: o de pé que não respondeu fica RODANDO, com o recado.
+    const { up, down } = sides(k);
+    const panes = envs.get(k)?.panes ?? {};
+    const deaf = deafSides(up.map(s => ({ tab: s, port: panes[s]!.port })), open);
+    const end = startEnd(down.length, deaf.length, Date.now() - t);
+    if (end === "subindo") continue;
+    starting.delete(k);
+    changed = true;
+    const [project, id] = k.split("\u0000");
+    const wt = findWt(project, id);
+    if (end === "rodando" || !wt) continue;
+    const what = lateText(down.map(s => TAB_LABEL[s]), deaf.map(s => ({ name: TAB_LABEL[s], port: panes[s]!.port! })));
+    const late = down[0] ?? deaf[0];
+    const why = errorWhy(project, id, late);
+    headerNote(true, project, what, noteWho(project, id, wt.label), why, down.length ? upHere(project, id, down) : null, seeTerminal(project, id, late));
+    notifyAway(project, wt.label, what, why);
   }
   if (changed) render();
 }

@@ -307,6 +307,39 @@ pub async fn git_status(paths: Vec<String>) -> Vec<Option<GitStatus>> {
     })
 }
 
+/// A saída do `git pull` diz se avançou: "Already up to date." quando não (antes do git 2.17, "Already up-to-date.").
+fn pulled(stdout: &str) -> bool {
+    !stdout.contains("Already up to date") && !stdout.contains("Already up-to-date")
+}
+
+/// `git pull --ff-only` numa pasta: `Ok(true)` se avançou, `Ok(false)` se já estava em dia, `Err` com a saída crua.
+/// `LC_ALL=C`: a saída é lida (`pulled`) e o front resume o erro pelo texto em inglês. `GIT_TERMINAL_PROMPT=0`: sem
+/// terminal, um pedido de senha do https seguraria o pull para sempre.
+fn pull_one(path: &str) -> Result<bool, String> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(path)
+        .args(["pull", "--ff-only"])
+        .env("LC_ALL", "C")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(if err.is_empty() { String::from_utf8_lossy(&out.stdout).trim().to_string() } else { err });
+    }
+    Ok(pulled(&String::from_utf8_lossy(&out.stdout)))
+}
+
+/// "Atualizar (pull)": um pull por lado da worktree, em paralelo (cada um espera a rede), na ordem pedida.
+#[tauri::command]
+pub async fn pull_worktree(paths: Vec<String>) -> Vec<Result<bool, String>> {
+    std::thread::scope(|s| {
+        let runs: Vec<_> = paths.iter().map(|p| s.spawn(move || pull_one(p))).collect();
+        runs.into_iter().map(|r| r.join().unwrap_or_else(|_| Err("o git pull não terminou".into()))).collect()
+    })
+}
+
 fn side(w: &Option<Wt>, cfg: &SideCfg) -> Option<SideView> {
     w.as_ref().map(|w| SideView {
         path: w.path.clone(),
@@ -1042,8 +1075,10 @@ pub fn add_project(project: NewProject) -> Result<(), FormError> {
 // ---------- GitHub ----------
 
 /// Roda o `gh` (GitHub CLI) com a conta já logada nele; erro de instalação ou login vira o próximo passo.
+/// Grupo de processos próprio, fora do PTY: o navegador que o `gh pr view --web` abre fica solto do app.
 fn gh(args: &[&str]) -> Result<String, String> {
-    let out = Command::new("gh").args(args).output().map_err(|e| match e.kind() {
+    use std::os::unix::process::CommandExt;
+    let out = Command::new("gh").args(args).process_group(0).output().map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound => "Instale o GitHub CLI (gh) para clonar do GitHub.".to_string(),
         _ => e.to_string(),
     })?;
@@ -1093,6 +1128,29 @@ fn side_prs(side: &SideCfg) -> Result<serde_json::Value, String> {
     let repo = gh_repo_of(&url).ok_or(format!("o origin não é um repositório do GitHub: {url}"))?;
     let out = gh(&["pr", "list", "--repo", &repo, "--limit", "100", "--json", "number,title,headRefName,author,isCrossRepository"])?;
     serde_json::from_str(&out).map_err(|e| e.to_string())
+}
+
+/// `gh pr view <branch> --web --repo HOST/OWNER/REPO`: o repo vem do origin, como no "Da PR".
+fn pr_view_args<'a>(repo: &'a str, branch: &'a str) -> [&'a str; 6] {
+    ["pr", "view", branch, "--web", "--repo", repo]
+}
+
+/// O gh diz `No pull requests found for branch "feat/x"` quando a branch não tem PR.
+fn no_pr(err: &str) -> bool {
+    err.to_lowercase().contains("no pull requests found")
+}
+
+/// "Ver PR": abre no navegador a PR da branch da aba visível, no repositório do origin da pasta dela (no bare o gh não
+/// acha o remoto sozinho). Ok(false): a branch não tem PR. Sem gh instalado ou logado, o erro diz o próximo passo.
+#[tauri::command]
+pub async fn open_pr(path: String, branch: String) -> Result<bool, String> {
+    let url = git(&path, &["remote", "get-url", "origin"])?;
+    let repo = gh_repo_of(&url).ok_or(format!("o origin não é um repositório do GitHub: {url}"))?;
+    match gh(&pr_view_args(&repo, &branch)) {
+        Ok(_) => Ok(true),
+        Err(e) if no_pr(&e) => Ok(false),
+        Err(e) => Err(e),
+    }
 }
 
 #[derive(Serialize)]
@@ -1425,6 +1483,36 @@ mod tests {
     }
 
     #[test]
+    fn pulls_fast_forward_only() {
+        let tmp = std::env::temp_dir().join(format!("hotswap-pull-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let sh = |cmd: &str| assert!(Command::new("sh").arg("-c").arg(cmd).current_dir(&tmp).status().unwrap().success(), "{cmd}");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let git_id = "-c user.name=t -c user.email=t@t";
+        sh(&format!("git init -q -b main up && git -C up {git_id} commit -q --allow-empty -m init && git clone -q up down"));
+        let path = |d: &str| tmp.join(d).to_str().unwrap().to_string();
+        let pull = |d: &str| tauri::async_runtime::block_on(pull_worktree(vec![path(d)])).remove(0);
+
+        assert_eq!(pull("down"), Ok(false), "já estava em dia");
+        sh(&format!("git -C up {git_id} commit -q --allow-empty -m novo"));
+        assert_eq!(pull("down"), Ok(true), "avançou");
+        assert_eq!(git(&path("down"), &["log", "-1", "--format=%s"]).unwrap(), "novo");
+
+        // Divergiu: commit dos dois lados. Não faz merge; o erro cru volta para o front resumir.
+        sh(&format!("git -C up {git_id} commit -q --allow-empty -m remoto && git -C down {git_id} commit -q --allow-empty -m local"));
+        let err = pull("down").unwrap_err();
+        assert!(err.contains("Not possible to fast-forward"), "{err}");
+        assert_eq!(git(&path("down"), &["log", "-1", "--format=%s"]).unwrap(), "local", "nada mudou");
+
+        // Branch sem upstream.
+        sh("git -C down checkout -q -b solta");
+        assert!(pull("down").unwrap_err().contains("no tracking information"));
+        assert!(pulled("Updating abc..def\nFast-forward\n a.ts | 2 +-\n"));
+        assert!(!pulled("Already up to date.\n"));
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
     fn bare_layout_from_clone() {
         let tmp = std::env::temp_dir().join(format!("hotswap-gh-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
@@ -1444,6 +1532,12 @@ mod tests {
             assert_eq!(gh_repo_of(url).as_deref(), Some("github.com/dono/repo"), "{url}");
         }
         assert_eq!(gh_repo_of("/tmp/origem"), None, "remoto local");
+        // "Ver PR": o repo do origin vai no --repo; origin local nem chega no gh.
+        assert_eq!(pr_view_args("github.com/dono/repo", "feat/x"), ["pr", "view", "feat/x", "--web", "--repo", "github.com/dono/repo"]);
+        assert!(no_pr("No pull requests found for branch \"feat/x\""));
+        assert!(!no_pr("To get started with GitHub CLI, please run:  gh auth login"));
+        let err = tauri::async_runtime::block_on(open_pr(tmp.join("dest/main").to_str().unwrap().into(), "main".into())).unwrap_err();
+        assert!(err.contains("não é um repositório do GitHub"), "{err}");
 
         assert!(valid_full_name("goldtech-dev/gtech-api"));
         assert!(valid_full_name("me/repo.js"));
