@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-12T01:20:16+00:00",
+  "generatedAt": "2026-10-20T14:26:39+00:00",
   "title": "Design System: Hotswap",
   "extensions": {
     "colorMeta": {
@@ -40,7 +40,7 @@
       },
       "flap": {
         "role": "neutral",
-        "displayName": "Palheta (noite)",
+        "displayName": "Palheta (baixo) e linha atual (noite)",
         "canonical": "#222428",
         "cssVar": "--flap",
         "mode": "dark",
@@ -57,7 +57,7 @@
       },
       "flap-hi": {
         "role": "neutral",
-        "displayName": "Palheta (metade de cima) (noite)",
+        "displayName": "Palheta (cima) (noite)",
         "canonical": "#2b2d32",
         "cssVar": "--flap-hi",
         "mode": "dark",
@@ -70,23 +70,6 @@
           "oklch(72% 0.009 268)",
           "oklch(84% 0.009 268)",
           "oklch(95% 0.009 268)"
-        ]
-      },
-      "seam": {
-        "role": "neutral",
-        "displayName": "Corte (noite)",
-        "canonical": "#0a0b0d",
-        "cssVar": "--seam",
-        "mode": "dark",
-        "tonalRamp": [
-          "oklch(15% 0.005 264)",
-          "oklch(26% 0.005 264)",
-          "oklch(38% 0.005 264)",
-          "oklch(49% 0.005 264)",
-          "oklch(61% 0.005 264)",
-          "oklch(72% 0.005 264)",
-          "oklch(84% 0.005 264)",
-          "oklch(95% 0.005 264)"
         ]
       },
       "rule": {
@@ -176,7 +159,7 @@
       },
       "start": {
         "role": "secondary",
-        "displayName": "Âmbar em Movimento (subindo) (noite)",
+        "displayName": "Âmbar Subindo (noite)",
         "canonical": "#f2b33d",
         "cssVar": "--start",
         "mode": "dark",
@@ -193,7 +176,7 @@
       },
       "wait": {
         "role": "secondary",
-        "displayName": "Âmbar em Movimento (aguardando, parando) (noite)",
+        "displayName": "Âmbar Aguarda (noite)",
         "canonical": "#f2b33d",
         "cssVar": "--wait",
         "mode": "dark",
@@ -295,7 +278,7 @@
       },
       "flap-day": {
         "role": "neutral",
-        "displayName": "Palheta (dia)",
+        "displayName": "Palheta (baixo) e linha atual (dia)",
         "canonical": "#d6d7d3",
         "cssVar": "--flap",
         "mode": "light",
@@ -312,8 +295,8 @@
       },
       "flap-hi-day": {
         "role": "neutral",
-        "displayName": "Palheta (metade de cima) (dia)",
-        "canonical": "#e1e2de",
+        "displayName": "Palheta (cima) (dia)",
+        "canonical": "#e7e8e4",
         "cssVar": "--flap-hi",
         "mode": "light",
         "tonalRamp": [
@@ -327,21 +310,242 @@
           "oklch(95% 0.005 118)"
         ]
       },
-      "seam-day": {
+      "flap-top-day": {
         "role": "neutral",
-        "displayName": "Corte (dia)",
-        "canonical": "#b9bbb6",
-        "cssVar": "--seam",
+        "displayName": "Palheta neutra (cima) (dia)",
+        "canonical": "#d2d3ce",
+        "cssVar": "--flap-top",
         "mode": "light",
         "tonalRamp": [
-          "oklch(15% 0.007 124)",
-          "oklch(26% 0.007 124)",
-          "oklch(38% 0.007 124)",
-          "oklch(49% 0.007 124)",
-          "oklch(61% 0.007 124)",
-          "oklch(72% 0.007 124)",
-          "oklch(84% 0.007 124)",
-          "oklch(95% 0.007 124)"
+          "oklch(15% 0.007 116)",
+          "oklch(26% 0.007 116)",
+          "oklch(38% 0.007 116)",
+          "oklch(49% 0.007 116)",
+          "oklch(61% 0.007 116)",
+          "oklch(72% 0.007 116)",
+          "oklch(84% 0.007 116)",
+          "oklch(95% 0.007 116)"
+        ]
+      },
+      "flap-bot-day": {
+        "role": "neutral",
+        "displayName": "Palheta neutra (baixo) (dia)",
+        "canonical": "#c3c5bf",
+        "cssVar": "--flap-bot",
+        "mode": "light",
+        "tonalRamp": [
+          "oklch(15% 0.009 122)",
+          "oklch(26% 0.009 122)",
+          "oklch(38% 0.009 122)",
+          "oklch(49% 0.009 122)",
+          "oklch(61% 0.009 122)",
+          "oklch(72% 0.009 122)",
+          "oklch(84% 0.009 122)",
+          "oklch(95% 0.009 122)"
+        ]
+      },
+      "flap-ink-day": {
+        "role": "neutral",
+        "displayName": "Tinta da palheta neutra (dia)",
+        "canonical": "#45474c",
+        "cssVar": "--flap-ink",
+        "mode": "light",
+        "tonalRamp": [
+          "oklch(15% 0.009 268)",
+          "oklch(26% 0.009 268)",
+          "oklch(38% 0.009 268)",
+          "oklch(49% 0.009 268)",
+          "oklch(61% 0.009 268)",
+          "oklch(72% 0.009 268)",
+          "oklch(84% 0.009 268)",
+          "oklch(95% 0.009 268)"
+        ]
+      },
+      "flap-run-day": {
+        "role": "neutral",
+        "displayName": "Tinta da palheta RODANDO (dia)",
+        "canonical": "#15161a",
+        "cssVar": "--flap-run",
+        "mode": "light",
+        "tonalRamp": [
+          "oklch(15% 0.008 275)",
+          "oklch(26% 0.008 275)",
+          "oklch(38% 0.008 275)",
+          "oklch(49% 0.008 275)",
+          "oklch(61% 0.008 275)",
+          "oklch(72% 0.008 275)",
+          "oklch(84% 0.008 275)",
+          "oklch(95% 0.008 275)"
+        ]
+      },
+      "flap-start-day": {
+        "role": "neutral",
+        "displayName": "Tinta da palheta em movimento (dia)",
+        "canonical": "#15161a",
+        "cssVar": "--flap-start",
+        "mode": "light",
+        "tonalRamp": [
+          "oklch(15% 0.008 275)",
+          "oklch(26% 0.008 275)",
+          "oklch(38% 0.008 275)",
+          "oklch(49% 0.008 275)",
+          "oklch(61% 0.008 275)",
+          "oklch(72% 0.008 275)",
+          "oklch(84% 0.008 275)",
+          "oklch(95% 0.008 275)"
+        ]
+      },
+      "flap-fail-day": {
+        "role": "neutral",
+        "displayName": "Tinta da palheta SEM X (dia)",
+        "canonical": "#15161a",
+        "cssVar": "--flap-fail",
+        "mode": "light",
+        "tonalRamp": [
+          "oklch(15% 0.008 275)",
+          "oklch(26% 0.008 275)",
+          "oklch(38% 0.008 275)",
+          "oklch(49% 0.008 275)",
+          "oklch(61% 0.008 275)",
+          "oklch(72% 0.008 275)",
+          "oklch(84% 0.008 275)",
+          "oklch(95% 0.008 275)"
+        ]
+      },
+      "flap-body-run-day": {
+        "role": "secondary",
+        "displayName": "Corpo verde RODANDO (dia)",
+        "canonical": "#6ccf9c / #55c08a",
+        "cssVar": "--body-run-top / --body-run-bot",
+        "mode": "light",
+        "tonalRamp": [
+          "oklch(15% 0.120 159)",
+          "oklch(26% 0.120 159)",
+          "oklch(38% 0.120 159)",
+          "oklch(49% 0.120 159)",
+          "oklch(61% 0.120 159)",
+          "oklch(72% 0.120 159)",
+          "oklch(84% 0.120 159)",
+          "oklch(95% 0.120 159)"
+        ]
+      },
+      "flap-body-move-day": {
+        "role": "secondary",
+        "displayName": "Corpo âmbar SUBINDO / AGUARDA (dia)",
+        "canonical": "#f6c45f / #f0b33f",
+        "cssVar": "--body-move-top / --body-move-bot",
+        "mode": "light",
+        "tonalRamp": [
+          "oklch(15% 0.131 83)",
+          "oklch(26% 0.131 83)",
+          "oklch(38% 0.131 83)",
+          "oklch(49% 0.131 83)",
+          "oklch(61% 0.131 83)",
+          "oklch(72% 0.131 83)",
+          "oklch(84% 0.131 83)",
+          "oklch(95% 0.131 83)"
+        ]
+      },
+      "flap-body-stop": {
+        "role": "secondary",
+        "displayName": "Corpo PARANDO / SIGKILL (noite)",
+        "canonical": "#f6c45f / #f0b33f",
+        "cssVar": "--body-stop-top / --body-stop-bot",
+        "mode": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.131 83)",
+          "oklch(26% 0.131 83)",
+          "oklch(38% 0.131 83)",
+          "oklch(49% 0.131 83)",
+          "oklch(61% 0.131 83)",
+          "oklch(72% 0.131 83)",
+          "oklch(84% 0.131 83)",
+          "oklch(95% 0.131 83)"
+        ]
+      },
+      "flap-ink-stop": {
+        "role": "neutral",
+        "displayName": "Tinta PARANDO / SIGKILL (noite)",
+        "canonical": "#131417",
+        "cssVar": "--ink-stop",
+        "mode": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.006 271)",
+          "oklch(26% 0.006 271)",
+          "oklch(38% 0.006 271)",
+          "oklch(49% 0.006 271)",
+          "oklch(61% 0.006 271)",
+          "oklch(72% 0.006 271)",
+          "oklch(84% 0.006 271)",
+          "oklch(95% 0.006 271)"
+        ]
+      },
+      "flap-body-stop-day": {
+        "role": "secondary",
+        "displayName": "Corpo PARANDO / SIGKILL (dia)",
+        "canonical": "#2b2d32 / #222428",
+        "cssVar": "--body-stop-top / --body-stop-bot",
+        "mode": "light",
+        "tonalRamp": [
+          "oklch(15% 0.009 268)",
+          "oklch(26% 0.009 268)",
+          "oklch(38% 0.009 268)",
+          "oklch(49% 0.009 268)",
+          "oklch(61% 0.009 268)",
+          "oklch(72% 0.009 268)",
+          "oklch(84% 0.009 268)",
+          "oklch(95% 0.009 268)"
+        ]
+      },
+      "flap-ink-stop-day": {
+        "role": "neutral",
+        "displayName": "Tinta PARANDO / SIGKILL (dia)",
+        "canonical": "#f2b33d",
+        "cssVar": "--ink-stop",
+        "mode": "light",
+        "tonalRamp": [
+          "oklch(15% 0.147 79)",
+          "oklch(26% 0.147 79)",
+          "oklch(38% 0.147 79)",
+          "oklch(49% 0.147 79)",
+          "oklch(61% 0.147 79)",
+          "oklch(72% 0.147 79)",
+          "oklch(84% 0.147 79)",
+          "oklch(95% 0.147 79)"
+        ]
+      },
+      "ends-bg-day": {
+        "role": "secondary",
+        "displayName": "Creme ENCERRA (dia)",
+        "canonical": "#f7e7c0",
+        "cssVar": "--ends-bg",
+        "mode": "light",
+        "tonalRamp": [
+          "oklch(15% 0.054 88)",
+          "oklch(26% 0.054 88)",
+          "oklch(38% 0.054 88)",
+          "oklch(49% 0.054 88)",
+          "oklch(61% 0.054 88)",
+          "oklch(72% 0.054 88)",
+          "oklch(84% 0.054 88)",
+          "oklch(95% 0.054 88)"
+        ]
+      },
+      "flap-body-fail-day": {
+        "role": "secondary",
+        "displayName": "Corpo vermelho SEM API / SEM FRONT (dia)",
+        "canonical": "#f4a29b / #ee8a82",
+        "cssVar": "--body-fail-top / --body-fail-bot",
+        "mode": "light",
+        "tonalRamp": [
+          "oklch(15% 0.099 25)",
+          "oklch(26% 0.099 25)",
+          "oklch(38% 0.099 25)",
+          "oklch(49% 0.099 25)",
+          "oklch(61% 0.099 25)",
+          "oklch(72% 0.099 25)",
+          "oklch(84% 0.099 25)",
+          "oklch(95% 0.099 25)"
         ]
       },
       "rule-day": {
@@ -431,7 +635,7 @@
       },
       "start-day": {
         "role": "secondary",
-        "displayName": "Âmbar em Movimento (subindo) (dia)",
+        "displayName": "Âmbar Subindo (dia)",
         "canonical": "#855000",
         "cssVar": "--start",
         "mode": "light",
@@ -448,7 +652,7 @@
       },
       "wait-day": {
         "role": "secondary",
-        "displayName": "Âmbar em Movimento (aguardando, parando) (dia)",
+        "displayName": "Âmbar Aguarda (dia)",
         "canonical": "#855000",
         "cssVar": "--wait",
         "mode": "light",
@@ -483,18 +687,18 @@
       "scrim-day": {
         "role": "neutral",
         "displayName": "Véu (dia)",
-        "canonical": "rgb(244 245 243 / 78%)",
+        "canonical": "rgb(21 22 26 / 24%)",
         "cssVar": "--scrim",
         "mode": "light",
         "tonalRamp": [
-          "oklch(15% 0.003 128)",
-          "oklch(26% 0.003 128)",
-          "oklch(38% 0.003 128)",
-          "oklch(49% 0.003 128)",
-          "oklch(61% 0.003 128)",
-          "oklch(72% 0.003 128)",
-          "oklch(84% 0.003 128)",
-          "oklch(95% 0.003 128)"
+          "oklch(15% 0.008 275)",
+          "oklch(26% 0.008 275)",
+          "oklch(38% 0.008 275)",
+          "oklch(49% 0.008 275)",
+          "oklch(61% 0.008 275)",
+          "oklch(72% 0.008 275)",
+          "oklch(84% 0.008 275)",
+          "oklch(95% 0.008 275)"
         ]
       },
       "selection-day": {
@@ -522,7 +726,7 @@
       },
       "headline": {
         "displayName": "Headline",
-        "purpose": "Título dos diálogos e do aviso de troca; busca da paleta em 17px."
+        "purpose": "Título dos diálogos; busca da paleta em 17px."
       },
       "title": {
         "displayName": "Title",
@@ -534,19 +738,19 @@
       },
       "small": {
         "displayName": "Small",
-        "purpose": "Par divergente, dicas, rótulos de campo, erros."
+        "purpose": "Par divergente, dicas, rótulos de campo (600, 0.02em), erros, a faixa da troca e os recados."
       },
       "label": {
         "displayName": "Label",
-        "purpose": "Caixa-alta espaçada: plataforma, abas, projeto, títulos da ajuda, legendas de fieldset."
+        "purpose": "Caixa-alta espaçada: plataforma, abas API | FRONT, nome do projeto no destino e na paleta, títulos da ajuda, legendas de fieldset."
       },
       "flap": {
         "displayName": "Flap",
-        "purpose": "Texto das palhetas e etiquetas SÓ API / SÓ FRONT."
+        "purpose": "Texto das palhetas e etiquetas SÓ API / SÓ FRONT; na faixa de destino, 14px."
       },
       "mono": {
         "displayName": "Mono",
-        "purpose": "Erros brutos, prévia de caminho, código no estado vazio, porta do dev server."
+        "purpose": "Erros brutos, prévia de caminho, código no estado vazio, porta do dev server, causa da falha."
       },
       "terminal": {
         "displayName": "Terminal",
@@ -557,12 +761,22 @@
       {
         "name": "floating",
         "value": "0 4px 8px rgb(0 0 0 / 28%)",
-        "purpose": "Paleta, ajuda, diálogos e o painel aberto por cima do terminal (janela estreita), sempre com borda rule de 1px. À noite."
+        "purpose": "Paleta, ajuda, ⋯, busca no terminal e diálogos, sempre com borda rule de 1px. À noite."
       },
       {
         "name": "floating-day",
-        "value": "0 4px 8px rgb(21 22 26 / 14%)",
-        "purpose": "A mesma sombra Flutuante de dia: na tinta e mais leve sobre o esmalte."
+        "value": "0 4px 8px rgb(21 22 26 / 14%), 0 12px 28px rgb(21 22 26 / 14%)",
+        "purpose": "A mesma Flutuante de dia, na tinta: o trilho fica a 1,08:1 do esmalte e só a sombra separa a superfície."
+      },
+      {
+        "name": "side",
+        "value": "8px 0 24px rgb(0 0 0 / 70%)",
+        "purpose": "O painel aberto por cima do terminal na janela estreita; a borda que importa é a direita. À noite (preto sobre grafite quase não se via)."
+      },
+      {
+        "name": "side-day",
+        "value": "6px 0 16px rgb(21 22 26 / 16%)",
+        "purpose": "A mesma Lateral de dia."
       },
       {
         "name": "current-row",
@@ -572,7 +786,12 @@
       {
         "name": "tab-selected",
         "value": "inset 0 -2px 0 var(--ink)",
-        "purpose": "Fio de 2px na base da aba selecionada (não é sombra)."
+        "purpose": "Fio de 2px na base da aba selecionada e da origem escolhida no Novo projeto (não é sombra)."
+      },
+      {
+        "name": "ends-outline",
+        "value": "inset 0 0 0 var(--ends-line) currentColor",
+        "purpose": "Contorno âmbar da prévia ENCERRA (1px à noite; 2px e o creme --ends-bg de dia)."
       }
     ],
     "motion": [
@@ -584,34 +803,44 @@
       {
         "name": "ends-preview",
         "value": "0s 120ms forwards",
-        "purpose": "Prévia ENCERRA: troca seca depois de 120ms com o cursor ou o foco em outra linha do projeto (só CSS, :has); não vira."
+        "purpose": "Prévia ENCERRA nas linhas: troca seca depois de 120ms com o cursor ou o foco em outra linha do projeto (só CSS, :has); não vira. Nos botões de parar, sem atraso."
       },
       {
         "name": "disclosure",
         "value": "90ms steps(2, jump-none)",
-        "purpose": "Chevron dos <details> e da placa do projeto."
+        "purpose": "Chevron dos <details> e da placa do projeto; desligado com reduzir movimento."
       },
       {
         "name": "reload-spin",
         "value": "640ms steps(8) infinite",
-        "purpose": "Ícone de reler enquanto lê; desligado com reduzir movimento."
+        "purpose": "Ícone de reler enquanto lê (aria-busy); desligado com reduzir movimento."
       }
     ],
     "breakpoints": [
       {
         "name": "narrow",
-        "value": "innerWidth < 640px (CSS, via JS)",
-        "purpose": "Painel e área principal não cabem lado a lado: o painel abre por cima do terminal e começa fechado."
+        "value": "innerWidth < 640px (200px de painel + 440px de área; classe body.narrow, via JS)",
+        "purpose": "Painel e área principal não cabem lado a lado: o painel começa fechado e abre por cima do terminal, com a sombra Lateral."
       },
       {
-        "name": "header-compact",
-        "value": "@container (max-width: 480px)",
-        "purpose": "Faixa de destino: porta, recado e outros em serviço saem antes do destino e das abas."
+        "name": "switching-compact",
+        "value": "@container (max-width: 480px) em main",
+        "purpose": "Faixa da troca: o nome sai do Voltar e fica \"Voltar e reiniciar\"."
+      },
+      {
+        "name": "help-single-column",
+        "value": "@media (max-width: 560px)",
+        "purpose": "A ajuda empilha atalhos e estados numa coluna."
+      },
+      {
+        "name": "dialog-low",
+        "value": "@media (max-height: 860px)",
+        "purpose": "Diálogos sobem para 16px do topo e ganham a altura (o Par do editar fica à vista)."
       },
       {
         "name": "color-scheme-light",
         "value": ":root[data-theme=\"light\"] (o sistema, ou o botão de tema)",
-        "purpose": "Troca para os tokens -day (tabela em esmalte)."
+        "purpose": "Troca para os tokens -day (tabela em esmalte); as palhetas ganham corpos de estado."
       },
       {
         "name": "reduced-motion",
@@ -629,7 +858,7 @@
       "source": "src/main.ts TERM_THEME + termTheme()",
       "background": "var(--term-bg)",
       "fontFamily": "var(--mono)",
-      "note": "Fundo, cursor, seleção e red/green/yellow são lidos dos tokens (--term-bg, --ink, --selection, --fail, --run, --start) ao criar o terminal e ao trocar de tema; a fonte vem de --mono. As demais cores ANSI são conteúdo do terminal e passam AA nos dois temas."
+      "note": "Fundo, cursor, seleção e red/green/yellow são lidos dos tokens (--term-bg, --ink, --selection, --fail, --run, --start) ao criar o terminal e ao trocar de tema; a fonte vem de --mono. As demais cores ANSI são conteúdo do terminal e passam AA nos dois temas, menos o black da noite, que por convenção é o próprio fundo (1,08:1); brightBlack da noite em #81827e (4,76:1)."
     }
   },
   "components": [
@@ -637,57 +866,65 @@
       "name": "Palheta de estado",
       "kind": "custom",
       "refersTo": "flap",
-      "description": "O estado da worktree em 7 caracteres: metades flap-hi/flap, entalhe seam só nas bordas, uma cor por estado. Vira em 3 quadros (steps) só quando o estado muda; aqui, no hover, para mostrar o giro.",
-      "html": "<span class=\"ds-flap\" data-state=\"run\"><span>RODANDO</span></span> <span class=\"ds-flap\" data-state=\"part\"><span>PARCIAL</span></span> <span class=\"ds-flap\" data-state=\"start\"><span>SUBINDO</span></span> <span class=\"ds-flap\" data-state=\"wait\"><span>AGUARDA</span></span> <span class=\"ds-flap\" data-state=\"stop\"><span>PARANDO</span></span> <span class=\"ds-flap\" data-state=\"kill\"><span>SIGKILL</span></span> <span class=\"ds-flap\" data-state=\"stop\"><span>ENCERRA</span></span> <span class=\"ds-flap\" data-state=\"idle\"><span>INATIVA</span></span> <span class=\"ds-flap\" data-state=\"none\"><span></span></span>",
-      "css": ".ds-flap{margin:0 4px 6px 0}.ds-flap{position:relative;display:inline-grid;place-items:center;min-width:calc(7ch + 14px);padding:0 6px;height:22px;border-radius:2px;background:linear-gradient(var(--flap-hi) 50%,var(--flap) 50%);color:var(--ink-2);font:700 12px/1 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.06em;overflow:hidden;flex-shrink:0}.ds-flap::after{content:'';position:absolute;inset:50% 0 auto;height:1px;background:linear-gradient(90deg,var(--seam) 2px,transparent 2px calc(100% - 2px),var(--seam) 0)}.ds-flap>span{position:relative;z-index:1;grid-area:1/1}.ds-flap[data-state=none]{background:none;box-shadow:inset 0 0 0 1px var(--rule)}.ds-flap[data-state=none]::after{content:none}.ds-flap[data-state=run]{color:var(--run)}.ds-flap[data-state=start]{color:var(--start)}.ds-flap[data-state=wait],.ds-flap[data-state=stop]{color:var(--wait)}.ds-flap[data-state=part],.ds-flap[data-state=kill]{color:var(--fail)}.ds-flap.ds-count{min-width:calc(4ch + 14px);color:var(--ink)}.ds-flap:hover>span{animation:ds-flip 180ms steps(3,jump-none)}@keyframes ds-flip{50%{transform:scaleY(.12)}}@media (prefers-reduced-motion:reduce){.ds-flap:hover>span{animation:none}}"
+      "description": "O estado da worktree em 7 caracteres: metades de luz de cima, entalhe em V recortado nas bordas, uma cor por estado (de dia, o estado mora no corpo). SEM FRONT leva o quadrado cheio, API PARADA o vazado; ENCERRA é prévia, só contorno; a contagem é estreita e neutra. Vira em 3 quadros (steps) só quando o estado muda; aqui, no hover, para mostrar o giro.",
+      "html": "<span class=\"ds-flap\" data-state=\"run\"><span>RODANDO</span></span> <span class=\"ds-flap\" data-state=\"part\"><span>SEM FRONT</span></span> <span class=\"ds-flap\" data-state=\"held\"><span>API PARADA</span></span> <span class=\"ds-flap\" data-state=\"start\"><span>SUBINDO</span></span> <span class=\"ds-flap\" data-state=\"wait\"><span>AGUARDA</span></span> <span class=\"ds-flap\" data-state=\"stop\"><span>PARANDO</span></span> <span class=\"ds-flap\" data-state=\"kill\"><span>SIGKILL</span></span> <span class=\"ds-flap ds-preview\" data-state=\"stop\"><span>ENCERRA</span></span> <span class=\"ds-flap\" data-state=\"idle\"><span>INATIVA</span></span> <span class=\"ds-flap ds-count\" data-state=\"idle\"><span>3 s</span></span> <span class=\"ds-flap\" data-state=\"none\"><span></span></span>",
+      "css": ".ds-flap{margin:0 4px 6px 0}.ds-flap{position:relative;display:inline-grid;place-items:center;width:calc(7ch + 20px);height:22px;border-radius:2px;background:linear-gradient(var(--ds-top,var(--flap-top,var(--flap-hi))) 50%,var(--ds-bot,var(--flap-bot,var(--flap))) 50%);color:var(--flap-ink,var(--ink-2));font:700 12px/1 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.06em;white-space:nowrap;overflow:hidden;flex-shrink:0;vertical-align:middle}.ds-flap:not(.ds-preview,[data-state=none]){clip-path:polygon(0 0,100% 0,100% calc(50% - 3px),calc(100% - 2.5px) 50%,100% calc(50% + 3px),100% 100%,0 100%,0 calc(50% + 3px),2.5px 50%,0 calc(50% - 3px))}.ds-flap>span{position:relative;z-index:1;grid-area:1/1}.ds-flap[data-state=none]{background:none;outline:1px dashed var(--ink-3);outline-offset:-1px}.ds-flap[data-state=run]{color:var(--flap-run,var(--run))}.ds-flap:is([data-state=start],[data-state=wait]){color:var(--flap-start,var(--start))}.ds-flap:is([data-state=stop],[data-state=kill]):not(.ds-preview){--ds-top:var(--body-stop-top,#f6c45f);--ds-bot:var(--body-stop-bot,#f0b33f);color:var(--ink-stop,var(--board))}.ds-flap[data-state=part]{color:var(--flap-fail,var(--fail))}.ds-flap:is([data-state=part],[data-state=held]){width:auto;min-width:calc(7ch + 20px);padding:0 7px}.ds-flap:is([data-state=part],[data-state=held])>span::before{content:'';display:inline-block;width:6px;height:6px;margin-right:5px;border-radius:2px;background:currentColor;vertical-align:1px}.ds-flap[data-state=held]>span::before{background:none;box-shadow:inset 0 0 0 1.5px currentColor}.ds-flap.ds-preview{color:var(--wait);background:var(--ends-bg,none);box-shadow:inset 0 0 0 var(--ends-line,1px) currentColor}.ds-flap.ds-count{width:calc(4ch + 14px);color:var(--ink)}:host-context([data-theme=light]) .ds-flap[data-state=run]{--ds-top:#6ccf9c;--ds-bot:#55c08a}:host-context([data-theme=light]) .ds-flap:is([data-state=start],[data-state=wait]){--ds-top:#f6c45f;--ds-bot:#f0b33f}:host-context([data-theme=light]) .ds-flap[data-state=part]{--ds-top:#f4a29b;--ds-bot:#ee8a82}.ds-flap:hover>span{animation:ds-flip 180ms steps(3,jump-none)}@keyframes ds-flip{50%{transform:scaleY(.12)}}@media (prefers-reduced-motion:reduce){.ds-flap:hover>span{animation:none}}"
     },
     {
       "name": "Linha do painel",
       "kind": "custom",
       "refersTo": "line",
-      "description": "Worktree no painel: nome à esquerda (prefixo em meia-tinta, nome em tinta cheia quando em serviço), palheta na coluna de situação à direita, lápis de 24px que aparece com o cursor ou o foco; a atual com fundo flap e fios internos ink-3.",
-      "html": "<ul class=\"ds-lines\"><li class=\"ds-row\"><button class=\"ds-line ds-live\" aria-current=\"true\"><span class=\"ds-name\"><span class=\"ds-branch\"><span class=\"ds-prefix\">feat/</span>scrap-movement</span></span><span class=\"ds-flap\" data-state=\"run\"><span>RODANDO</span></span></button><button class=\"ds-edit\" aria-label=\"Editar\" aria-disabled=\"true\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M11 2.5 13.5 5 6 12.5H3.5V10ZM9.5 4 12 6.5\"/></svg></button></li><li class=\"ds-row\"><button class=\"ds-line\"><span class=\"ds-name\"><span class=\"ds-branch\"><span class=\"ds-prefix\"></span>main</span></span><span class=\"ds-flap\" data-state=\"idle\"><span>INATIVA</span></span></button><button class=\"ds-edit\" aria-label=\"Editar\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M11 2.5 13.5 5 6 12.5H3.5V10ZM9.5 4 12 6.5\"/></svg></button></li><li class=\"ds-row\"><button class=\"ds-line\"><span class=\"ds-name\"><span class=\"ds-branch\"><span class=\"ds-prefix\"></span>motor-x</span><span class=\"ds-pair\">feature-api/<svg class=\"ds-inline\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M3 5.5h10M10.5 3 13 5.5 10.5 8M13 10.5H3M5.5 8 3 10.5 5.5 13\"/></svg>feature-app/</span></span><span class=\"ds-flap\" data-state=\"none\"><span></span></span></button><button class=\"ds-edit\" aria-label=\"Editar\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M11 2.5 13.5 5 6 12.5H3.5V10ZM9.5 4 12 6.5\"/></svg></button></li><li class=\"ds-row\"><button class=\"ds-line\"><span class=\"ds-name\"><span class=\"ds-branch\"><span class=\"ds-prefix\">fix/</span>login</span><span class=\"ds-tag\">SÓ API</span></span><span class=\"ds-flap\" data-state=\"none\"><span></span></span></button><button class=\"ds-edit\" aria-label=\"Editar\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M11 2.5 13.5 5 6 12.5H3.5V10ZM9.5 4 12 6.5\"/></svg></button></li></ul>",
-      "css": ".ds-flap{position:relative;display:inline-grid;place-items:center;min-width:calc(7ch + 14px);padding:0 6px;height:22px;border-radius:2px;background:linear-gradient(var(--flap-hi) 50%,var(--flap) 50%);color:var(--ink-2);font:700 12px/1 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.06em;overflow:hidden;flex-shrink:0}.ds-flap::after{content:'';position:absolute;inset:50% 0 auto;height:1px;background:linear-gradient(90deg,var(--seam) 2px,transparent 2px calc(100% - 2px),var(--seam) 0)}.ds-flap>span{position:relative;z-index:1;grid-area:1/1}.ds-flap[data-state=none]{background:none;box-shadow:inset 0 0 0 1px var(--rule)}.ds-flap[data-state=none]::after{content:none}.ds-flap[data-state=run]{color:var(--run)}.ds-flap[data-state=start]{color:var(--start)}.ds-flap[data-state=wait],.ds-flap[data-state=stop]{color:var(--wait)}.ds-flap[data-state=part],.ds-flap[data-state=kill]{color:var(--fail)}.ds-flap.ds-count{min-width:calc(4ch + 14px);color:var(--ink)}.ds-flap:hover>span{animation:ds-flip 180ms steps(3,jump-none)}@keyframes ds-flip{50%{transform:scaleY(.12)}}@media (prefers-reduced-motion:reduce){.ds-flap:hover>span{animation:none}}.ds-lines{width:280px;margin:0;padding:0;list-style:none;background:var(--rail);font:500 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums}.ds-row{display:flex;align-items:start}.ds-row:hover{background:color-mix(in srgb,var(--flap) 50%,var(--rail))}.ds-row:has(>.ds-line[aria-current=true]){background:var(--flap);box-shadow:inset 0 -1px 0 var(--ink-3),inset 0 1px 0 var(--ink-3)}.ds-line{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;flex:1;min-width:0;padding:5px 2px 5px 14px;border:0;background:none;color:var(--ink-2);font:inherit;text-align:left;cursor:pointer}.ds-line:focus-visible{outline:2px solid var(--focus);outline-offset:2px;outline-offset:-2px}.ds-line .ds-flap{margin:1px 0 0 10px}.ds-name{min-width:0;padding-top:2px}.ds-branch{display:flex;white-space:nowrap}.ds-prefix{color:var(--ink-2)}.ds-live .ds-branch,.ds-line[aria-current=true] .ds-branch{color:var(--ink)}.ds-pair{display:flex;align-items:center;white-space:nowrap;color:var(--ink-2);font-size:13px}.ds-inline{width:12px;height:12px;margin:0 4px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}.ds-tag{display:inline-block;margin:3px 0 1px;padding:0 4px;border:1px solid var(--rule);border-radius:2px;color:var(--ink-2);font:700 12px/16px 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.06em}.ds-edit{display:inline-grid;place-items:center;width:24px;height:24px;margin:5px 4px 0 0;padding:0;border:0;border-radius:4px;background:none;color:var(--ink-2);opacity:0;cursor:pointer}.ds-row:is(:hover,:focus-within)>.ds-edit{opacity:1}.ds-edit:not([aria-disabled=true]):hover{background:var(--flap-hi);color:var(--ink)}.ds-edit[aria-disabled=true]{color:var(--ink-3);cursor:not-allowed}.ds-edit:focus-visible{outline:2px solid var(--focus);outline-offset:2px;outline-offset:-2px}.ds-edit svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}"
+      "description": "Worktree no painel: nome à esquerda (prefixo em meia-tinta, nome em tinta cheia quando em serviço), estado do git logo depois do nome, palheta na coluna de situação à direita (a nunca aberta não tem palheta), lápis de 24px que aparece com o cursor ou o foco; a atual com fundo flap, fios internos ink-3 e a metade de baixo da palheta no fundo do painel.",
+      "html": "<ul class=\"ds-lines\"><li class=\"ds-row\"><button class=\"ds-line ds-live\" aria-current=\"true\"><span class=\"ds-name\"><span class=\"ds-top\"><span class=\"ds-branch\"><span class=\"ds-prefix\">feat/</span>scrap-movement</span><span class=\"ds-git\" aria-hidden=\"true\"><span class=\"ds-dirty\"></span><span><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M8 13V3M4 7l4-4 4 4\"/></svg>2</span></span></span></span><span class=\"ds-flap\" data-state=\"run\"><span>RODANDO</span></span></button><button class=\"ds-edit\" aria-label=\"Editar: troque para outra worktree do projeto antes\" aria-disabled=\"true\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M11 2.5 13.5 5 6 12.5H3.5V10ZM9.5 4 12 6.5\"/></svg></button></li><li class=\"ds-row\"><button class=\"ds-line\"><span class=\"ds-name\"><span class=\"ds-top\"><span class=\"ds-branch\">main</span><span class=\"ds-git\" aria-hidden=\"true\"><span><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M8 3v10M4 9l4 4 4-4\"/></svg>1</span></span></span></span><span class=\"ds-flap\" data-state=\"idle\"><span>INATIVA</span></span></button><button class=\"ds-edit\" aria-label=\"Editar\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M11 2.5 13.5 5 6 12.5H3.5V10ZM9.5 4 12 6.5\"/></svg></button></li><li class=\"ds-row\"><button class=\"ds-line\"><span class=\"ds-name\"><span class=\"ds-top\"><span class=\"ds-branch\">motor-x</span></span><span class=\"ds-pair\">feature-api<svg class=\"ds-inline\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M3 5.5h10M10.5 3 13 5.5 10.5 8M13 10.5H3M5.5 8 3 10.5 5.5 13\"/></svg>feature-app</span></span></button><button class=\"ds-edit\" aria-label=\"Editar\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M11 2.5 13.5 5 6 12.5H3.5V10ZM9.5 4 12 6.5\"/></svg></button></li><li class=\"ds-row\"><button class=\"ds-line\"><span class=\"ds-name\"><span class=\"ds-top\"><span class=\"ds-branch\"><span class=\"ds-prefix\">fix/</span>login</span></span><span class=\"ds-tag\">SÓ API</span></span></button><button class=\"ds-edit\" aria-label=\"Editar\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M11 2.5 13.5 5 6 12.5H3.5V10ZM9.5 4 12 6.5\"/></svg></button></li></ul>",
+      "css": ".ds-flap{position:relative;display:inline-grid;place-items:center;width:calc(7ch + 20px);height:22px;border-radius:2px;background:linear-gradient(var(--ds-top,var(--flap-top,var(--flap-hi))) 50%,var(--ds-bot,var(--flap-bot,var(--flap))) 50%);color:var(--flap-ink,var(--ink-2));font:700 12px/1 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.06em;white-space:nowrap;overflow:hidden;flex-shrink:0;vertical-align:middle}.ds-flap:not(.ds-preview,[data-state=none]){clip-path:polygon(0 0,100% 0,100% calc(50% - 3px),calc(100% - 2.5px) 50%,100% calc(50% + 3px),100% 100%,0 100%,0 calc(50% + 3px),2.5px 50%,0 calc(50% - 3px))}.ds-flap>span{position:relative;z-index:1;grid-area:1/1}.ds-flap[data-state=none]{background:none;outline:1px dashed var(--ink-3);outline-offset:-1px}.ds-flap[data-state=run]{color:var(--flap-run,var(--run))}.ds-flap:is([data-state=start],[data-state=wait]){color:var(--flap-start,var(--start))}.ds-flap:is([data-state=stop],[data-state=kill]):not(.ds-preview){--ds-top:var(--body-stop-top,#f6c45f);--ds-bot:var(--body-stop-bot,#f0b33f);color:var(--ink-stop,var(--board))}.ds-flap[data-state=part]{color:var(--flap-fail,var(--fail))}.ds-flap:is([data-state=part],[data-state=held]){width:auto;min-width:calc(7ch + 20px);padding:0 7px}.ds-flap:is([data-state=part],[data-state=held])>span::before{content:'';display:inline-block;width:6px;height:6px;margin-right:5px;border-radius:2px;background:currentColor;vertical-align:1px}.ds-flap[data-state=held]>span::before{background:none;box-shadow:inset 0 0 0 1.5px currentColor}.ds-flap.ds-preview{color:var(--wait);background:var(--ends-bg,none);box-shadow:inset 0 0 0 var(--ends-line,1px) currentColor}.ds-flap.ds-count{width:calc(4ch + 14px);color:var(--ink)}:host-context([data-theme=light]) .ds-flap[data-state=run]{--ds-top:#6ccf9c;--ds-bot:#55c08a}:host-context([data-theme=light]) .ds-flap:is([data-state=start],[data-state=wait]){--ds-top:#f6c45f;--ds-bot:#f0b33f}:host-context([data-theme=light]) .ds-flap[data-state=part]{--ds-top:#f4a29b;--ds-bot:#ee8a82}.ds-flap:hover>span{animation:ds-flip 180ms steps(3,jump-none)}@keyframes ds-flip{50%{transform:scaleY(.12)}}@media (prefers-reduced-motion:reduce){.ds-flap:hover>span{animation:none}}.ds-lines{width:280px;margin:0;padding:6px 0;list-style:none;background:var(--rail);font:500 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums}.ds-row{display:flex;align-items:start}.ds-row:hover{background:var(--hover,color-mix(in srgb,var(--flap) 50%,var(--rail)))}.ds-row:has(>.ds-line[aria-current=true]){background:var(--flap);box-shadow:inset 0 -1px 0 var(--ink-3),inset 0 1px 0 var(--ink-3)}.ds-row:has(>.ds-line:focus-visible){outline:2px solid var(--focus);outline-offset:-2px}.ds-line[aria-current=true] .ds-flap{--flap-bot:var(--board)}:host-context([data-theme=light]) .ds-line[aria-current=true] .ds-flap{--flap-top:var(--flap-hi);--flap-bot:#c3c5bf}.ds-line{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;flex:1;min-width:0;padding:5px 2px 5px 14px;border:0;background:none;color:var(--ink-2);font:inherit;text-align:left;cursor:pointer}.ds-line:focus-visible{outline:none}.ds-line .ds-flap{margin:1px 0 0 10px}.ds-name{min-width:0;padding-top:2px}.ds-top{display:flex;align-items:baseline;min-width:0}.ds-branch{display:flex;min-width:0;white-space:nowrap}.ds-prefix{color:var(--ink-2)}.ds-live .ds-branch,.ds-line[aria-current=true] .ds-branch{color:var(--ink)}.ds-git{display:inline-flex;align-self:center;align-items:center;gap:6px;flex-shrink:0;margin-left:6px;color:var(--ink-2);font:600 12px/1 'Barlow Semi Condensed',system-ui,sans-serif}.ds-git>span{display:inline-flex;align-items:center;gap:1px}.ds-git svg{width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}.ds-git .ds-dirty{width:6px;height:6px;border-radius:50%;background:currentColor}.ds-pair{display:flex;align-items:center;white-space:nowrap;color:var(--ink-2);font-size:13px}.ds-inline{width:12px;height:12px;margin:0 4px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}.ds-tag{display:block;width:max-content;margin:2px 0 0;padding:0 4px;border:1px solid var(--rule);border-radius:2px;color:var(--ink-2);font:700 12px/14px 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.06em}.ds-edit{display:inline-grid;place-items:center;width:24px;height:24px;margin:5px 4px 0 0;padding:0;border:0;border-radius:4px;background:none;color:var(--ink-2);opacity:0;cursor:pointer}.ds-row:is(:hover,:focus-within)>.ds-edit{opacity:1}.ds-row:is(:hover,:focus-within)>.ds-edit[aria-disabled=true]{opacity:.5;cursor:not-allowed}.ds-edit:not([aria-disabled=true]):hover{background:var(--flap-hi);color:var(--ink)}.ds-edit:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}.ds-edit svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}"
     },
     {
       "name": "Abas API | FRONT",
       "kind": "nav",
       "refersTo": "tab",
-      "description": "Selecionada: fundo flap liso e fio de 2px em ink na base (o fundo sozinho não distingue). Lado caído (PARCIAL): texto fail com um quadrado de 6px.",
-      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\">API</button><button class=\"ds-tab ds-down\" role=\"tab\" aria-selected=\"false\">FRONT</button></div>",
-      "css": ".ds-tabs{display:flex;gap:4px;padding:9px 8px;background:var(--board)}.ds-tab{height:26px;padding:0 12px;border:1px solid var(--rule);border-radius:2px;background:none;color:var(--ink-2);font:700 12px/1 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}.ds-tab[aria-selected=true]{border-color:transparent;background:var(--flap);box-shadow:inset 0 -2px 0 var(--ink);color:var(--ink)}.ds-tab:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-tab.ds-down{color:var(--fail)}.ds-tab.ds-down::before{content:'';display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:2px;background:currentColor;vertical-align:1px}"
+      "description": "Sem contorno (o contorno é dos botões). Selecionada: fundo flap liso e fio de 2px em ink na base. Quadrado de 6px no respiro da esquerda, a aba não muda de largura: cheio em fail, caiu; cheio em âmbar, parando; vazado, parado à mão.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\">API</button><button class=\"ds-tab ds-down\" role=\"tab\" aria-selected=\"false\">FRONT</button></div><div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab ds-parked\" role=\"tab\" aria-selected=\"false\">API</button><button class=\"ds-tab ds-halting\" role=\"tab\" aria-selected=\"true\">FRONT</button></div>",
+      "css": ".ds-tabs{display:flex;gap:4px;padding:9px 8px;background:var(--board)}.ds-tab{height:26px;padding:0 12px;border:1px solid transparent;border-radius:2px;background:none;color:var(--ink-2);font:700 12px/1 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;cursor:pointer}.ds-tab:hover{background:var(--hover,color-mix(in srgb,var(--flap) 50%,var(--rail)));color:var(--ink)}.ds-tab[aria-selected=true]{background:var(--flap);box-shadow:inset 0 -2px 0 var(--ink);color:var(--ink)}.ds-tab:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-tab:is(.ds-down,.ds-parked,.ds-halting){padding-left:2px}.ds-tab:is(.ds-down,.ds-parked,.ds-halting)::before{content:'';display:inline-block;width:6px;height:6px;margin-right:4px;border-radius:2px;vertical-align:1px}.ds-down{color:var(--fail)}.ds-down::before{background:currentColor}.ds-parked::before{box-shadow:inset 0 0 0 1.5px var(--ink-2)}.ds-halting::before{background:var(--wait)}"
+    },
+    {
+      "name": "Parar / Subir",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Ações da faixa de destino: verbo e objeto escritos, 26px, 13px/600, contorno de fio, abertas por um fio vertical. Cada uma com a largura do maior rótulo que pode ter (rótulos empilhados e invisíveis): o clique não puxa o vizinho para baixo do cursor. Fora de hora, aria-disabled a 0.5 com o motivo.",
+      "html": "<div class=\"ds-actions\"><button class=\"ds-halt\" aria-keyshortcuts=\"Control+Shift+X\"><span>Parar API</span><span class=\"ds-ghost\" aria-hidden=\"true\">Subir Front</span></button><button class=\"ds-halt\" aria-keyshortcuts=\"Control+Shift+Alt+X\"><span>Parar tudo</span></button><button class=\"ds-halt\" aria-disabled=\"true\"><span>Subir API</span></button></div>",
+      "css": ".ds-actions{position:relative;display:flex;align-items:center;gap:4px;margin-left:9px;padding:9px 0;background:var(--board)}.ds-actions::before{content:'';position:absolute;left:-9px;top:13px;bottom:13px;border-left:1px solid var(--rule)}.ds-halt{display:inline-grid;place-items:center;height:26px;padding:0 10px;border:1px solid var(--rule);border-radius:4px;background:none;color:var(--ink);font:600 13px/1 'Barlow Semi Condensed',system-ui,sans-serif;white-space:nowrap;cursor:pointer}.ds-halt>span{grid-area:1/1}.ds-halt>.ds-ghost{visibility:hidden}.ds-halt:hover{background:var(--flap)}.ds-halt:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-halt[aria-disabled=true]{opacity:.5;background:none;cursor:not-allowed}"
     },
     {
       "name": "Botão primário",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Ação principal dos diálogos, em tinta neutra (nunca acento). Vem primeiro no DOM e aparece à direita.",
-      "html": "<button class=\"ds-btn ds-btn-primary\">Criar worktree</button>",
-      "css": ".ds-btn{height:32px;padding:0 14px;border:1px solid var(--rule);border-radius:4px;background:none;color:var(--ink);font:500 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums;font-weight:600;cursor:pointer}.ds-btn-primary{border-color:transparent;background:var(--primary);color:var(--primary-ink)}.ds-btn-primary:hover{background:var(--ink-2)}.ds-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-btn[aria-disabled=true]{opacity:.5;cursor:progress}"
+      "description": "Ação principal dos diálogos, em tinta neutra (nunca acento). Vem primeiro no DOM e aparece à direita. Ocupado: aria-disabled a 0.5 com cursor progress, nunca disabled.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Criar worktree</button> <button class=\"ds-btn ds-btn-primary\" aria-disabled=\"true\">Criando…</button>",
+      "css": ".ds-btn{height:32px;padding:0 14px;border:1px solid var(--rule);border-radius:4px;background:none;color:var(--ink);font:600 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums;cursor:pointer}.ds-btn:hover{background:var(--flap)}.ds-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-btn-primary{border-color:transparent;background:var(--primary);color:var(--primary-ink)}.ds-btn-primary:hover{background:var(--ink-2)}.ds-btn[aria-disabled=true]{opacity:.5;cursor:progress}"
     },
     {
       "name": "Botão secundário",
       "kind": "button",
       "refersTo": "button",
-      "description": "Cancelar, Voltar, Forçar agora, Escolher…: contorno de fio, hover de palheta.",
-      "html": "<button class=\"ds-btn\">Cancelar</button>",
-      "css": ".ds-btn{height:32px;padding:0 14px;border:1px solid var(--rule);border-radius:4px;background:none;color:var(--ink);font:500 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums;font-weight:600;cursor:pointer}.ds-btn:hover{background:var(--flap)}.ds-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-btn:disabled{opacity:.5;cursor:default}"
+      "description": "Cancelar, Escolher…, Remover… (destrutivo não ganha acento): contorno de fio, hover de palheta.",
+      "html": "<button class=\"ds-btn\">Cancelar</button> <button class=\"ds-btn\">Remover…</button> <button class=\"ds-btn\" disabled>Cancelar</button>",
+      "css": ".ds-btn{height:32px;padding:0 14px;border:1px solid var(--rule);border-radius:4px;background:none;color:var(--ink);font:600 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums;cursor:pointer}.ds-btn:hover{background:var(--flap)}.ds-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-btn:disabled{opacity:.5;cursor:default}"
     },
     {
       "name": "Botão de ícone",
       "kind": "button",
       "refersTo": "icon-button",
-      "description": "28×28, ícone SVG de traço 1.5 em meia-tinta; hover fundo flap e ícone ink; indisponível (aria-disabled) em ink-3, ainda focável com o motivo no nome.",
-      "html": "<button class=\"ds-icon-btn\" aria-label=\"Nova worktree\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M8 3v10M3 8h10\"/></svg></button><button class=\"ds-icon-btn\" aria-label=\"Reler worktrees\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3\"/></svg></button><button class=\"ds-icon-btn\" aria-label=\"Nova worktree: indisponível\" aria-disabled=\"true\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M8 3v10M3 8h10\"/></svg></button>",
-      "css": ".ds-icon-btn{display:inline-grid;place-items:center;width:28px;height:28px;padding:0;border:0;border-radius:4px;background:none;color:var(--ink-2);cursor:pointer}.ds-icon-btn:hover{background:var(--flap);color:var(--ink)}.ds-icon-btn[aria-disabled=true]{color:var(--ink-3);background:none;cursor:not-allowed}.ds-icon-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-icon-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}"
+      "description": "28×28, ícone SVG de traço 1.5 em meia-tinta; hover fundo flap e ícone ink; indisponível (aria-disabled) a 0.5 de opacidade, como os botões de texto, ainda focável com o motivo no nome.",
+      "html": "<button class=\"ds-icon-btn\" aria-label=\"Nova worktree\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M8 3v10M3 8h10\"/></svg></button><button class=\"ds-icon-btn\" aria-label=\"Reler worktrees\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3\"/></svg></button><button class=\"ds-icon-btn\" aria-label=\"Mais ações\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"3.5\" cy=\"8\" r=\"1.25\" class=\"ds-dot\"/><circle cx=\"8\" cy=\"8\" r=\"1.25\" class=\"ds-dot\"/><circle cx=\"12.5\" cy=\"8\" r=\"1.25\" class=\"ds-dot\"/></svg></button><button class=\"ds-icon-btn\" aria-label=\"Nova worktree: o config do projeto tem um problema\" aria-disabled=\"true\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M8 3v10M3 8h10\"/></svg></button>",
+      "css": ".ds-icon-btn{display:inline-grid;place-items:center;width:28px;height:28px;padding:0;border:0;border-radius:4px;background:none;color:var(--ink-2);cursor:pointer}.ds-icon-btn:hover{background:var(--flap);color:var(--ink)}.ds-icon-btn[aria-disabled=true]{opacity:.5;background:none;cursor:not-allowed}.ds-icon-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-icon-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}.ds-icon-btn .ds-dot{fill:currentColor;stroke:none}"
     },
     {
       "name": "Campo de texto",
       "kind": "input",
       "refersTo": "input",
-      "description": "34px sobre o fundo do painel, contorno ink-3 (≥3:1), placeholder com \"ex.:\"; foco é anel neutro; inválido ganha contorno fail e a mensagem logo abaixo.",
-      "html": "<label class=\"ds-label\">Branch<input class=\"ds-input\" placeholder=\"ex.: feat/minha-feature\"></label><label class=\"ds-label\">Repositório<input class=\"ds-input\" aria-invalid=\"true\" value=\"~/dev/meu-api\"></label><p class=\"ds-error\">Essa pasta não é um repositório git.</p>",
-      "css": ".ds-label{display:block;margin-bottom:12px;color:var(--ink-2);font:600 13px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.02em}.ds-input{display:block;width:100%;height:34px;margin-top:4px;padding:0 10px;border:1px solid var(--ink-3);border-radius:4px;background:var(--board);color:var(--ink);font:500 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums}.ds-input::placeholder{color:var(--ink-2)}.ds-input:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-input[aria-invalid=true]{border-color:var(--fail)}.ds-error{margin:-4px 0 12px;color:var(--fail);font:500 13px/1.35 'Barlow Semi Condensed',system-ui,sans-serif}"
+      "description": "34px sobre o fundo do painel, contorno ink-3 (≥3:1), placeholder com \"ex.:\"; foco é anel neutro; inválido ganha contorno fail e a mensagem logo abaixo. O comando de start tem o prefixo do gerenciador fora do campo, com o anel na caixa inteira.",
+      "html": "<label class=\"ds-label\">Branch<input class=\"ds-input\" placeholder=\"ex.: feat/minha-feature\"></label><label class=\"ds-label\">Repositório<input class=\"ds-input\" aria-invalid=\"true\" value=\"~/dev/meu-api\"></label><p class=\"ds-error\">Essa pasta não é um repositório git.</p><label class=\"ds-label\">Comando de start<span class=\"ds-cmd\"><span class=\"ds-cmd-prefix\">npm run</span><input class=\"ds-input\" value=\"dev\"></span></label>",
+      "css": ".ds-label{display:block;margin-bottom:12px;color:var(--ink-2);font:600 13px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.02em}.ds-input{display:block;width:100%;height:34px;margin-top:4px;padding:0 10px;border:1px solid var(--ink-3);border-radius:4px;background:var(--board);color:var(--ink);font:500 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums}.ds-input::placeholder{color:var(--ink-2)}.ds-input:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-input[aria-invalid=true]{border-color:var(--fail)}.ds-error{margin:-4px 0 12px;color:var(--fail);font:500 13px/1.35 'Barlow Semi Condensed',system-ui,sans-serif}.ds-cmd{display:flex;align-items:center;margin-top:4px;border:1px solid var(--ink-3);border-radius:4px;background:var(--board)}.ds-cmd:focus-within{outline:2px solid var(--focus);outline-offset:2px}.ds-cmd-prefix{flex-shrink:0;padding-left:10px;color:var(--ink-2);font:500 15px 'Barlow Semi Condensed',system-ui,sans-serif;white-space:nowrap}.ds-cmd .ds-input{height:32px;margin:0;padding-left:6px;border:0;outline:none}"
     },
     {
       "name": "Etiqueta e tecla",
@@ -698,12 +935,12 @@
       "css": ".ds-tag{display:inline-block;padding:0 4px;border:1px solid var(--rule);border-radius:2px;color:var(--ink-2);font:700 12px/16px 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.06em}.ds-kbd{display:inline-block;min-width:1.6em;padding:1px 5px;margin-right:3px;border:1px solid var(--rule);border-bottom-width:2px;border-radius:2px;background:var(--flap);color:var(--ink);font:600 12px/1.4 'Barlow Semi Condensed',system-ui,sans-serif;text-align:center}"
     },
     {
-      "name": "Aviso de troca",
-      "kind": "card",
-      "refersTo": "floating-surface",
-      "description": "Superfície flutuante (trilho, fio de 1px, raio 6px) sobre o véu, sem sombra. Nenhum botão é primário: esperar é a ação padrão; Voltar primeiro, Forçar afastado à direita. A contagem até o SIGKILL é uma palheta estreita em tinta neutra.",
-      "html": "<div class=\"ds-scrim\"><div class=\"ds-float\" role=\"group\" aria-label=\"Troca em andamento\"><div class=\"ds-head\"><span class=\"ds-flap\" data-state=\"stop\"><span>PARANDO</span></span><strong>Encerrando feat/scrap-movement</strong><span class=\"ds-flap ds-count\" data-state=\"idle\"><span>4 s</span></span></div><p>Ctrl+C enviado a <code>npm run dev</code>. Esperando saírem e liberarem as portas para iniciar main.</p><p class=\"ds-fine\">Se não saírem até a contagem zerar, recebem SIGKILL.</p><div class=\"ds-actions\"><button class=\"ds-btn\">Voltar para feat/scrap-movement</button><button class=\"ds-btn ds-force\">Forçar agora</button></div></div></div>",
-      "css": ".ds-flap{position:relative;display:inline-grid;place-items:center;min-width:calc(7ch + 14px);padding:0 6px;height:22px;border-radius:2px;background:linear-gradient(var(--flap-hi) 50%,var(--flap) 50%);color:var(--ink-2);font:700 12px/1 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.06em;overflow:hidden;flex-shrink:0}.ds-flap::after{content:'';position:absolute;inset:50% 0 auto;height:1px;background:linear-gradient(90deg,var(--seam) 2px,transparent 2px calc(100% - 2px),var(--seam) 0)}.ds-flap>span{position:relative;z-index:1;grid-area:1/1}.ds-flap[data-state=none]{background:none;box-shadow:inset 0 0 0 1px var(--rule)}.ds-flap[data-state=none]::after{content:none}.ds-flap[data-state=run]{color:var(--run)}.ds-flap[data-state=start]{color:var(--start)}.ds-flap[data-state=wait],.ds-flap[data-state=stop]{color:var(--wait)}.ds-flap[data-state=part],.ds-flap[data-state=kill]{color:var(--fail)}.ds-flap.ds-count{min-width:calc(4ch + 14px);color:var(--ink)}.ds-flap:hover>span{animation:ds-flip 180ms steps(3,jump-none)}@keyframes ds-flip{50%{transform:scaleY(.12)}}@media (prefers-reduced-motion:reduce){.ds-flap:hover>span{animation:none}}.ds-scrim{display:grid;place-items:center;padding:24px;background:var(--scrim)}.ds-float{display:grid;gap:10px;width:min(440px,100%);padding:22px 24px;border:1px solid var(--rule);border-radius:6px;background:var(--rail);color:var(--ink);font:500 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums}.ds-head{display:flex;align-items:first baseline;gap:10px}.ds-head .ds-count{margin-left:auto}.ds-float strong{font-size:19px;font-weight:600;line-height:1.25}.ds-float p{margin:0;color:var(--ink-2)}.ds-float code{font:12px 'JetBrainsMono Nerd Font','Hack Nerd Font Mono',monospace}.ds-fine{margin-top:-4px!important;font-size:13px}.ds-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}.ds-force{margin-left:auto}.ds-btn{height:32px;padding:0 14px;border:1px solid var(--rule);border-radius:4px;background:none;color:var(--ink);font:500 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums;font-weight:600;cursor:pointer}.ds-btn:hover{background:var(--flap)}.ds-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}"
+      "name": "Faixa da troca",
+      "kind": "custom",
+      "refersTo": "flap",
+      "description": "A troca em andamento na segunda faixa (36px, largura inteira, sem véu nem card): o verbo, Voltar e reiniciar (o nome trunca), e só depois de 2 s \"SIGKILL em\", a contagem numa palheta estreita neutra e Forçar, afastado por um fio. Nenhum botão é primário: esperar é a ação padrão; o foco vai para a faixa, com o anel no verbo.",
+      "html": "<div class=\"ds-strip\" role=\"group\" aria-label=\"Troca em andamento\" tabindex=\"-1\"><span class=\"ds-what\">Parando</span><button class=\"ds-btn ds-back\">Voltar <span class=\"ds-para\">e reiniciar</span><span class=\"ds-to\">scrap-movement</span></button><span>SIGKILL em</span><span class=\"ds-flap ds-count\" data-state=\"idle\"><span>3 s</span></span><button class=\"ds-btn ds-force\">Forçar</button></div>",
+      "css": ".ds-flap{position:relative;display:inline-grid;place-items:center;width:calc(7ch + 20px);height:22px;border-radius:2px;background:linear-gradient(var(--ds-top,var(--flap-top,var(--flap-hi))) 50%,var(--ds-bot,var(--flap-bot,var(--flap))) 50%);color:var(--flap-ink,var(--ink-2));font:700 12px/1 'Barlow Semi Condensed',system-ui,sans-serif;letter-spacing:.06em;white-space:nowrap;overflow:hidden;flex-shrink:0;vertical-align:middle}.ds-flap:not(.ds-preview,[data-state=none]){clip-path:polygon(0 0,100% 0,100% calc(50% - 3px),calc(100% - 2.5px) 50%,100% calc(50% + 3px),100% 100%,0 100%,0 calc(50% + 3px),2.5px 50%,0 calc(50% - 3px))}.ds-flap>span{position:relative;z-index:1;grid-area:1/1}.ds-flap[data-state=none]{background:none;outline:1px dashed var(--ink-3);outline-offset:-1px}.ds-flap[data-state=run]{color:var(--flap-run,var(--run))}.ds-flap:is([data-state=start],[data-state=wait]){color:var(--flap-start,var(--start))}.ds-flap:is([data-state=stop],[data-state=kill]):not(.ds-preview){--ds-top:var(--body-stop-top,#f6c45f);--ds-bot:var(--body-stop-bot,#f0b33f);color:var(--ink-stop,var(--board))}.ds-flap[data-state=part]{color:var(--flap-fail,var(--fail))}.ds-flap:is([data-state=part],[data-state=held]){width:auto;min-width:calc(7ch + 20px);padding:0 7px}.ds-flap:is([data-state=part],[data-state=held])>span::before{content:'';display:inline-block;width:6px;height:6px;margin-right:5px;border-radius:2px;background:currentColor;vertical-align:1px}.ds-flap[data-state=held]>span::before{background:none;box-shadow:inset 0 0 0 1.5px currentColor}.ds-flap.ds-preview{color:var(--wait);background:var(--ends-bg,none);box-shadow:inset 0 0 0 var(--ends-line,1px) currentColor}.ds-flap.ds-count{width:calc(4ch + 14px);color:var(--ink)}:host-context([data-theme=light]) .ds-flap[data-state=run]{--ds-top:#6ccf9c;--ds-bot:#55c08a}:host-context([data-theme=light]) .ds-flap:is([data-state=start],[data-state=wait]){--ds-top:#f6c45f;--ds-bot:#f0b33f}:host-context([data-theme=light]) .ds-flap[data-state=part]{--ds-top:#f4a29b;--ds-bot:#ee8a82}.ds-flap:hover>span{animation:ds-flip 180ms steps(3,jump-none)}@keyframes ds-flip{50%{transform:scaleY(.12)}}@media (prefers-reduced-motion:reduce){.ds-flap:hover>span{animation:none}}.ds-btn{height:32px;padding:0 14px;border:1px solid var(--rule);border-radius:4px;background:none;color:var(--ink);font:600 15px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums;cursor:pointer}.ds-btn:hover{background:var(--flap)}.ds-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-strip{display:flex;align-items:center;gap:8px;height:36px;padding:0 8px 0 12px;border-bottom:1px solid var(--rule);background:var(--board);color:var(--ink-2);font:500 13px/1.35 'Barlow Semi Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap}.ds-strip:focus{outline:none}.ds-strip:focus-visible>.ds-what{outline:2px solid var(--focus);outline-offset:2px;border-radius:2px}.ds-strip .ds-btn{height:26px;padding:0 10px;font-size:13px}.ds-back{display:inline-flex;align-items:center;min-width:0;max-width:420px;overflow:hidden}.ds-para,.ds-to{margin-left:.25em}.ds-to{min-width:0;overflow:hidden;text-overflow:ellipsis}.ds-force{position:relative;margin-left:4px}.ds-force::before{content:'';position:absolute;left:-9px;top:4px;bottom:4px;border-left:1px solid var(--rule)}"
     }
   ],
   "narrative": {
@@ -720,7 +957,7 @@
     "rules": [
       {
         "name": "A Regra de Uma Cor por Estado",
-        "body": "Verde é de pé, âmbar é em movimento (subindo, aguardando, parando), vermelho é falha (parcial, SIGKILL, erro). A contagem até o SIGKILL fica em tinta neutra: esperar é o caminho normal. Nenhuma outra cor entra na interface: foco, caret, seleção, botão primário e checkbox (`accent-color`) são tinta neutra.",
+        "body": "Verde é de pé, âmbar é em movimento (subindo, aguardando, parando), vermelho é falha (parcial, erro); o SIGKILL é âmbar, porque parar à força ainda é movimento. Dentro do âmbar, a polaridade separa quem morre de quem espera: PARANDO e SIGKILL são a palheta invertida, nunca outra cor. A contagem até o SIGKILL fica em tinta neutra e só aparece com o Forçar (2 s): esperar é o caminho normal. Nenhuma outra cor entra na interface: foco, caret, seleção, botão primário e checkbox (`accent-color`) são tinta neutra.",
         "section": "colors"
       },
       {
@@ -730,7 +967,7 @@
       },
       {
         "name": "A Regra do Terminal sem Moldura",
-        "body": "O terminal fica sobre `board`, o mesmo fundo do painel, sem borda nem cartão. Fundo, cursor e seleção do xterm são lidos dos tokens (`--term-bg`, `--ink`, `--selection`) ao criar o terminal e ao trocar de tema; vermelho, verde e amarelo do ANSI também (`--fail`, `--run`, `--start`), então seguem os estados sem cópia; as outras cores ANSI pertencem ao conteúdo do terminal, não à interface, mas todas passam AA (≥4,5:1) sobre o fundo do terminal nos dois temas.",
+        "body": "O terminal fica sobre `board`, o mesmo fundo do painel, sem borda nem cartão. E fica no fim: quem estava no fim continua no fim quando a faixa da troca entra e sai (`fitPane`; o xterm 6.0 prendia a vista uma linha acima e parava de acompanhar a saída, e toda troca com histórico terminava no \"^C\" da anterior, com o servidor subindo abaixo da dobra). Fundo, cursor e seleção do xterm são lidos dos tokens (`--term-bg`, `--ink`, `--selection`) ao criar o terminal e ao trocar de tema; vermelho, verde e amarelo do ANSI também (`--fail`, `--run`, `--start`), então seguem os estados sem cópia; as outras cores ANSI pertencem ao conteúdo do terminal, não à interface, mas todas passam AA (≥4,5:1) sobre o fundo do terminal nos dois temas, menos o `black` da noite, que por convenção é o próprio fundo (1,08:1). O `brightBlack` da noite é a cor das sugestões do fish, lida o dia todo: `#81827e`, a 4,76:1 (o `#6c6d6a` de antes dava 3,54:1).",
         "section": "colors"
       },
       {
@@ -749,7 +986,7 @@
       "**Do** usar tinta cheia (`ink`) apenas no que está em serviço; o resto em `ink-2`.",
       "**Do** desenhar ícones como SVG de traço 1.5 em viewBox 16 (16px, inline 12px), em `currentColor`.",
       "**Do** animar só em degraus (`steps`), só na mudança de estado (ou enquanto um estado dura, como o reler lendo), e desligar com `prefers-reduced-motion`.",
-      "**Do** dar a toda superfície flutuante borda `rule` de 1px, raio 6px, fundo `rail` e a sombra `0 4px 8px`.",
+      "**Do** dar a toda superfície flutuante borda `rule` de 1px, raio 6px, fundo `rail` e a sombra Flutuante.",
       "**Do** manter o terminal sobre `board`, sem moldura.",
       "**Do** definir todo valor novo nas duas paletas (noite e dia) com contraste AA."
     ],

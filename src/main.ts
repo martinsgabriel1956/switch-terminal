@@ -85,7 +85,8 @@ const TERM_THEME: Record<"dark" | "light", ITheme> = {
     magenta: "#c792ea",
     cyan: "#5ccfe6",
     white: "#d6d5cf",
-    brightBlack: "#6c6d6a",
+    // 4,76:1 sobre o fundo: é a cor das sugestões do fish, lida o dia todo (#6c6d6a dava 3,54:1)
+    brightBlack: "#81827e",
     brightRed: "#ff8a8a",
     brightGreen: "#6fd9a5",
     brightYellow: "#ffcb66",
@@ -758,9 +759,14 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
   term.loadAddon(search);
   term.open(paneEl);
   // O recado no terminal acompanha a saída: o prompt desce o cursor, uma linha longa ocupa o canto.
-  term.onWriteParsed(() => termNoteEl.hidden || renderTermNote());
+  // Só o terminal em que o recado está, e uma vez por quadro: na troca a anterior despeja o log de desligar, e cada lote,
+  // de qualquer terminal, relia o layout das linhas (um reflow por lote).
+  term.onWriteParsed(() => termNoteEl.hidden || pane !== notePane() || queueTermNote());
   // O Tab é do shell e não sai do terminal: a saída do teclado é dita onde o foco está, não só na ajuda.
-  term.textarea?.setAttribute("aria-description", "Tab vai para o shell; Ctrl+Shift+E volta ao painel, Ctrl+Shift+K troca de worktree");
+  // Por aria-describedby (#term-keys): o WebKitGTK não passa aria-description ao leitor de tela.
+  term.textarea?.setAttribute("aria-describedby", "term-keys");
+  // O xterm chama os dois campos de "Terminal input" (só no open): o leitor de tela não dizia em qual lado se digita.
+  term.textarea?.setAttribute("aria-label", `Terminal ${TAB_LABEL[t]}`);
   fit.fit();
 
   const pane: Pane = { term, fit, search, el: paneEl, ptyId: -1, side, url: null, port: null };
@@ -1185,13 +1191,9 @@ function renderHalt(b: HTMLButtonElement, all: boolean) {
   // Os fantasmas ficam fora do nome acessível (aria-hidden e invisíveis): o leitor de tela ouve só "Parar API".
   b.replaceChildren(el("span", { textContent: text }), ...HALT_LABELS[all ? "all" : "tab"].map((g) => el("span", { className: "ghost", textContent: g, ariaHidden: "true" })));
   b.setAttribute("aria-keyshortcuts", `Control+${chord}`);
-  if (wait) {
-    b.setAttribute("aria-disabled", "true");
-    b.setAttribute("aria-description", title);
-  } else {
-    b.removeAttribute("aria-disabled");
-    b.removeAttribute("aria-description");
-  }
+  // O motivo ("Aguarde: parando processos") chega ao leitor de tela pelo title, que o WebKitGTK passa como descrição.
+  if (wait) b.setAttribute("aria-disabled", "true");
+  else b.removeAttribute("aria-disabled");
 }
 
 /** Primeiro uso: a troca em três palhetas, com as peças do próprio painel. O que ele vai fazer, antes de ter o que fazer. */
@@ -1406,6 +1408,10 @@ function projectErrorSummary(error: string) {
   return `${side}: ${reason}`;
 }
 
+// id da descrição "Encerra …" de cada linha, fixo por chave: um id novo a cada render mudava o outerHTML que o render do
+// painel compara, e toda plataforma era recriada (o atraso da prévia ENCERRA reiniciava sob o cursor)
+const endsIds = new Map<string, string>();
+const endsId = (k: string) => endsIds.get(k) ?? endsIds.set(k, `ends-${endsIds.size}`).get(k)!;
 function lineButton(project: string, wt: Worktree) {
   const k = key(project, wt.id);
   // Encerrada à força pela troca: SIGKILL (em âmbar) só enquanto acontece, depois INATIVA. É rotina: o recado diz "à força".
@@ -1450,7 +1456,13 @@ function lineButton(project: string, wt: Worktree) {
     // A palheta fica à direita, como a coluna de situação de um painel de partidas; nunca aberta, ela não ocupa a coluna (CSS) e o nome usa a largura.
     f,
   );
-  if (ends) b.setAttribute("aria-description", `Encerra ${spokenLabel(ends.label)}${endsProcs}`);
+  // O que o clique encerra, com o par falado ("pareada com", não "↔"). Num filho hidden por aria-describedby: o WebKitGTK
+  // não passa aria-description ao leitor de tela. Sem ele, a descrição é o title (nome, git e o mesmo "Encerra").
+  if (ends) {
+    const id = endsId(k);
+    b.append(el("span", { id, hidden: true, textContent: `Encerra ${spokenLabel(ends.label)}${endsProcs}` }));
+    b.setAttribute("aria-describedby", id);
+  }
   b.dataset.key = k;
   if (currentKey() === k) b.setAttribute("aria-current", "true");
   return b;
@@ -1554,7 +1566,8 @@ function renderBoard() {
       },
       el("span", { className: "tile", textContent: p.name }),
       icon(CHEVRON, "chev"),
-      hidden ? el("span", { className: "count", textContent: `+${hidden}` }) : null,
+      // o "+6" é para o olho; o leitor de tela ouve ", 6 ocultas" (os dois juntos falavam a contagem duas vezes)
+      hidden ? el("span", { className: "count", textContent: `+${hidden}`, ariaHidden: "true" }) : null,
       hidden ? el("span", { className: "sr", textContent: `, ${hidden} ocultas` }) : null,
     );
     fold.setAttribute("aria-expanded", String(open));
@@ -1842,21 +1855,42 @@ function fitHeaderOnce() {
   renderTermNote();
 }
 
+/** O terminal onde o recado fica: o da aba aberta da worktree atual. */
+function notePane() {
+  const env = current ? envs.get(currentKey()!) : undefined;
+  return env && (env.panes[tab] ?? Object.values(env.panes)[0]);
+}
+
+let noteFrame = 0;
+/** O recado seguindo a saída: um render por quadro, por mais lotes que cheguem nele. */
+function queueTermNote() {
+  noteFrame ||= requestAnimationFrame(() => {
+    noteFrame = 0;
+    renderTermNote();
+  });
+}
+
 /** Recado no terminal, sem custo de largura na faixa. Na troca, na linha logo abaixo do cursor (escondido) do terminal
  *  travado, onde a primeira tecla iria: no canto de cima, a 1440, ficava longe do olho. Depois, no canto, o "Parou em"
  *  que a faixa estreita cedeu: a meia tela a troca terminava sem fecho. aria-hidden: o #last-stop já falou. */
 function renderTermNote() {
   const env = current ? envs.get(currentKey()!) : undefined;
   const st = env && stopping.get(env.project);
+  // a conta do notePane, aqui em linha: o TypeScript estreita env a partir dela
   const pane = env && (env.panes[tab] ?? Object.values(env.panes)[0]);
   if (st && pane) {
     // Sem linha abaixo (cursor na última), vai para o canto: na linha do cursor cobriria o prompt.
     const next = pane.el.querySelector(".xterm-rows")?.children[pane.term.buffer.active.cursorY + 1];
+    // Lê antes de escrever: a classe e o texto não mexem nas linhas, e a leitura não força outro layout.
+    const top = next ? `${next.getBoundingClientRect().top - panesEl.getBoundingClientRect().top}px` : "";
     termNoteEl.classList.toggle("lock", !!next);
-    termNoteEl.style.top = next ? `${next.getBoundingClientRect().top - panesEl.getBoundingClientRect().top}px` : "";
+    termNoteEl.style.top = top;
     // Depois do Voltar, a que espera é a própria anterior: "Aguardando main parar" no terminal da main.
-    termNoteEl.textContent =
+    const text =
       active[env.project] === st.fromId ? `Reiniciando ${proseName(st.from)} · digitação liberada quando subir` : `Aguardando ${proseName(st.from)} parar · digitação liberada em seguida`;
+    if (termNoteEl.textContent !== text) termNoteEl.textContent = text;
+    // o texto daqui não é cópia do #last-stop: o canto recopia na próxima vez
+    delete termNoteEl.dataset.src;
     termNoteEl.hidden = false;
     return;
   }
@@ -1867,7 +1901,12 @@ function renderTermNote() {
   const parked = !!pane && !note && !haltTabEl.hidden && haltTabEl.inert && lineState(env.project, current!.wt) === "held";
   termNoteEl.hidden = !note && !parked;
   if (!pane || termNoteEl.hidden) return;
-  termNoteEl.replaceChildren(...(note ? [...lastStopEl.children].map((c) => c.cloneNode(true)) : [`${haltTabEl.dataset.label} · Ctrl+Shift+S`]));
+  // Recopia só quando a origem muda: com a saída correndo, isto roda a cada quadro.
+  const src = note ? lastStopEl.innerHTML : `${haltTabEl.dataset.label} · Ctrl+Shift+S`;
+  if (termNoteEl.dataset.src !== src) {
+    termNoteEl.dataset.src = src;
+    termNoteEl.replaceChildren(...(note ? [...lastStopEl.children].map((c) => c.cloneNode(true)) : [src]));
+  }
   // No canto, na primeira das 4 linhas de cima cuja saída termina antes dele: por cima de uma linha longa do dev
   // server, cobria a saída por 8 s. Nenhuma livre: sai (o leitor de tela já ouviu, e a linha voltou a INATIVA).
   const rows = pane.el.querySelector(".xterm-rows");
