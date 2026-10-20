@@ -85,7 +85,8 @@ const TERM_THEME: Record<"dark" | "light", ITheme> = {
     magenta: "#c792ea",
     cyan: "#5ccfe6",
     white: "#d6d5cf",
-    brightBlack: "#6c6d6a",
+    // 4,76:1 sobre o fundo: é a cor das sugestões do fish, lida o dia todo (#6c6d6a dava 3,54:1)
+    brightBlack: "#81827e",
     brightRed: "#ff8a8a",
     brightGreen: "#6fd9a5",
     brightYellow: "#ffcb66",
@@ -760,7 +761,10 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
   // O recado no terminal acompanha a saída: o prompt desce o cursor, uma linha longa ocupa o canto.
   term.onWriteParsed(() => termNoteEl.hidden || renderTermNote());
   // O Tab é do shell e não sai do terminal: a saída do teclado é dita onde o foco está, não só na ajuda.
-  term.textarea?.setAttribute("aria-description", "Tab vai para o shell; Ctrl+Shift+E volta ao painel, Ctrl+Shift+K troca de worktree");
+  // Por aria-describedby (#term-keys): o WebKitGTK não passa aria-description ao leitor de tela.
+  term.textarea?.setAttribute("aria-describedby", "term-keys");
+  // O xterm chama os dois campos de "Terminal input" (só no open): o leitor de tela não dizia em qual lado se digita.
+  term.textarea?.setAttribute("aria-label", `Terminal ${TAB_LABEL[t]}`);
   fit.fit();
 
   const pane: Pane = { term, fit, search, el: paneEl, ptyId: -1, side, url: null, port: null };
@@ -1185,13 +1189,9 @@ function renderHalt(b: HTMLButtonElement, all: boolean) {
   // Os fantasmas ficam fora do nome acessível (aria-hidden e invisíveis): o leitor de tela ouve só "Parar API".
   b.replaceChildren(el("span", { textContent: text }), ...HALT_LABELS[all ? "all" : "tab"].map((g) => el("span", { className: "ghost", textContent: g, ariaHidden: "true" })));
   b.setAttribute("aria-keyshortcuts", `Control+${chord}`);
-  if (wait) {
-    b.setAttribute("aria-disabled", "true");
-    b.setAttribute("aria-description", title);
-  } else {
-    b.removeAttribute("aria-disabled");
-    b.removeAttribute("aria-description");
-  }
+  // O motivo ("Aguarde: parando processos") chega ao leitor de tela pelo title, que o WebKitGTK passa como descrição.
+  if (wait) b.setAttribute("aria-disabled", "true");
+  else b.removeAttribute("aria-disabled");
 }
 
 /** Primeiro uso: a troca em três palhetas, com as peças do próprio painel. O que ele vai fazer, antes de ter o que fazer. */
@@ -1406,6 +1406,10 @@ function projectErrorSummary(error: string) {
   return `${side}: ${reason}`;
 }
 
+// id da descrição "Encerra …" de cada linha, fixo por chave: um id novo a cada render mudava o outerHTML que o render do
+// painel compara, e toda plataforma era recriada (o atraso da prévia ENCERRA reiniciava sob o cursor)
+const endsIds = new Map<string, string>();
+const endsId = (k: string) => endsIds.get(k) ?? endsIds.set(k, `ends-${endsIds.size}`).get(k)!;
 function lineButton(project: string, wt: Worktree) {
   const k = key(project, wt.id);
   // Encerrada à força pela troca: SIGKILL (em âmbar) só enquanto acontece, depois INATIVA. É rotina: o recado diz "à força".
@@ -1450,7 +1454,13 @@ function lineButton(project: string, wt: Worktree) {
     // A palheta fica à direita, como a coluna de situação de um painel de partidas; nunca aberta, ela não ocupa a coluna (CSS) e o nome usa a largura.
     f,
   );
-  if (ends) b.setAttribute("aria-description", `Encerra ${spokenLabel(ends.label)}${endsProcs}`);
+  // O que o clique encerra, com o par falado ("pareada com", não "↔"). Num filho hidden por aria-describedby: o WebKitGTK
+  // não passa aria-description ao leitor de tela. Sem ele, a descrição é o title (nome, git e o mesmo "Encerra").
+  if (ends) {
+    const id = endsId(k);
+    b.append(el("span", { id, hidden: true, textContent: `Encerra ${spokenLabel(ends.label)}${endsProcs}` }));
+    b.setAttribute("aria-describedby", id);
+  }
   b.dataset.key = k;
   if (currentKey() === k) b.setAttribute("aria-current", "true");
   return b;
@@ -1554,7 +1564,8 @@ function renderBoard() {
       },
       el("span", { className: "tile", textContent: p.name }),
       icon(CHEVRON, "chev"),
-      hidden ? el("span", { className: "count", textContent: `+${hidden}` }) : null,
+      // o "+6" é para o olho; o leitor de tela ouve ", 6 ocultas" (os dois juntos falavam a contagem duas vezes)
+      hidden ? el("span", { className: "count", textContent: `+${hidden}`, ariaHidden: "true" }) : null,
       hidden ? el("span", { className: "sr", textContent: `, ${hidden} ocultas` }) : null,
     );
     fold.setAttribute("aria-expanded", String(open));

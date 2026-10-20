@@ -29,7 +29,9 @@
         </svg>
         <h1>Hotswap</h1>
       </div>
-      <nav id="board" aria-label="Projetos" aria-description="Setas andam entre as worktrees; Enter troca"></nav>
+      <!-- aria-describedby, não aria-description: o WebKitGTK não passa aria-description ao AT-SPI, e o Orca não ouvia nada -->
+      <nav id="board" aria-label="Projetos" aria-describedby="board-keys"></nav>
+      <span id="board-keys" hidden>Setas andam entre as worktrees; Enter troca</span>
       <div id="sidebar-foot">
         <button id="new-project" type="button" class="quiet">
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5V12.5H14V6H7.5L6 4.5Z" /><path d="M8 7.8v3.4M6.3 9.5h3.4" /></svg>
@@ -77,9 +79,12 @@
         <div id="empty"></div>
         <p id="wait-say" class="sr" role="status"></p>
         <p id="term-note" aria-hidden="true" hidden></p>
+        <!-- descrição do campo de cada terminal (main.ts) -->
+        <span id="term-keys" hidden>Tab vai para o shell; Ctrl+Shift+E volta ao painel, Ctrl+Shift+K troca de worktree</span>
         <div id="term-search" role="search" aria-label="Buscar no terminal" hidden>
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3 3" /></svg>
-          <input type="search" aria-label="Buscar no terminal" aria-describedby="term-search-say" aria-description="Enter vai para a próxima, Shift+Enter para a anterior, Esc fecha" placeholder="Buscar no terminal" spellcheck="false" autocomplete="off" />
+          <input type="search" aria-label="Buscar no terminal" aria-describedby="term-search-keys term-search-say" placeholder="Buscar no terminal" spellcheck="false" autocomplete="off" />
+          <span id="term-search-keys" hidden>Enter vai para a próxima, Shift+Enter para a anterior, Esc fecha</span>
           <span id="term-search-say" role="status"></span>
           <button type="button" aria-label="Fechar a busca" title="Fechar a busca (Esc)">
             <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" /></svg>
