@@ -98,7 +98,7 @@
       <h2>Atalhos</h2>
       <p class="chord">Todos com <kbd>Ctrl</kbd><kbd>Shift</kbd> e mais a tecla:</p>
       <dl class="keys">
-        <dt><kbd>K</kbd></dt><dd>Trocar de worktree (abre na anterior)</dd>
+        <dt><kbd>K</kbd></dt><dd>Trocar de worktree (abre na anterior; no meio de uma troca, <kbd>Enter</kbd> volta)</dd>
         <dt><kbd>J</kbd></dt><dd>Alternar API e Front</dd>
         <dt><kbd>F</kbd></dt><dd>Buscar no terminal (Enter próxima, Shift+Enter anterior, Esc fecha)</dd>
         <dt><kbd>X</kbd></dt><dd>Parar a aba; com <kbd>Alt</kbd>, os dois lados</dd>
@@ -119,15 +119,15 @@
         <dt><span class="flap" data-state="run"><span>RODANDO</span></span></dt><dd>API e Front de pé</dd>
         <dt><span class="flap" data-state="part"><span>SEM FRONT</span></span></dt><dd>Um lado caiu (aqui, o Front); Subir Front o sobe de novo</dd>
         <dt><span class="flap" data-state="held"><span>API PARADA</span></span></dt><dd>Um lado parado à mão (aqui, a API); o outro segue de pé</dd>
-        <dt><span class="tab-mark" aria-hidden="true"><i class="down"></i><i class="halting"></i><i class="parked"></i></span></dt><dd>Quadrado na aba e na palheta: cheio, caiu ou parando; vazado, parado à mão</dd>
+        <dt><span class="tab-mark" aria-hidden="true"><i class="down"></i><i class="halting"></i><i class="parked"></i></span></dt><dd>Quadrado na aba e na palheta: cheio, caiu; meio cheio, parando; vazado, parado à mão</dd>
         <dt><span class="flap" data-state="start"><span>SUBINDO</span></span></dt><dd>O comando de start acabou de ser enviado</dd>
         <dt><span class="flap" data-state="wait"><span>AGUARDA</span></span></dt><dd>Esperando o que roda no projeto parar, para subir</dd>
         <dt><span class="flap" data-state="stop"><span>PARANDO</span></span></dt><dd>Ctrl+C enviado; esperando os processos saírem</dd>
         <dt><span class="flap" data-state="kill"><span>SIGKILL</span></span></dt><dd>Não parou a tempo (ou você forçou): parando à força</dd>
         <dt><span class="flap preview" data-state="stop"><span>ENCERRA</span></span></dt><dd>Prévia, não estado: trocar para a linha sob o cursor encerra esta</dd>
-        <dt><span class="flap" data-state="idle"><span>INATIVA</span></span></dt><dd>Terminais abertos, nada rodando</dd>
-        <dt><span class="flap" data-state="none"><span></span></span></dt><dd>Sem palheta na linha: ainda não aberta nesta sessão</dd>
-        <dt><span class="git" aria-hidden="true"><span class="dirty"></span><span><svg class="icon" viewBox="0 0 16 16"><path d="M8 13V3M4 7l4-4 4 4" /></svg>2</span><span><svg class="icon" viewBox="0 0 16 16"><path d="M8 3v10M4 9l4 4 4-4" /></svg>1</span></span><span class="sr">Git</span></dt><dd>Depois do nome: o ponto diz que há mudança não commitada ou arquivo não rastreado; as setas, commits à frente e atrás do upstream</dd>
+        <dt><span class="flap" data-state="idle"><span>INATIVA</span></span><span class="sr">Fio</span></dt><dd>Só o fio: terminais abertos, nada rodando (na paleta, INATIVA)</dd>
+        <dt><span class="flap" data-state="none"><span></span></span><span class="sr">Nada</span></dt><dd>Nem palheta nem fio: ainda não aberta nesta sessão</dd>
+        <dt><span class="git" aria-hidden="true"><span class="dirty"></span><span><svg class="icon" viewBox="0 0 16 16"><path d="M8 13V3M4 7l4-4 4 4" /></svg>2</span><span><svg class="icon" viewBox="0 0 16 16"><path d="M8 3v10M4 9l4 4 4-4" /></svg>1</span></span><span class="sr">Git</span></dt><dd>Embaixo da palheta, na linha atual e nas em serviço (nas outras, ao passar o cursor): o ponto diz que há mudança não commitada ou arquivo não rastreado; as setas, commits à frente e atrás do upstream</dd>
       </dl>
       </section>
       <section class="sr-col">
@@ -239,7 +239,7 @@
             <details class="more cmd">
               <summary>Comando de start</summary>
               <label>
-                <span id="edit-api-cmd-label">Comando de start</span>
+                <span id="edit-api-cmd-label" class="sr">Comando de start</span>
                 <span class="dir-row">
                   <span class="cmd-box">
                     <span class="prefix" id="edit-api-cmd-prefix">npm run</span>
@@ -299,7 +299,7 @@
             <details class="more cmd">
               <summary>Comando de start</summary>
               <label>
-                <span id="edit-front-cmd-label">Comando de start</span>
+                <span id="edit-front-cmd-label" class="sr">Comando de start</span>
                 <span class="dir-row">
                   <span class="cmd-box">
                     <span class="prefix" id="edit-front-cmd-prefix">npm run</span>
