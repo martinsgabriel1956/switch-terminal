@@ -759,7 +759,9 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
   term.loadAddon(search);
   term.open(paneEl);
   // O recado no terminal acompanha a saída: o prompt desce o cursor, uma linha longa ocupa o canto.
-  term.onWriteParsed(() => termNoteEl.hidden || renderTermNote());
+  // Só o terminal em que o recado está, e uma vez por quadro: na troca a anterior despeja o log de desligar, e cada lote,
+  // de qualquer terminal, relia o layout das linhas (um reflow por lote).
+  term.onWriteParsed(() => termNoteEl.hidden || pane !== notePane() || queueTermNote());
   // O Tab é do shell e não sai do terminal: a saída do teclado é dita onde o foco está, não só na ajuda.
   // Por aria-describedby (#term-keys): o WebKitGTK não passa aria-description ao leitor de tela.
   term.textarea?.setAttribute("aria-describedby", "term-keys");
@@ -1853,21 +1855,42 @@ function fitHeaderOnce() {
   renderTermNote();
 }
 
+/** O terminal onde o recado fica: o da aba aberta da worktree atual. */
+function notePane() {
+  const env = current ? envs.get(currentKey()!) : undefined;
+  return env && (env.panes[tab] ?? Object.values(env.panes)[0]);
+}
+
+let noteFrame = 0;
+/** O recado seguindo a saída: um render por quadro, por mais lotes que cheguem nele. */
+function queueTermNote() {
+  noteFrame ||= requestAnimationFrame(() => {
+    noteFrame = 0;
+    renderTermNote();
+  });
+}
+
 /** Recado no terminal, sem custo de largura na faixa. Na troca, na linha logo abaixo do cursor (escondido) do terminal
  *  travado, onde a primeira tecla iria: no canto de cima, a 1440, ficava longe do olho. Depois, no canto, o "Parou em"
  *  que a faixa estreita cedeu: a meia tela a troca terminava sem fecho. aria-hidden: o #last-stop já falou. */
 function renderTermNote() {
   const env = current ? envs.get(currentKey()!) : undefined;
   const st = env && stopping.get(env.project);
+  // a conta do notePane, aqui em linha: o TypeScript estreita env a partir dela
   const pane = env && (env.panes[tab] ?? Object.values(env.panes)[0]);
   if (st && pane) {
     // Sem linha abaixo (cursor na última), vai para o canto: na linha do cursor cobriria o prompt.
     const next = pane.el.querySelector(".xterm-rows")?.children[pane.term.buffer.active.cursorY + 1];
+    // Lê antes de escrever: a classe e o texto não mexem nas linhas, e a leitura não força outro layout.
+    const top = next ? `${next.getBoundingClientRect().top - panesEl.getBoundingClientRect().top}px` : "";
     termNoteEl.classList.toggle("lock", !!next);
-    termNoteEl.style.top = next ? `${next.getBoundingClientRect().top - panesEl.getBoundingClientRect().top}px` : "";
+    termNoteEl.style.top = top;
     // Depois do Voltar, a que espera é a própria anterior: "Aguardando main parar" no terminal da main.
-    termNoteEl.textContent =
+    const text =
       active[env.project] === st.fromId ? `Reiniciando ${proseName(st.from)} · digitação liberada quando subir` : `Aguardando ${proseName(st.from)} parar · digitação liberada em seguida`;
+    if (termNoteEl.textContent !== text) termNoteEl.textContent = text;
+    // o texto daqui não é cópia do #last-stop: o canto recopia na próxima vez
+    delete termNoteEl.dataset.src;
     termNoteEl.hidden = false;
     return;
   }
@@ -1878,7 +1901,12 @@ function renderTermNote() {
   const parked = !!pane && !note && !haltTabEl.hidden && haltTabEl.inert && lineState(env.project, current!.wt) === "held";
   termNoteEl.hidden = !note && !parked;
   if (!pane || termNoteEl.hidden) return;
-  termNoteEl.replaceChildren(...(note ? [...lastStopEl.children].map((c) => c.cloneNode(true)) : [`${haltTabEl.dataset.label} · Ctrl+Shift+S`]));
+  // Recopia só quando a origem muda: com a saída correndo, isto roda a cada quadro.
+  const src = note ? lastStopEl.innerHTML : `${haltTabEl.dataset.label} · Ctrl+Shift+S`;
+  if (termNoteEl.dataset.src !== src) {
+    termNoteEl.dataset.src = src;
+    termNoteEl.replaceChildren(...(note ? [...lastStopEl.children].map((c) => c.cloneNode(true)) : [src]));
+  }
   // No canto, na primeira das 4 linhas de cima cuja saída termina antes dele: por cima de uma linha longa do dev
   // server, cobria a saída por 8 s. Nenhuma livre: sai (o leitor de tela já ouviu, e a linha voltou a INATIVA).
   const rows = pane.el.querySelector(".xterm-rows");
