@@ -287,17 +287,9 @@ kbd {
   grid-area: 1 / 1;
 }
 
-/* Nunca aberta: o encaixe vazio, um contorno tracejado da largura da palheta. Só a legenda da ajuda o desenha:
-   os entalhes que ele tinha liam como hífens ("–  –"). */
+/* Nunca aberta: nada. Na paleta o encaixe vazio ocupa a coluna, que fica alinhada. */
 .flap[data-state="none"] {
   background: none;
-  outline: 1px dashed var(--ink-3);
-  outline-offset: -1px;
-}
-
-/* Na paleta o encaixe não desenha nada e ocupa a coluna, que fica alinhada. */
-#palette .flap[data-state="none"] {
-  outline: none;
 }
 
 /* No painel a linha nunca aberta não reserva a coluna: são ~80px a mais para o nome justo onde ainda não há estado.
@@ -306,7 +298,31 @@ kbd {
   display: none;
 }
 
+/* Aberta e parada (INATIVA), no painel: só o fio do corte, sem palheta. Um painel de partidas mostra o que parte; a
+   palheta cinza em cada linha visitada enchia a coluna de situação de tinta que não diz nada. A palavra fica na paleta e
+   no nome da linha. O fio ocupa a largura da palheta: a linha não muda de forma quando ela vira. */
+:is(.line, .legend) .flap[data-state="idle"] {
+  background: none;
+  clip-path: none;
+}
+
+:is(.line, .legend) .flap[data-state="idle"] > span {
+  visibility: hidden;
+}
+
+:is(.line, .legend) .flap[data-state="idle"]::after {
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto;
+  border-top: 1px solid var(--ink-3);
+}
+
+/* RODANDO é a verdade mais importante da tela: à noite também ganha corpo, o verde do estado a 12% nas duas metades
+   (sem cor nova). Só tinta verde sobre grafite, era a palheta mais apagada da janela, abaixo do PARANDO e da falha.
+   A tinta verde fica a 5:1 ou mais nas duas metades; na linha atual a de baixo mistura com o fundo do painel. */
 .flap[data-state="run"] {
+  --state-top: color-mix(in srgb, var(--run) 12%, var(--flap-top));
+  --state-bot: color-mix(in srgb, var(--run) 12%, var(--flap-bot));
   color: var(--flap-run);
 }
 
@@ -453,7 +469,7 @@ body:has(header:not(.acted) :is(.halt, .more-item)[data-ends="all"]:is(:hover, :
 #sidebar {
   display: flex;
   flex-direction: column;
-  width: var(--sidebar-w, 280px);
+  width: var(--sidebar-w, 300px);
   flex-shrink: 0;
   background: var(--rail);
   border-right: 1px solid var(--rule);
@@ -711,12 +727,21 @@ body:has(header:not(.acted) :is(.halt, .more-item)[data-ends="all"]:is(:hover, :
 }
 
 .line .flap {
+  grid-area: 1 / 2;
   margin: 1px 0 0 10px;
 }
 
+/* O nome ocupa as duas linhas da grade; a segunda coluna é a de situação: a palheta e, embaixo dela, o git. */
 .line .name {
+  grid-area: 1 / 1 / 3 / 2;
   min-width: 0;
   padding-top: 2px;
+}
+
+.line > .git {
+  grid-area: 2 / 2;
+  justify-self: end;
+  margin: 3px 1px 0 10px;
 }
 
 .line .top {
@@ -758,9 +783,9 @@ body:has(header:not(.acted) :is(.halt, .more-item)[data-ends="all"]:is(:hover, :
   color: var(--ink-2);
 }
 
-/* Estado do git logo depois do nome, na primeira linha: ponto (mudança não commitada ou arquivo não rastreado) e as
-   setas com os commits à frente/atrás do upstream. Meia-tinta: não é estado da palheta, e nenhuma cor entra. Não encolhe:
-   o nome cede (fitBranches mede o que sobra ao lado dele) e a palheta fica na coluna dela. */
+/* Estado do git embaixo da palheta, na coluna de situação: ponto (mudança não commitada ou arquivo não rastreado) e as
+   setas com os commits à frente/atrás do upstream. Meia-tinta: não é estado da palheta, e nenhuma cor entra. Depois do
+   nome ele tirava ~30px da branch, que é o que se lê de relance. */
 .git {
   display: inline-flex;
   align-self: center;
@@ -960,7 +985,7 @@ body.narrow #sidebar {
   position: fixed;
   inset: 0 auto 0 0;
   z-index: 2;
-  width: min(280px, calc(100vw - 48px));
+  width: min(300px, calc(100vw - 48px));
   box-shadow: var(--side-shadow);
 }
 
@@ -1037,6 +1062,10 @@ header.tight .halt {
   align-items: center;
   gap: 4px;
   visibility: hidden;
+}
+
+header.tight #destination .flap > .ghost.side {
+  display: none;
 }
 
 #destination .flap > span:first-child::before {
@@ -1204,17 +1233,18 @@ body:not(.sidebar-off, .narrow) header.tight #destination .where > :is(.project,
   color: var(--fail);
 }
 
-/* O quadrado entra no respiro da esquerda (2 + 6 + 4 = os 12px de sempre): a aba não muda de largura e as ações
-   ao lado não andam quando um lado cai ou para. */
+/* O quadrado entra no respiro da esquerda (0 + 8 + 4 = os 12px de sempre): a aba não muda de largura e as ações
+   ao lado não andam quando um lado cai ou para. 8px e não os 6 da palheta: cheio, meio cheio e vazado só se separam
+   pela forma, e a 6px a forma quase não se lia. */
 #tabs button:is(.down, .parked, .halting) {
-  padding-left: 2px;
+  padding-left: 0;
 }
 
 #tabs button.down::before {
   content: "";
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   margin-right: 4px;
   border-radius: 2px;
   background: currentColor;
@@ -1222,21 +1252,22 @@ body:not(.sidebar-off, .narrow) header.tight #destination .where > :is(.project,
 }
 
 /* Parado à mão: o mesmo quadrado, vazado e em meia-tinta, e o rótulo segue a aba (foi pedido, não caiu).
-   Parando só este lado: cheio, em âmbar, enquanto o Ctrl+C não termina; a palheta da worktree fica com o estado dela. */
+   Parando só este lado: meio cheio, em âmbar, enquanto o Ctrl+C não termina; a palheta da worktree fica com o estado dela. */
 #tabs button:is(.parked, .halting)::before {
   content: "";
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   margin-right: 4px;
   border-radius: 2px;
   box-shadow: inset 0 0 0 1.5px var(--ink-2);
   vertical-align: 1px;
 }
 
+/* Parando: meio cheio, entre o cheio do que caiu e o vazado do parado à mão. Só a cor separava "parando" de "caiu". */
 #tabs button.halting::before {
-  background: var(--wait);
-  box-shadow: none;
+  background: linear-gradient(transparent 50%, var(--wait) 50%);
+  box-shadow: inset 0 0 0 1.5px var(--wait);
 }
 
 /* Os acessórios da faixa (a porta, as ações, os outros projetos, o recado) numa linha que quebra: o que não cabe desce
@@ -1353,7 +1384,7 @@ body:not(.sidebar-off, .narrow) header.tight #destination .where > :is(.project,
   border-bottom: 1px solid var(--rule);
 }
 
-/* A troca, do Ctrl+C ao SIGKILL: "Parando [4 s] Voltar para X | Forçar". O nome do Voltar trunca no meio (cutBack). */
+/* A troca, do Ctrl+C ao SIGKILL: "Parando feat/x → fix/y  Voltar  SIGKILL em [4 s] | Forçar". Os nomes truncam no meio (cutBack). */
 #switching {
   display: flex;
   align-items: center;
@@ -1370,28 +1401,77 @@ body:not(.sidebar-off, .narrow) header.tight #destination .where > :is(.project,
 
 /* O foco na faixa (esperar é a ação padrão) marca o verbo, não o grupo: o anel em volta de Voltar e Forçar parecia
    uma seleção de botões. */
-#switching:focus-visible > .what {
+#switching:focus-visible .what {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
   border-radius: 2px;
 }
 
-#switching > :not(.back) {
+#switching > :not(.fact) {
   flex-shrink: 0;
 }
 
-/* "Parando" e "Reiniciando" empilhados: o verbo não muda de largura depois do Voltar */
-#switching > .what {
-  display: inline-grid;
+/* O fato: o verbo em meia-tinta, os nomes em tinta cheia. É o que cede quando falta largura (os nomes, no meio). */
+#switching > .fact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ink);
+  font-weight: 600;
 }
 
-#switching > .what > * {
+#switching .fact .nm {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Sem largura, quem cede primeiro é o nome de quem para (a linha dele diz PARANDO no painel); o destino é o que se
+   procura. A 720 os dois cediam por igual: "acco… → lo…". */
+#switching .fact > .nm {
+  flex-shrink: 3;
+}
+
+/* sem 3em para ele, sai inteiro (cutBack): "Parando → login-redirect"; a linha dele no painel diz PARANDO */
+#switching .fact > .nm.gone {
+  display: none;
+}
+
+#switching .onward {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+#switching .onward .icon {
+  flex-shrink: 0;
+  margin: 0;
+  color: var(--ink-2);
+}
+
+/* "Parando" e "Reiniciando" empilhados: o verbo não muda de largura depois do Voltar */
+#switching .what {
+  display: inline-grid;
+  flex-shrink: 0;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+#switching .what > * {
   grid-area: 1 / 1;
 }
 
-#switching > .what > .ghost,
+#switching .what > .ghost,
+#switching .onward.hold,
 #switching .back.hold {
   visibility: hidden;
+}
+
+/* entre o fato e as ações, o vão maior: o Voltar não lê como parte do nome */
+#switching .btn.back {
+  margin-left: 8px;
 }
 
 /* "depois sobe X" no SIGKILL: é o único que trunca */
@@ -1407,21 +1487,6 @@ body:not(.sidebar-off, .narrow) header.tight #destination .where > :is(.project,
   height: 26px;
   padding: 0 10px;
   font-size: 13px;
-}
-
-#switching .btn.back {
-  flex-shrink: 1;
-  min-width: 0;
-  max-width: 420px;
-  overflow: hidden;
-}
-
-/* Janela pequena (ou zoom alto): o nome sai, e o botão fica "Voltar e reiniciar" (o nome no title e na faixa). "Voltar
-   main" prometia desfazer, e o Ctrl+C já foi. */
-@container (max-width: 480px) {
-  #switching .back .to {
-    display: none;
-  }
 }
 
 /* Forçar mata sem o Ctrl+C: entra depois de FORCE_DELAY, depois do Voltar e da contagem na ordem do Tab, e afastado por um fio */
@@ -1976,25 +2041,6 @@ body:not(.sidebar-off) #running {
   color: var(--ink);
 }
 
-/* "Voltar para feature-api/…": o nome trunca, o verbo fica */
-.btn.back {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  white-space: nowrap;
-}
-
-.btn.back .para {
-  margin-left: 0.25em;
-}
-
-.btn.back .to {
-  min-width: 0;
-  margin-left: 0.25em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .btn,
 dialog.form menu button {
   height: 32px;
@@ -2109,8 +2155,8 @@ dialog.form .pick[aria-disabled="true"] {
 }
 
 #help .tab-mark i {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 2px;
   background: var(--ink-2);
 }
@@ -2120,7 +2166,8 @@ dialog.form .pick[aria-disabled="true"] {
 }
 
 #help .tab-mark .halting {
-  background: var(--wait);
+  background: linear-gradient(transparent 50%, var(--wait) 50%);
+  box-shadow: inset 0 0 0 1.5px var(--wait);
 }
 
 #help .tab-mark .parked {

@@ -496,6 +496,8 @@ function headerNote(stay: boolean, about: string | null, ...nodes: (Node | strin
   }
   fitHeader();
 }
+/** O texto do recado para o title: os espaços entre as partes são o gap do CSS, e o textContent as colava ("6,0 s· feat/x"). */
+const noteText = (note: HTMLElement) => [...note.children].map((c) => c.textContent).join(" ");
 /** "Ver o terminal" na falha: leva à worktree e à aba do lado que caiu ou não subiu. Só se ela ainda for a ativa
  *  do projeto: selecionar outra seria uma troca (mataria a que está de pé). */
 function seeTerminal(project: string, id: string, side: Tab) {
@@ -678,8 +680,13 @@ function say(project: string, wt: Worktree, state: LineState) {
   return `só ${names(up)} rodando, ${state === "part" ? `${names(down)} caiu` : `${names(held)} parada à mão`}`;
 }
 
+/** O title da linha, para os estados sem palavra no painel. */
+const STATE_HINT: Partial<Record<LineState, string>> = { idle: "Inativa: terminais abertos, nada rodando", none: "Ainda não aberta nesta sessão" };
+
 const X_ICON = "M4.5 4.5l7 7M11.5 4.5l-7 7";
 const PAIR_ICON = "M3 5.5h10M10.5 3 13 5.5 10.5 8M13 10.5H3M5.5 8 3 10.5 5.5 13";
+/** "→" da faixa da troca: de quem para para quem sobe. */
+const ARROW_ICON = "M3 8h10M9.5 4.5 13 8l-3.5 3.5";
 /** Sentido do movimento na palheta do destino: subindo ↑, parando ↓ (desenhados). */
 const DIR: Partial<Record<LineState, string>> = { start: "M8 13V3M4 7l4-4 4 4", stop: "M8 3v10M4 9l4 4 4-4" };
 const FROM_ICON = "M13 8H3M6.5 4.5 3 8l3.5 3.5";
@@ -1079,8 +1086,10 @@ function render(focus = false) {
     if (dir) f.firstElementChild!.prepend(icon(dir, "dir"));
     // Largura fixa: os rótulos mais largos que ela pode ter, empilhados e invisíveis (como .halt). Crescendo de
     // RODANDO a API PARADA, ela empurrava "Parar tudo" para baixo do cursor.
-    const ghost = (...c: (Node | string)[]) => el("span", { className: "ghost" }, ...c);
-    f.append(ghost(icon(DIR.stop!, "dir"), FLAP.stop), ...(wt.api && wt.front ? [ghost("FRONT PARADO"), ghost("API PARADA"), ghost("SEM FRONT")] : []));
+    // Apertado (.tight), os rótulos de um lado só saem dos fantasmas: reservavam ~40px que a branch não tinha (a 720
+    // sobrava "…vivo"). Eles são raros e não chegam no meio de uma troca, quando o cursor mira o que vem depois.
+    const ghost = (cls: string, ...c: (Node | string)[]) => el("span", { className: cls }, ...c);
+    f.append(ghost("ghost", icon(DIR.stop!, "dir"), FLAP.stop), ...(wt.api && wt.front ? ["FRONT PARADO", "API PARADA", "SEM FRONT"].map((t) => ghost("ghost side", t)) : []));
     // "Parar tudo" com o cursor ou o foco mostra a mesma prévia ENCERRA das linhas (CSS).
     if (LIVE.includes(state)) f.append(el("span", { className: "ends", textContent: "ENCERRA" }));
     // O visível trunca (cutDest) e perde o projeto; quem fala é o .sr, inteiro. Truncado dentro da região viva, o leitor
@@ -1294,18 +1303,21 @@ function renderWait(project: string, wt: Worktree) {
   // Sem atalho de Esc: no reflexo do vim, ele desfazia a troca recém-pedida.
   // Depois do clique ele guarda o lugar, invisível (.hold): sumindo, o Forçar deslizava para baixo do cursor e o
   // segundo clique de um duplo clique mandava SIGKILL na que se queria reiniciar.
+  // Curto e secundário: o fato da faixa (quem para, quem sobe) vem antes e em tinta cheia; o que ele reinicia está ali
+  // ao lado, no fato, e inteiro no title. "Voltar e reiniciar feat/x" contornado era o mais forte da faixa.
   const back =
     st.forcing || !st.fromWt
       ? null
-      : el(
-          "button",
-          { type: "button", className: goingBack ? "btn back hold" : "btn back", inert: goingBack, title: `Cancela a troca e reinicia ${st.from}`, onclick: () => st.fromWt && select(project, st.fromWt) },
-          // "Voltar e reiniciar": o Ctrl+C já foi, e "Voltar para" prometia desfazer.
-          "Voltar",
-          el("span", { className: "para" }, "e reiniciar"),
-          // Só o nome (sem os prefixos do par): na faixa estreita ele trunca no meio e fica (cutBack).
-          el("span", { className: "to", textContent: proseName(st.from) }),
-        );
+      : el("button", {
+          type: "button",
+          className: goingBack ? "btn back hold" : "btn back",
+          inert: goingBack,
+          textContent: "Voltar",
+          // A paleta abre na anterior: no meio da troca, Ctrl+Shift+K e Enter é o Voltar pelo teclado.
+          title: `Cancela a troca e reinicia ${st.from} (Ctrl+Shift+K, Enter)`,
+          ariaLabel: `Voltar: cancela a troca e reinicia ${from}`,
+          onclick: () => st.fromWt && select(project, st.fromWt),
+        });
   if (back) back.dataset.act = "back";
   // No SIGKILL não há botão: o backend espera no máximo 1 s depois dele e a troca segue sozinha.
   const force =
@@ -1326,18 +1338,26 @@ function renderWait(project: string, wt: Worktree) {
   if (force) force.dataset.act = "force";
   // Redesenho mantém o foco onde estava (o mesmo botão, ou a faixa se o botão sumiu).
   const had = switchingEl.contains(document.activeElement) ? ((document.activeElement as HTMLElement).dataset.act ?? "strip") : null;
-  switchingEl.replaceChildren(
+  // O fato da troca, em tinta cheia: "Parando feat/x → fix/y". Era só "Parando", e quem parava estava dentro do Voltar.
+  // Os nomes truncam no meio (cutBack). Depois do Voltar, "→ fix/y" guarda o lugar invisível: nada à direita anda.
+  const fact = el(
+    "span",
+    { className: "fact" },
     // O verbo da palheta da anterior (PARANDO); ENCERRA fica só para a prévia. No SIGKILL ele continua: a palheta ao lado diz como.
     // Os dois verbos empilhados: "Reiniciando" mais largo empurrava o Forçar para baixo do cursor.
     el("span", { className: "what" }, el("span", { textContent: goingBack ? "Reiniciando" : "Parando" }), el("span", { className: "ghost", ariaHidden: "true", textContent: "Reiniciando" })),
+    el("span", { className: "nm", textContent: proseName(st.from) }),
+    el("span", { className: goingBack ? "onward hold" : "onward" }, icon(ARROW_ICON, "inline"), el("span", { className: "nm", textContent: next })),
+  );
+  switchingEl.replaceChildren(
+    fact,
     // O Voltar logo depois do verbo: a contagem que entra aos 2 s fica à direita dele, e ele não anda (andava ~110px
     // no instante em que se mirava nele).
     // A contagem entra com o Forçar: na troca típica (1–2 s), contar até um SIGKILL que não vem era ansiedade à toa.
     // "SIGKILL em [3 s]": sem o rótulo, a contagem lia como "a nova para em 3 s".
     ...[back, st.forcing ? flap("kill", `strip:${project}`) : late ? el("span", { className: "count-to", textContent: "SIGKILL em" }) : null, late && !st.forcing ? countFlap(project, st) : null, force].filter((b) => b !== null),
-    // No SIGKILL não sobra botão: o que vem depois fica escrito, não só no title. Era o momento de mais risco e o de
-    // menos reasseguramento à vista.
-    ...(st.forcing ? [el("span", { className: "then", textContent: goingBack ? "reinicia em seguida" : `depois sobe ${next}` })] : []),
+    // No SIGKILL não sobra botão: o que vem depois fica escrito, não só no title (na troca, o "→ fix/y" do fato já diz).
+    ...(st.forcing && goingBack ? [el("span", { className: "then", textContent: "reinicia em seguida" })] : []),
   );
   if (had) (switchingEl.querySelector<HTMLElement>(`[data-act="${had}"]`) ?? switchingEl).focus();
   // A faixa cresceu ou mudou (contagem e Forçar aos 2 s): a branch de destino pode ter ficado abaixo do piso.
@@ -1364,17 +1384,24 @@ function fontWidth(e: HTMLElement) {
   };
 }
 
-/** O nome do Voltar, sem espaço: primeiro sai o prefixo ("feat/"), o nome é o que distingue; depois trunca no meio,
- *  como as branches do painel ("Voltar calculo…agrupados"). O nome inteiro fica no title. */
+/** Os nomes do fato da troca, sem espaço: primeiro sai o prefixo ("feat/"), o nome é o que distingue; depois trunca no
+ *  meio, como as branches do painel ("calculo…agrupados"). Os dois inteiros ficam no title e na fala. */
 function cutBack() {
-  const to = switchingEl.hidden ? null : switchingEl.querySelector<HTMLElement>(".to");
-  if (!to) return;
-  to.textContent = to.dataset.full ??= to.textContent!;
-  if (!overflows(to)) return;
-  const avail = to.getBoundingClientRect().width;
-  const w = fontWidth(to);
-  const name = splitBranch(to.dataset.full!)[1] || to.dataset.full!;
-  to.textContent = w(name) <= avail ? name : middleCut(name, avail, w);
+  const names = switchingEl.hidden ? [] : [...switchingEl.querySelectorAll<HTMLElement>(".fact .nm")];
+  for (const nm of names) {
+    nm.classList.remove("gone");
+    nm.textContent = nm.dataset.full ??= nm.textContent!;
+  }
+  // Quem para cede primeiro (CSS); sem 3em para ele, sai inteiro e a largura vai para quem sobe.
+  const from = names[0];
+  if (from && overflows(from) && from.getBoundingClientRect().width < 3 * parseFloat(getComputedStyle(from).fontSize)) from.classList.add("gone");
+  // Mede todos antes de escrever: cada corte devolveria largura ao outro.
+  const cuts = names.map((nm) => (overflows(nm) ? { nm, avail: nm.getBoundingClientRect().width, w: fontWidth(nm) } : null));
+  for (const c of cuts) {
+    if (!c) continue;
+    const name = splitBranch(c.nm.dataset.full!)[1] || c.nm.dataset.full!;
+    c.nm.textContent = c.w(name) <= c.avail ? name : middleCut(name, c.avail, c.w);
+  }
 }
 
 /** A branch do destino, sem espaço. Com o painel aberto ao lado, corta pelo começo ("…de-lotes-por-leilao"): a linha
@@ -1444,7 +1471,8 @@ function lineButton(project: string, wt: Worktree) {
       type: "button",
       className: `line${live ? " live" : ""}`,
       tabIndex: -1,
-      title: [wt.label, git.text, endsText].filter(Boolean).join("\n"),
+      // O estado por extenso no title: o fio e a falta de palheta não se explicam sozinhos.
+      title: [wt.label, STATE_HINT[state] ?? say(project, wt, state), git.text, endsText].filter(Boolean).join("\n"),
       ariaLabel: `${spokenLabel(wt.label)}${soloSay(wt)}: ${say(project, wt, state)}${git.text ? `; ${git.text}` : ""}`,
       // Busca a worktree na hora do clique: o botão pode ter sobrevivido a um refresh do config.
       onclick: () => {
@@ -1452,9 +1480,12 @@ function lineButton(project: string, wt: Worktree) {
         if (fresh) select(project, fresh);
       },
     },
-    el("span", { className: "name" }, el("span", { className: "top" }, el("span", { className: "branch" }, ...top), gitBadge(git)), pair, tag),
+    el("span", { className: "name" }, el("span", { className: "top" }, el("span", { className: "branch" }, ...top)), pair, tag),
     // A palheta fica à direita, como a coluna de situação de um painel de partidas; nunca aberta, ela não ocupa a coluna (CSS) e o nome usa a largura.
     f,
+    // O git embaixo da palheta, na coluna de situação, só na linha atual e nas em serviço: depois do nome, ele tirava ~30px
+    // do que distingue as branches, e em toda linha virava textura. Nas outras ele fica no title e no nome acessível.
+    live || currentKey() === k ? gitBadge(git) : null,
   );
   // O que o clique encerra, com o par falado ("pareada com", não "↔"). Num filho hidden por aria-describedby: o WebKitGTK
   // não passa aria-description ao leitor de tela. Sem ele, a descrição é o title (nome, git e o mesmo "Encerra").
@@ -1468,7 +1499,7 @@ function lineButton(project: string, wt: Worktree) {
   return b;
 }
 
-/** Depois do nome, na primeira linha: um ponto se há mudança não commitada ou arquivo não rastreado, e ↑2 ↓1 com os
+/** Na coluna de situação, embaixo da palheta: um ponto se há mudança não commitada ou arquivo não rastreado, e ↑2 ↓1 com os
  *  commits à frente/atrás do upstream, só quando não são zero. As setas são desenhadas; o texto vai no nome da linha. */
 function gitBadge(g: ReturnType<typeof gitSummary>) {
   if (!g.dirty && !g.ahead && !g.behind) return null;
@@ -1799,7 +1830,7 @@ function fitHeaderOnce() {
       floor(textWidth(branch));
       if (ceded(lastStopEl) && lastStopEl.querySelector(".who")) {
         lastStopEl.classList.add("short");
-        lastStopEl.title = lastStopEl.textContent!;
+        lastStopEl.title = noteText(lastStopEl);
       }
       lastStopEl.classList.toggle("out", ceded(lastStopEl));
     }
@@ -1822,7 +1853,7 @@ function fitHeaderOnce() {
   while (squeezed() && lastStopEl.childElementCount && !lastStopEl.classList.contains("out")) {
     if (!lastStopEl.classList.contains("short") && lastStopEl.querySelector(".who")) {
       lastStopEl.classList.add("short");
-      lastStopEl.title = lastStopEl.textContent!;
+      lastStopEl.title = noteText(lastStopEl);
     } else lastStopEl.classList.add("out");
     setFlowW();
   }
@@ -3333,7 +3364,7 @@ $("#sidebar").addEventListener("keydown", (e) => {
 });
 
 // Largura arrastável da barra lateral, lembrada entre sessões.
-const SIDEBAR_W = { min: 200, max: 480, default: 280 };
+const SIDEBAR_W = { min: 200, max: 480, default: 300 };
 const handle = $("#sidebar-handle");
 const sidebarEl = $("#sidebar");
 
