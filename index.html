@@ -363,6 +363,40 @@
       </form>
     </dialog>
 
+    <dialog id="ports-dialog" class="form" aria-labelledby="ports-title">
+      <form method="dialog" novalidate>
+        <h2 id="ports-title">Portas da worktree</h2>
+        <p class="hint where"></p>
+        <p class="hint">Outra worktree do projeto está de pé. Esta sobe nestas portas, passadas pelas variáveis do <code>parallelEnv</code> de cada lado, no config.</p>
+        <fieldset class="side" data-side="api">
+          <legend>API</legend>
+          <label>
+            Porta
+            <input name="api" type="number" min="1024" max="65535" inputmode="numeric" autocomplete="off" aria-errormessage="ports-api-error" />
+          </label>
+          <p class="hint default"></p>
+          <p class="preview vars"></p>
+          <p class="side-error" id="ports-api-error" role="alert"></p>
+        </fieldset>
+        <fieldset class="side" data-side="front">
+          <legend>Front</legend>
+          <label>
+            Porta
+            <input name="front" type="number" min="1024" max="65535" inputmode="numeric" autocomplete="off" aria-errormessage="ports-front-error" />
+          </label>
+          <p class="hint default"></p>
+          <p class="preview vars"></p>
+          <p class="side-error" id="ports-front-error" role="alert"></p>
+        </fieldset>
+        <p class="error" id="ports-error" role="alert"></p>
+        <menu>
+          <button value="ok" class="primary">Subir</button>
+          <button value="cancel" formnovalidate>Cancelar</button>
+          <button type="button" class="open-config">Abrir o config.json</button>
+        </menu>
+      </form>
+    </dialog>
+
     <dialog id="project-dialog" class="form" aria-labelledby="project-title">
       <form method="dialog" novalidate>
         <h2 id="project-title">Novo projeto</h2>

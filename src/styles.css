@@ -2585,6 +2585,28 @@ dialog.form code {
   font: 12px var(--mono);
 }
 
+/* Portas do modo paralelo: as variáveis como sobem no terminal, uma por linha, e com quem o Front fala */
+#ports-dialog .vars {
+  display: grid;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+#ports-dialog .vars code {
+  color: var(--ink);
+}
+
+#ports-dialog .talks {
+  margin-top: 4px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+#ports-dialog input[type="number"] {
+  width: 12ch;
+  font-variant-numeric: tabular-nums;
+}
+
 /* min-inline-size 0: o padrão (min-content) deixava um caminho longo alargar o fieldset para fora do diálogo */
 dialog.form fieldset {
   min-inline-size: 0;
@@ -2831,7 +2853,7 @@ dialog.form menu {
 }
 
 /* "Remover…" do editar: à esquerda, longe do Salvar (row-reverse: a margem da direita empurra para a borda) */
-dialog.form menu .remove {
+dialog.form menu :is(.remove, .open-config) {
   margin-right: auto;
 }
 

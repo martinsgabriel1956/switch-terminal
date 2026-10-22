@@ -18,6 +18,7 @@ import { searchKey } from "./search";
 import { restartRefusal } from "./restart";
 import { deafSides, lateText, startEnd } from "./start";
 import { pullErrorLine, pullErrorSummary } from "./pull";
+import { envPrefix, fill, movesOwnPort, propose, templateError, type Ports } from "./parallel";
 
 /** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto.
  *  `parallelEnv`: as variáveis que levam as portas no modo paralelo ("SERVER_PORT": "{apiPort}"). */
@@ -29,7 +30,9 @@ type Tab = "api" | "front";
 /** `url`: endereço do dev server lido da saída do terminal ("Local: http://localhost:3000"), só enquanto o processo vive.
  *  `port`: a última porta lida, que fica entre as subidas: o SUBINDO espera por ela (pollStatus).
  *  `follow`: desliga o acompanhamento até o fim que fitPane liga depois de um resize. */
-type Pane = { term: Terminal; fit: FitAddon; search: SearchAddon; el: HTMLElement; ptyId: number; side: Side; url: string | null; port: number | null; follow?: () => void };
+/** `assigned`/`prefix`: a porta e o "env '…' " com que o start subiu no modo paralelo (null/"" sem prefixo); o Subir e o
+ *  Reiniciar repetem os dois, para não voltar à porta padrão que outra worktree usa. */
+type Pane = { term: Terminal; fit: FitAddon; search: SearchAddon; el: HTMLElement; ptyId: number; tab: Tab; side: Side; url: string | null; port: number | null; assigned: number | null; prefix: string; follow?: () => void };
 type Env = { project: string; root: HTMLElement; panes: Partial<Record<Tab, Pane>>; ready: Promise<void> };
 /** Estado de uma linha do painel: o que a palheta mostra. */
 type LineState = "run" | "part" | "held" | "start" | "wait" | "stop" | "kill" | "idle" | "none";
@@ -752,7 +755,7 @@ function branchText(branch: string) {
 
 // ---------- terminais ----------
 
-async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane> {
+async function createPane(t: Tab, side: Side, parent: HTMLElement, project: string): Promise<Pane> {
   const paneEl = el("div", { className: "pane off" });
   paneEl.setAttribute("role", "tabpanel");
   paneEl.setAttribute("aria-labelledby", `tab-${t}`);
@@ -784,7 +787,7 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
   term.textarea?.setAttribute("aria-label", `Terminal ${TAB_LABEL[t]}`);
   fit.fit();
 
-  const pane: Pane = { term, fit, search, el: paneEl, ptyId: -1, side, url: null, port: null };
+  const pane: Pane = { term, fit, search, el: paneEl, ptyId: -1, tab: t, side, url: null, port: null, assigned: null, prefix: "" };
   const dec = new TextDecoder();
   let tail = "";
   const onData = new Channel<ArrayBuffer>();
@@ -800,6 +803,8 @@ async function createPane(t: Tab, side: Side, parent: HTMLElement): Promise<Pane
     if (port) {
       pane.url = `localhost:${port}`;
       pane.port = Number(port);
+      // Lida num start sem prefixo: é a porta padrão do lado, a que o modo paralelo desvia quando está tomada.
+      if (pane.assigned === null) learnDefault(project, t, pane.port);
       render();
     }
   };
@@ -837,8 +842,9 @@ function fitPane(pane: Pane) {
 }
 
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g;
-// "http://localhost:3000", "127.0.0.1:3333", "listening on port 3333"
-const PORT_RE = /(?:https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):|\bporta?\s*:?\s+)(\d{2,5})\b/gi;
+// "http://localhost:3000", "127.0.0.1:3333", "listening on port 3333". Não depois de "=": o eco do prefixo do modo
+// paralelo ("WEB_URL=http://localhost:3001") é a porta do outro lado, não a deste servidor.
+const PORT_RE = /(?:(?<!=)https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):|\bporta?\s*:?\s+)(\d{2,5})\b/gi;
 
 function ensureEnv(project: string, wt: Worktree): { env: Env; created: boolean } {
   const k = key(project, wt.id);
@@ -851,7 +857,7 @@ function ensureEnv(project: string, wt: Worktree): { env: Env; created: boolean 
   env.ready = (async () => {
     for (const t of TABS) {
       const side = wt[t];
-      if (side) env.panes[t] = await createPane(t, side, root);
+      if (side) env.panes[t] = await createPane(t, side, root, project);
     }
   })();
   envs.set(k, env);
@@ -867,8 +873,10 @@ function disposeEnv(k: string, env: Env) {
   envs.delete(k);
 }
 
-async function writeStart(k: string, pane: Pane, isFresh: boolean) {
+async function writeStart(k: string, pane: Pane, isFresh: boolean, prefix = pane.prefix, assigned = pane.assigned) {
   halted.delete(pane.ptyId);
+  pane.prefix = prefix;
+  pane.assigned = assigned;
   const setup = isFresh ? pane.side.setupCommand : null;
   if (!setup && !pane.side.startCommand) return;
   pane.url = null;
@@ -876,13 +884,83 @@ async function writeStart(k: string, pane: Pane, isFresh: boolean) {
   // Sem node_modules o start falharia: instala antes, na mesma linha, à vista no terminal.
   // O setupCommand de uma worktree recém-criada já cuida disso; checar antes (e não a cada erro) não reinstala num crash.
   const install = setup || !pane.side.startCommand ? null : await invoke<string | null>("missing_deps_install", { path: pane.side.path, start: pane.side.startCommand });
-  const cmd = [setup, install, pane.side.startCommand].filter(Boolean).join(" && ");
+  const cmd = [setup, install, pane.side.startCommand && prefix + pane.side.startCommand].filter(Boolean).join(" && ");
   invoke("pty_write", { id: pane.ptyId, data: cmd + "\r" });
 }
-/** O start de cada lado da worktree que vai subir. */
+/** O start de cada lado da worktree que vai subir. Em paralelo, com as portas padrão tomadas, com as portas da worktree
+ *  num prefixo "env '…' " montado do parallelEnv de cada lado. */
 async function startEnv(k: string, env: Env) {
-  Object.values(env.panes).forEach((pane) => writeStart(k, pane, fresh.has(k)));
+  const [project, id] = k.split("\u0000");
+  const wt = findWt(project, id);
+  const plan = wt && isParallel(project) ? await planPorts(project, wt) : null;
+  // Cancelado: não sobe nada (e o setup da primeira subida fica para a próxima).
+  if (plan === "cancel") return headerNote(false, project, "Não subiu: portas canceladas", noteWho(project, id, wt!.label, " · "));
+  const def = defaultPorts[project] ?? NO_PORTS;
+  const ports = plan && { api: plan.api ?? def.api, front: plan.front ?? def.front };
+  for (const pane of Object.values(env.panes))
+    writeStart(k, pane, fresh.has(k), ports ? envPrefix(fill(pane.side.parallelEnv, ports)) : "", ports ? ports[pane.tab] : null);
   fresh.delete(k);
+}
+
+const NO_PORTS: Ports = { api: null, front: null };
+/** Porta padrão de cada lado por projeto: a última lida num start sem prefixo. */
+const defaultPorts: Record<string, Ports> = load("defaultPorts", {});
+/** Portas confirmadas por worktree no diálogo: na próxima subida em paralelo, valem sem perguntar se estiverem livres. */
+const savedPorts: Record<string, Ports> = load("ports", {});
+
+function learnDefault(project: string, t: Tab, port: number) {
+  const d = (defaultPorts[project] ??= { ...NO_PORTS });
+  if (d[t] === port) return;
+  d[t] = port;
+  save("defaultPorts", defaultPorts);
+}
+
+/** Portas que outra worktree de pé (ou subindo) usa, lidas da saída ou atribuídas. */
+function takenPorts(k: string) {
+  const taken = new Set<number>();
+  for (const [ek, env] of envs)
+    if (ek !== k)
+      for (const p of Object.values(env.panes)) if (busy.has(p.ptyId) || starting.has(ek)) for (const n of [p.port, p.assigned]) if (n !== null) taken.add(n);
+  return taken;
+}
+
+/** As que aceitam conexão em localhost: outro programa (ou um dev server fora do app) já escuta nelas. */
+async function portsOpen(ports: (number | null)[]) {
+  const list = ports.filter((n): n is number => n !== null);
+  const ans = list.length ? await invoke<boolean[]>("ports_open", { ports: list }).catch(() => []) : [];
+  return new Set(list.filter((_, i) => ans[i]));
+}
+
+/** A proposta com as portas também livres fora do app: a que responde entra nas tomadas e a proposta anda. */
+async function freePorts(def: Ports, taken: Set<number>): Promise<Ports> {
+  const avoid = new Set(taken);
+  for (let i = 0; i < 5; i++) {
+    const p = propose(def, avoid);
+    const open = await portsOpen([p.api, p.front]);
+    if (!open.size) return p;
+    for (const n of open) avoid.add(n);
+  }
+  return propose(def, avoid);
+}
+
+/** null: sobe sem prefixo, como fora do modo; Ports: sobe com elas; "cancel": não sobe. */
+async function planPorts(project: string, wt: Worktree): Promise<Ports | null | "cancel"> {
+  const k = key(project, wt.id);
+  const def = defaultPorts[project] ?? NO_PORTS;
+  const sidesUp = TABS.filter((t) => wt[t]?.startCommand);
+  const others = liveWts(project).some((w) => w.id !== wt.id);
+  // Sozinha no projeto e sem padrão conhecida: a primeira subida, que ensina a padrão.
+  if (!others && sidesUp.every((t) => def[t] === null)) return null;
+  const taken = takenPorts(k);
+  const proposal = await freePorts(def, taken);
+  // As padrão livres (e conhecidas, ou ninguém de pé): sobe como sempre.
+  if (sidesUp.every((t) => (def[t] === null ? !others : proposal[t] === def[t]))) return null;
+  const saved = savedPorts[k];
+  if (saved) {
+    const open = await portsOpen([saved.api, saved.front]);
+    if (sidesUp.every((t) => saved[t] !== null && !taken.has(saved[t]!) && !open.has(saved[t]!))) return saved;
+  }
+  return askPorts(project, wt, proposal, def, taken);
 }
 
 /** Ctrl+C → espera → SIGKILL; resolve `true` se precisou forçar. */
@@ -2095,6 +2173,8 @@ async function refresh() {
   for (const [k, env] of envs) if (loaded.has(env.project) && !alive.has(k)) disposeEnv(k, env);
   for (const p of loaded) if (active[p] && !alive.has(key(p, active[p]))) delete active[p];
   saveActive();
+  for (const k of Object.keys(savedPorts)) if (loaded.has(k.split("\u0000")[0]) && !alive.has(k)) delete savedPorts[k];
+  save("ports", savedPorts);
 
   if (current) {
     const freshWt = alive.get(currentKey()!);
@@ -3005,6 +3085,127 @@ editDialog.addEventListener("close", () => {
   editing = null;
   const pencil = byKey(`edit:${k}`);
   pencil ? pencil.focus() : render(true);
+});
+
+// ---------- portas do modo paralelo ----------
+
+const portsDialog = $<HTMLDialogElement>("#ports-dialog");
+const portsForm = portsDialog.querySelector("form")!;
+const portsError = $("#ports-error");
+const portInput = (t: Tab) => portsForm.elements.namedItem(t) as HTMLInputElement;
+const portBox = (t: Tab) => portsForm.querySelector<HTMLFieldSetElement>(`fieldset[data-side="${t}"]`)!;
+const portMsg = (t: Tab) => $(`#ports-${t}-error`);
+let portsAsk: { project: string; wt: Worktree; def: Ports; taken: Set<number>; resolve: (p: Ports | "cancel") => void } | null = null;
+
+portsForm.querySelector<HTMLButtonElement>(".open-config")!.addEventListener("click", () => invoke("open_config"));
+
+/** Pergunta as portas da worktree que vai subir com outra do projeto de pé. Esc e Cancelar resolvem "cancel". */
+function askPorts(project: string, wt: Worktree, proposal: Ports, def: Ports, taken: Set<number>): Promise<Ports | "cancel"> {
+  portsAsk?.resolve("cancel");
+  return new Promise((resolve) => {
+    portsAsk = { project, wt, def, taken, resolve };
+    portsForm.querySelector(".where")!.replaceChildren(el("span", { className: "project", textContent: project }), " / ", ...labelNodes(wt.label));
+    for (const t of TABS) {
+      const has = !!wt[t]?.startCommand;
+      portBox(t).hidden = !has;
+      portInput(t).value = has && proposal[t] !== null ? String(proposal[t]) : "";
+      portBox(t).querySelector(".default")!.textContent = def[t] === null ? "Porta padrão desconhecida: diga em qual sobe." : `Padrão ${def[t]}, tomada por outra worktree ou programa.`;
+    }
+    portsError.textContent = "";
+    clearInvalid(portsForm);
+    renderPortVars();
+    portsDialog.showModal();
+    // O foco no primeiro campo vazio (porta desconhecida), senão no Subir: a proposta costuma bastar.
+    const empty = TABS.find((t) => !portBox(t).hidden && !portInput(t).value);
+    (empty ? portInput(empty) : portsForm.querySelector<HTMLElement>("button.primary")!).focus();
+  });
+}
+
+/** Portas digitadas; null no lado sem servidor ou com o campo vazio. */
+function typedPorts(): Ports {
+  const one = (t: Tab) => (portBox(t).hidden || !portInput(t).value ? null : Number(portInput(t).value));
+  return { api: one("api"), front: one("front") };
+}
+
+/** O que impede subir cada lado com as portas digitadas, ou "" (sem a checagem de porta ocupada, que é no envio). */
+function portProblems(ports: Ports): Record<Tab, string> {
+  const { wt, def } = portsAsk!;
+  const out: Record<Tab, string> = { api: "", front: "" };
+  for (const t of TABS) {
+    if (portBox(t).hidden) continue;
+    const tpl = wt[t]!.parallelEnv;
+    const n = ports[t];
+    out[t] =
+      templateError(tpl) ??
+      (n === null || !Number.isInteger(n) || n < 1024 || n > 65535
+        ? "Porta entre 1024 e 65535."
+        : t === "front" && n === ports.api
+          ? "A mesma porta da API."
+          : n !== def[t] && !movesOwnPort(tpl, t)
+            ? `Sem variável com {${t}Port} no parallelEnv ${t === "api" ? "da API" : "do Front"}: ele subiria na ${def[t] ?? "padrão"} assim mesmo.`
+            : "");
+  }
+  // O Front de um par precisa saber a API nova; sem {apiPort} ele falaria com a da outra worktree.
+  if (!out.front && !portBox("front").hidden && wt.api && ports.api !== def.api && !Object.values(wt.front!.parallelEnv).some((v) => v.includes("{apiPort}")))
+    out.front = `O Front falaria com a API na ${def.api ?? "padrão"}: ponha {apiPort} no parallelEnv do Front.`;
+  return out;
+}
+
+/** As variáveis que cada lado vai receber, como sobem no terminal, e com quem o Front fala. */
+function renderPortVars() {
+  if (!portsAsk) return;
+  const { wt, def } = portsAsk;
+  const typed = typedPorts();
+  const ports = { api: typed.api ?? def.api, front: typed.front ?? def.front };
+  const problems = portProblems(typed);
+  for (const t of TABS) {
+    if (portBox(t).hidden) continue;
+    const vars = Object.entries(fill(wt[t]!.parallelEnv, ports));
+    const talks = t === "front" && wt.api && ports.api !== null && Object.values(wt.front!.parallelEnv).some((v) => v.includes("{apiPort}"));
+    portBox(t).querySelector(".vars")!.replaceChildren(
+      ...(vars.length ? vars.map(([k, v]) => el("code", { textContent: `${k}=${v}` })) : [el("span", { textContent: "Nenhuma variável no parallelEnv." })]),
+      ...(talks ? [el("span", { className: "talks", textContent: `Front → API na ${ports.api}` })] : []),
+    );
+    // Ao digitar, o erro aparece sem roubar o foco; o campo só fica marcado no envio.
+    portMsg(t).textContent = problems[t];
+  }
+}
+
+portsForm.addEventListener("input", renderPortVars);
+
+portsForm.addEventListener("submit", async (e) => {
+  if ((e.submitter as HTMLButtonElement | null)?.value !== "ok" || !portsAsk) return;
+  e.preventDefault();
+  const ask = portsAsk;
+  clearInvalid(portsForm);
+  const ports = typedPorts();
+  const problems = portProblems(ports);
+  const bad = TABS.find((t) => problems[t]);
+  if (bad) {
+    portMsg(bad).textContent = problems[bad];
+    return markInvalid(portInput(bad), portMsg(bad));
+  }
+  // Ocupada agora (outra worktree do app ou outro programa): diz qual e não sobe.
+  const open = await portsOpen([ports.api, ports.front]);
+  const busyAt = TABS.find((t) => ports[t] !== null && (ask.taken.has(ports[t]!) || open.has(ports[t]!)));
+  if (busyAt) {
+    const n = ports[busyAt]!;
+    const who = runningOthers().find(({ wt }) => TABS.some((t) => envs.get(key(ask.project, wt.id))?.panes[t]?.port === n));
+    portMsg(busyAt).textContent = `${n} está ocupada ${who ? `por ${who.p.name.toUpperCase()} / ${who.wt.label}` : "por outro programa"}.`;
+    return markInvalid(portInput(busyAt), portMsg(busyAt));
+  }
+  if (portsAsk !== ask) return;
+  savedPorts[key(ask.project, ask.wt.id)] = ports;
+  save("ports", savedPorts);
+  portsAsk = null;
+  portsDialog.close();
+  ask.resolve(ports);
+});
+
+// Esc, Cancelar ou outro pedido por cima: não sobe nada.
+portsDialog.addEventListener("close", () => {
+  portsAsk?.resolve("cancel");
+  portsAsk = null;
 });
 
 // ---------- remover worktree ----------
