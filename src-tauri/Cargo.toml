@@ -22,12 +22,18 @@ tauri = { version = "2", features = ["tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 portable-pty = "0.9"
-libc = "0.2"
 tokio = { version = "1", features = ["time"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 # Já vem com o Tauri (GTK): lê os .desktop e abre o editor como o menu do sistema.
 gio = "0.18"
+
+[target.'cfg(windows)'.dependencies]
+# Já vem com o Tauri: lista e derruba os processos que rodam no terminal (no Windows não há grupo de processos).
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
