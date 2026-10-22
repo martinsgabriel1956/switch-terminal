@@ -29,13 +29,16 @@ test("o modelo vira as variáveis com as portas; sem porta, a variável sai", ()
 test("o prefixo usa o env com aspas simples, e some sem variáveis", () => {
   assert.equal(envPrefix({}), "");
   assert.equal(envPrefix({ PORT: "3001", URL: "http://localhost:3334/api" }), "env 'PORT=3001' 'URL=http://localhost:3334/api' ");
+  assert.equal(envPrefix({}, true), "");
+  assert.equal(envPrefix({ PORT: "3001", URL: "http://localhost:3334/api" }, true), 'set "PORT=3001" && set "URL=http://localhost:3334/api" && ');
 });
 
-test("o modelo com nome inválido, aspa simples ou placeholder errado é recusado", () => {
+test("o modelo com nome inválido, aspa ou placeholder errado é recusado", () => {
   assert.equal(templateError(LEILAO.api), null);
   assert.equal(templateError(LEILAO.front), null);
   assert.match(templateError({ "NEXT-URL": "x" })!, /NEXT-URL/);
   assert.match(templateError({ URL: "it's" })!, /aspa/);
+  assert.match(templateError({ URL: 'a"b' })!, /aspa/);
   assert.match(templateError({ PORT: "{apiport}" })!, /\{apiport\}/);
 });
 

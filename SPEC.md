@@ -38,7 +38,7 @@ Arquivo `~/.config/hotswap/config.json` (o app se chamava switch-terminal: na pr
 - `editorCommand` é opcional: para um editor sem `.desktop`, como `"code -n"` ou `"~/bin/ed"`. Aparece no fim do "Abrir com…", e vale quando nenhum `editor` foi escolhido (escolhê-lo ali tira o `editor`). O app roda `<editorCommand> <pasta>` solto dele (grupo de processos próprio, sem esperar nem passar pelo PTY), lendo o config na hora. O texto é separado por espaços, sem aspas (`~/` no programa vira a home). Sem `editor` nem `editorCommand`, o `Ctrl+Shift+O` abre o "Abrir com…"; se o editor não abre, a segunda faixa diz "Editor não abriu · code: não encontrado" com "Abrir com…"; dá certo e o cabeçalho diz "Abrindo API no editor".
 - `screenReader` é opcional (padrão `false`): liga o modo leitor de tela do xterm, que expõe a saída dos terminais como texto acessível. Custa desempenho com saída intensa; o painel relê ao voltar para a janela e aplica nos terminais abertos. A ajuda (`Ctrl+Shift+H`) tem um interruptor que grava esse campo no config sem mexer no resto.
 - `parallel` é opcional (padrão `false`, por projeto): o modo paralelo (veja abaixo). Gravado pelo interruptor da placa do projeto; desligado é a ausência do campo.
-- `parallelEnv` é opcional, por lado, só à mão: as variáveis que levam as portas no modo paralelo, com `{apiPort}` e `{frontPort}` (`"api": { "parallelEnv": { "SERVER_PORT": "{apiPort}", "WEB_URL": "http://localhost:{frontPort}" } }`, `"front": { "parallelEnv": { "PORT": "{frontPort}", "NEXT_PUBLIC_API_URL": "http://localhost:{apiPort}/api" } }`). Nome de variável válido, valor sem aspa simples.
+- `parallelEnv` é opcional, por lado, só à mão: as variáveis que levam as portas no modo paralelo, com `{apiPort}` e `{frontPort}` (`"api": { "parallelEnv": { "SERVER_PORT": "{apiPort}", "WEB_URL": "http://localhost:{frontPort}" } }`, `"front": { "parallelEnv": { "PORT": "{frontPort}", "NEXT_PUBLIC_API_URL": "http://localhost:{apiPort}/api" } }`). Nome de variável válido, valor sem aspa (simples ou dupla).
 
 Estado persistido no `localStorage` do webview: `{ "<projeto>": "<id da worktree ativa>" }`; no modo paralelo, também `defaultPorts` (a porta padrão de cada lado por projeto) e `ports` (as portas confirmadas por worktree).
 
@@ -153,6 +153,17 @@ Identidade visual: **painel de partidas** (split-flap). Tokens, tipografia e reg
 - **X da janela:** só esconde na bandeja; os terminais e dev servers continuam rodando.
 - **Bandeja:** menu com "Mostrar janela" e "Sair". "Sair" pede confirmação (diálogo nativo) se algum PTY tiver processo em primeiro plano; ao sair, todos os PTYs são mortos.
 - **Instância única:** abrir o app de novo só mostra a janela existente.
+
+## Windows
+
+O mesmo app, compilado para Windows (instalador NSIS no release). Feito e verificado só no Linux: no Windows ele compila, mas não foi usado.
+
+- **Shell:** `%COMSPEC%` (o `cmd`), não o PowerShell: o 5.1 não aceita o `&&` da linha do start.
+- **Processos:** sem grupo em primeiro plano, "rodando" é o shell ter um filho, e parar à força derruba a árvore dele (Toolhelp + `TerminateProcess`). O Ctrl+C continua indo pelo terminal.
+- **Modo paralelo:** o prefixo é `set "K=v" && ` por variável, que fica valendo no terminal depois do start.
+- **Abrir** URL e config pelo `explorer.exe`; `git` e `gh` sem janela de console; o `editorCommand` passa pelo `cmd /c` (acha o `code.cmd`).
+- **Sem equivalente:** o "Abrir com…" não lista editores (não há `.desktop`), só o `editorCommand`; sem notificação do sistema.
+- **Config:** `%USERPROFILE%\.config\hotswap\config.json`.
 
 ## Logo
 

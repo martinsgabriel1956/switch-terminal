@@ -900,10 +900,12 @@ async function startEnv(k: string, env: Env) {
   const def = defaultPorts[project] ?? NO_PORTS;
   const ports = plan && { api: plan.api ?? def.api, front: plan.front ?? def.front };
   for (const pane of Object.values(env.panes))
-    writeStart(k, pane, fresh.has(k), ports ? envPrefix(fill(pane.side.parallelEnv, ports)) : "", ports ? ports[pane.tab] : null);
+    writeStart(k, pane, fresh.has(k), ports ? envPrefix(fill(pane.side.parallelEnv, ports), WINDOWS) : "", ports ? ports[pane.tab] : null);
   fresh.delete(k);
 }
 
+/** O terminal no Windows é o cmd: o prefixo das portas é outro. */
+const WINDOWS = navigator.userAgent.includes("Windows");
 const NO_PORTS: Ports = { api: null, front: null };
 /** Porta padrão de cada lado por projeto: a última lida num start sem prefixo. */
 const defaultPorts: Record<string, Ports> = load("defaultPorts", {});

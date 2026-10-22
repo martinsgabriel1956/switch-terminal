@@ -101,7 +101,17 @@ pub struct Wt {
 }
 
 fn home() -> String {
-    std::env::var("HOME").unwrap_or_default()
+    std::env::home_dir().map(|h| h.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
+/// Programa de console solto do terminal do app. No Windows, sem `CREATE_NO_WINDOW`, cada `git` abriria uma janela
+/// de console por cima do app.
+fn quiet(program: &str) -> Command {
+    #[allow(unused_mut)]
+    let mut cmd = Command::new(program);
+    #[cfg(windows)]
+    std::os::windows::process::CommandExt::creation_flags(&mut cmd, 0x0800_0000);
+    cmd
 }
 
 fn expand(p: &str) -> String {
@@ -118,10 +128,11 @@ pub fn config_path() -> String {
 /// "Abrir o config.json" no projeto com erro: abre no editor padrão do sistema.
 #[tauri::command]
 pub fn open_config() -> Result<(), String> {
-    let mut child = std::process::Command::new("xdg-open").arg(config_path()).spawn().map_err(|e| e.to_string())?;
-    // Recolhe o xdg-open quando ele sair, senão fica um zumbi por clique.
-    std::thread::spawn(move || child.wait());
-    Ok(())
+    // O explorer não entende "/" num caminho.
+    #[cfg(windows)]
+    return crate::pty::open_default(&config_path().replace('/', "\\"));
+    #[cfg(unix)]
+    crate::pty::open_default(&config_path())
 }
 
 /// "code -n" + pasta → ("code", ["-n", pasta]). Vazio = sem editor.
@@ -133,6 +144,7 @@ fn editor_argv(cmd: &str, dir: &str) -> Option<(String, Vec<String>)> {
 }
 
 /// Editor de interface gráfica pelas categorias do .desktop; os de terminal (Vim) ficam de fora.
+#[cfg_attr(windows, allow(dead_code))]
 fn is_editor(categories: &str, terminal: bool) -> bool {
     !terminal && categories.split(';').any(|c| c == "TextEditor" || c == "IDE")
 }
@@ -154,18 +166,41 @@ pub struct Editors {
 /// O GIO lê os .desktop das pastas do XDG (Flatpak e Snap inclusos), já sem os ocultos, e dá o nome no idioma do sistema.
 #[tauri::command]
 pub fn list_editors() -> Result<Editors, String> {
-    use gio::prelude::*;
     let cfg = read_config()?;
-    let mut editors: Vec<Editor> = gio::AppInfo::all()
+    let mut editors = installed_editors();
+    editors.sort_by_key(|e| e.name.to_lowercase());
+    let command = cfg.editor_command.filter(|c| !c.trim().is_empty());
+    Ok(Editors { editors, chosen: cfg.editor, command })
+}
+
+#[cfg(unix)]
+fn installed_editors() -> Vec<Editor> {
+    use gio::prelude::*;
+    gio::AppInfo::all()
         .into_iter()
         .filter(|a| a.should_show())
         .filter_map(|a| a.downcast::<gio::DesktopAppInfo>().ok())
         .filter(|d| is_editor(d.categories().as_deref().unwrap_or(""), d.boolean("Terminal")))
         .filter_map(|d| Some(Editor { id: d.id()?.to_string(), name: d.name().to_string() }))
-        .collect();
-    editors.sort_by_key(|e| e.name.to_lowercase());
-    let command = cfg.editor_command.filter(|c| !c.trim().is_empty());
-    Ok(Editors { editors, chosen: cfg.editor, command })
+        .collect()
+}
+
+/// Sem .desktop no Windows: o "Abrir com…" fica só com o `editorCommand`.
+#[cfg(windows)]
+fn installed_editors() -> Vec<Editor> {
+    Vec::new()
+}
+
+#[cfg(unix)]
+fn launch_desktop(id: &str, path: &str) -> Result<(), String> {
+    use gio::prelude::*;
+    let app = gio::DesktopAppInfo::new(id).ok_or(format!("{id}: não está mais instalado"))?;
+    app.launch(&[gio::File::for_path(path)], None::<&gio::AppLaunchContext>).map_err(|e| format!("{}: {e}", app.name()))
+}
+
+#[cfg(windows)]
+fn launch_desktop(id: &str, _path: &str) -> Result<(), String> {
+    Err(format!("{id}: não está instalado"))
 }
 
 /// Grava a escolha do "Abrir com…" (None: volta ao `editorCommand`) sem mexer no resto do config.
@@ -186,16 +221,28 @@ pub fn set_editor(id: Option<String>) -> Result<(), String> {
 /// o campo não precisa reler. Ok(false): nenhum dos dois.
 #[tauri::command]
 pub fn open_in_editor(path: String) -> Result<bool, String> {
-    use gio::prelude::*;
-    use std::os::unix::process::CommandExt;
     let cfg = read_config()?;
     if let Some(id) = cfg.editor.as_deref() {
-        let app = gio::DesktopAppInfo::new(id).ok_or(format!("{id}: não está mais instalado"))?;
-        app.launch(&[gio::File::for_path(&path)], None::<&gio::AppLaunchContext>).map_err(|e| format!("{}: {e}", app.name()))?;
+        launch_desktop(id, &path)?;
         return Ok(true);
     }
     let Some((program, args)) = editor_argv(cfg.editor_command.as_deref().unwrap_or(""), &path) else { return Ok(false) };
-    let mut child = Command::new(&program).args(args).process_group(0).spawn().map_err(|e| match e.kind() {
+    #[cfg(unix)]
+    let mut cmd = {
+        use std::os::unix::process::CommandExt;
+        let mut cmd = Command::new(&program);
+        cmd.process_group(0);
+        cmd
+    };
+    // Pelo cmd: o `code` do VS Code é um `code.cmd`, que o Command sozinho não acha.
+    // ponytail: editor que não existe só falha dentro do cmd, sem o "não encontrado".
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut cmd = quiet("cmd");
+        cmd.args(["/c", &program]);
+        cmd
+    };
+    let mut child = cmd.args(args).spawn().map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound => format!("{program}: não encontrado"),
         _ => format!("{program}: {e}"),
     })?;
@@ -251,7 +298,7 @@ fn pair(api: Vec<Wt>, front: Vec<Wt>, manual: &[Pair]) -> Vec<(Option<Wt>, Optio
 }
 
 fn git(repo: &str, args: &[&str]) -> Result<String, String> {
-    let out = Command::new("git").arg("-C").arg(repo).args(args).output().map_err(|e| e.to_string())?;
+    let out = quiet("git").arg("-C").arg(repo).args(args).output().map_err(|e| e.to_string())?;
     if !out.status.success() {
         return Err(format!("{}: {}", repo, String::from_utf8_lossy(&out.stderr).trim()));
     }
@@ -324,7 +371,7 @@ fn pulled(stdout: &str) -> bool {
 /// `LC_ALL=C`: a saída é lida (`pulled`) e o front resume o erro pelo texto em inglês. `GIT_TERMINAL_PROMPT=0`: sem
 /// terminal, um pedido de senha do https seguraria o pull para sempre.
 fn pull_one(path: &str) -> Result<bool, String> {
-    let out = Command::new("git")
+    let out = quiet("git")
         .arg("-C")
         .arg(path)
         .args(["pull", "--ff-only"])
@@ -1108,8 +1155,10 @@ pub fn add_project(project: NewProject) -> Result<(), FormError> {
 /// Roda o `gh` (GitHub CLI) com a conta já logada nele; erro de instalação ou login vira o próximo passo.
 /// Grupo de processos próprio, fora do PTY: o navegador que o `gh pr view --web` abre fica solto do app.
 fn gh(args: &[&str]) -> Result<String, String> {
-    use std::os::unix::process::CommandExt;
-    let out = Command::new("gh").args(args).process_group(0).output().map_err(|e| match e.kind() {
+    let mut cmd = quiet("gh");
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
+    let out = cmd.args(args).output().map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound => "Instale o GitHub CLI (gh) para clonar do GitHub.".to_string(),
         _ => e.to_string(),
     })?;

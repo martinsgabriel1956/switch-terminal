@@ -36,17 +36,19 @@ export function fill(tpl: EnvTemplate, ports: Ports): Record<string, string> {
 }
 
 /** "env 'K=v' 'K2=v2' " antes do start. O env, e não "K=v cmd": o mesmo em fish, bash e zsh. As aspas simples
- *  valem nos três; valor com aspa simples é recusado no templateError. */
-export function envPrefix(vars: Record<string, string>): string {
-  const pairs = Object.entries(vars).map(([k, v]) => `'${k}=${v}'`);
-  return pairs.length ? `env ${pairs.join(" ")} ` : "";
+ *  valem nos três; valor com aspa é recusado no templateError. No Windows o terminal é o cmd, sem env:
+ *  'set "K=v" && ', que fica valendo no terminal depois do start (as próximas subidas dele repetem as mesmas portas). */
+export function envPrefix(vars: Record<string, string>, windows = false): string {
+  const pairs = Object.entries(vars);
+  if (windows) return pairs.map(([k, v]) => `set "${k}=${v}" && `).join("");
+  return pairs.length ? `env ${pairs.map(([k, v]) => `'${k}=${v}'`).join(" ")} ` : "";
 }
 
 /** O que está errado no parallelEnv de um lado, ou null. */
 export function templateError(tpl: EnvTemplate): string | null {
   for (const [name, value] of Object.entries(tpl)) {
     if (!NAME.test(name)) return `nome de variável inválido: ${name}`;
-    if (value.includes("'")) return `${name} tem aspa simples, que o app não passa ao shell`;
+    if (/['"]/.test(value)) return `${name} tem aspa, que o app não passa ao shell`;
     const bad = [...value.matchAll(PLACEHOLDER)].find((m) => !(m[1] in PORT_OF));
     if (bad) return `${name}: ${bad[0]} não existe (use {apiPort} ou {frontPort})`;
   }

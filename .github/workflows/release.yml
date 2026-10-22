@@ -1,6 +1,6 @@
 name: Release
 
-# Toda versão nova que chega na main vira um release com o .deb, o .rpm e o PKGBUILD do AUR. A versão mora no tauri.conf.json (o "chore: versão X"
+# Toda versão nova que chega na main vira um release com o .deb, o .rpm, o PKGBUILD do AUR e o .exe do Windows. A versão mora no tauri.conf.json (o "chore: versão X"
 # muda ele junto com package.json e Cargo.toml); se a tag v<versão> já existe, o release já foi feito e nada roda.
 on:
   push:
@@ -54,6 +54,12 @@ jobs:
       - run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      # O instalador do Windows, compilado daqui: NSIS, o linker e o rc do LLVM, e o cargo-xwin (que baixa o SDK do Windows).
+      - run: |
+          sudo apt-get install -y nsis lld llvm
+          rustup target add x86_64-pc-windows-msvc
+          cargo install --locked cargo-xwin
 
       - run: npm ci
 
