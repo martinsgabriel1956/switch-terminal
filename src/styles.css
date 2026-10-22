@@ -403,17 +403,17 @@ kbd {
   visibility: hidden;
 }
 
-.platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap,
+.platform:not(.parallel):has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap,
 body:has(header:not(.acted) :is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) .line.live[aria-current="true"] .flap {
   animation: ends-ink 0s 120ms forwards;
 }
 
-.platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap > span:first-child,
+.platform:not(.parallel):has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap > span:first-child,
 body:has(header:not(.acted) :is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) .line.live[aria-current="true"] .flap > span:first-child {
   animation: ends-off 0s 120ms forwards;
 }
 
-.platform:has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap .ends,
+.platform:not(.parallel):has(.line:not(.live):is(:hover, :focus-visible)) .line.live .flap .ends,
 body:has(header:not(.acted) :is(.halt, .more-item)[data-ends="all"]:is(:hover, :focus-visible)) .line.live[aria-current="true"] .flap .ends {
   animation: ends-on 0s 120ms forwards;
 }
@@ -595,6 +595,17 @@ body:has(header:not(.acted) :is(.halt, .more-item)[data-ends="all"]:is(:hover, :
 .icon-btn:hover {
   background: var(--flap);
   color: var(--ink);
+}
+
+/* Modo paralelo ligado: a placa do botão fica (fundo flap) e as barras engrossam na cor de quem está de pé.
+   Forma e fundo mudam junto com a cor: ligado não depende só do verde. */
+.icon-btn.parallel:is([aria-pressed="true"], .on) {
+  background: var(--flap);
+  color: var(--run);
+}
+
+.icon-btn.parallel:is([aria-pressed="true"], .on) .icon {
+  stroke-width: 3;
 }
 
 /* desabilitado: a mesma meia opacidade dos botões de texto; em ink-3 ele ficava perto demais do ícone habilitado (ink-2) */
@@ -2574,6 +2585,28 @@ dialog.form code {
   font: 12px var(--mono);
 }
 
+/* Portas do modo paralelo: as variáveis como sobem no terminal, uma por linha, e com quem o Front fala */
+#ports-dialog .vars {
+  display: grid;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+#ports-dialog .vars code {
+  color: var(--ink);
+}
+
+#ports-dialog .talks {
+  margin-top: 4px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+#ports-dialog input[type="number"] {
+  width: 12ch;
+  font-variant-numeric: tabular-nums;
+}
+
 /* min-inline-size 0: o padrão (min-content) deixava um caminho longo alargar o fieldset para fora do diálogo */
 dialog.form fieldset {
   min-inline-size: 0;
@@ -2820,7 +2853,7 @@ dialog.form menu {
 }
 
 /* "Remover…" do editar: à esquerda, longe do Salvar (row-reverse: a margem da direita empurra para a borda) */
-dialog.form menu .remove {
+dialog.form menu :is(.remove, .open-config) {
   margin-right: auto;
 }
 

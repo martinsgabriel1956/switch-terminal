@@ -32,6 +32,9 @@ struct ProjectCfg {
     #[serde(default)]
     manual_pairs: Vec<Pair>,
     base_branch: Option<String>,
+    /// Modo paralelo: as worktrees do projeto sobem juntas, sem a troca encerrar a anterior. Gravado pelo app.
+    #[serde(default)]
+    parallel: bool,
 }
 
 #[derive(Deserialize)]
@@ -43,6 +46,9 @@ struct SideCfg {
     /// Start próprio de uma branch ("feat/x": "npm run dev:mock"); a que não está aqui usa o `start_command`.
     #[serde(default)]
     branch_commands: HashMap<String, String>,
+    /// Variáveis que levam as portas no modo paralelo ("SERVER_PORT": "{apiPort}"); escritas à mão.
+    #[serde(default)]
+    parallel_env: HashMap<String, String>,
 }
 
 #[derive(Deserialize)]
@@ -64,6 +70,7 @@ pub struct ConfigView {
 pub struct ProjectView {
     name: String,
     error: Option<String>,
+    parallel: bool,
     worktrees: Vec<WorktreeView>,
 }
 
@@ -84,6 +91,7 @@ pub struct SideView {
     setup_command: Option<String>,
     /// O do projeto, para o diálogo de edição mostrar o padrão e saber se a branch tem um próprio.
     project_start: Option<String>,
+    parallel_env: HashMap<String, String>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -346,6 +354,7 @@ fn side(w: &Option<Wt>, cfg: &SideCfg) -> Option<SideView> {
         start_command: cfg.branch_commands.get(&w.branch).cloned().or_else(|| cfg.start_command.clone()),
         setup_command: cfg.setup_command.clone(),
         project_start: cfg.start_command.clone(),
+        parallel_env: cfg.parallel_env.clone(),
     })
 }
 
@@ -384,7 +393,7 @@ pub fn load_config() -> Result<ConfigView, String> {
                 (Err(e), _) => (Some(format!("API: {e}")), vec![]),
                 (_, Err(e)) => (Some(format!("Front: {e}")), vec![]),
             };
-            ProjectView { name: p.name.clone(), error, worktrees }
+            ProjectView { name: p.name.clone(), error, parallel: p.parallel, worktrees }
         })
         .collect();
 
@@ -1067,6 +1076,28 @@ pub fn set_screen_reader(on: bool) -> Result<(), String> {
     write_config_json(&path, &cfg)
 }
 
+/// Liga ou desliga o modo paralelo de um projeto sem mexer no resto do config.
+fn set_parallel_in(path: &str, project: &str, on: bool) -> Result<(), String> {
+    let mut cfg = read_config_json(path)?;
+    let proj = cfg["projects"]
+        .as_array_mut()
+        .and_then(|ps| ps.iter_mut().find(|p| p["name"] == project))
+        .and_then(|p| p.as_object_mut())
+        .ok_or(format!("Projeto {project} não está no config."))?;
+    // Desligado é a ausência do campo: o config de quem nunca ligou continua igual.
+    if on {
+        proj.insert("parallel".into(), true.into());
+    } else {
+        proj.remove("parallel");
+    }
+    write_config_json(path, &cfg)
+}
+
+#[tauri::command]
+pub fn set_parallel(project: String, on: bool) -> Result<(), String> {
+    set_parallel_in(&config_path(), &project, on)
+}
+
 #[tauri::command]
 pub fn add_project(project: NewProject) -> Result<(), FormError> {
     add_project_to(&config_path(), &project)
@@ -1221,6 +1252,42 @@ pub async fn clone_github_repo(full_name: String, parent: String) -> Result<Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn set_parallel_keeps_the_rest() {
+        let tmp = std::env::temp_dir().join(format!("hotswap-parallel-{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let config = tmp.join("config.json").to_str().unwrap().to_string();
+        let raw = r#"{"editor":"z.desktop","projects":[{"name":"a","api":{"repo":"x"},"front":{"repo":"y"}},{"name":"b","api":{"repo":"x"},"front":{"repo":"y"}}]}"#;
+        std::fs::write(&config, raw).unwrap();
+        let read = || serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(&config).unwrap()).unwrap();
+
+        set_parallel_in(&config, "b", true).unwrap();
+        let cfg = read();
+        assert_eq!(cfg["projects"][1]["parallel"], true);
+        assert!(cfg["projects"][0].get("parallel").is_none());
+        assert_eq!(cfg["editor"], "z.desktop");
+
+        // Desligar tira o campo: volta ao config de antes.
+        set_parallel_in(&config, "b", false).unwrap();
+        assert_eq!(read(), serde_json::from_str::<serde_json::Value>(raw).unwrap());
+
+        assert!(set_parallel_in(&config, "c", true).is_err());
+
+        // JSON quebrado: recusa e não sobrescreve.
+        std::fs::write(&config, "{").unwrap();
+        assert!(set_parallel_in(&config, "b", true).is_err());
+        assert_eq!(std::fs::read_to_string(&config).unwrap(), "{");
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn parallel_fields_default_off() {
+        let p: ProjectCfg = serde_json::from_str(r#"{"name":"a","api":{"repo":"x"},"front":{"repo":"y","parallelEnv":{"PORT":"{frontPort}"}}}"#).unwrap();
+        assert!(!p.parallel);
+        assert!(p.api.parallel_env.is_empty());
+        assert_eq!(p.front.parallel_env["PORT"], "{frontPort}");
+    }
 
     #[test]
     fn is_editor_by_category() {

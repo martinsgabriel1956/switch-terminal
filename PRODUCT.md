@@ -16,7 +16,7 @@ Trocar de worktree sem fricção: com um clique ou atalho, a worktree anterior d
 
 ## Positioning
 
-Pareia worktrees de dois repositórios diferentes (API + front) pelo nome da branch e garante **uma worktree rodando por projeto**: a troca encerra a anterior, espera as portas liberarem e só então sobe a nova. Um multiplexador de terminal ou o terminal do editor não faz esse pareamento nem esse ciclo de vida.
+Pareia worktrees de dois repositórios diferentes (API + front) pelo nome da branch e garante **uma worktree rodando por projeto**: a troca encerra a anterior, espera as portas liberarem e só então sobe a nova. No modo paralelo, ligado por projeto, várias worktrees do mesmo projeto rodam juntas, cada uma nas suas portas, com o front ligado à API do par. Um multiplexador de terminal ou o terminal do editor não faz esse pareamento nem esse ciclo de vida.
 
 ## Operating Context
 
@@ -30,6 +30,7 @@ Pareia worktrees de dois repositórios diferentes (API + front) pelo nome da bra
 - Projetos configurados em `~/.config/hotswap/config.json` (também criáveis pela UI); worktrees lidas com `git worktree list`; pares manuais para branches de nomes diferentes.
 - Por worktree: abas API e Front, cada uma um PTY real (xterm.js) com o shell do usuário (fish).
 - Troca: Ctrl+C, espera o grupo de processos sair, SIGKILL no timeout; "Forçar agora" e "Voltar para a anterior" durante a espera.
+- Modo paralelo por projeto: as portas vão por variáveis de ambiente declaradas à mão no config (`parallelEnv`), num prefixo `env` visível no terminal.
 - Criar worktree (diretório e branch de origem por lado) e criar projeto pela UI, apontando pastas locais ou clonando do GitHub da conta logada no `gh` (layout bare); remover worktree pelo app (sem forçar); remover projeto não é feito pelo app.
 - Teclado: `Ctrl+Shift+K` paleta, `Ctrl+Shift+J` alterna abas, `Ctrl+Shift+B` barra lateral.
 - Interface em português do Brasil.
