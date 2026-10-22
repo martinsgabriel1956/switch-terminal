@@ -18,7 +18,7 @@ import { searchKey } from "./search";
 import { restartRefusal } from "./restart";
 import { deafSides, lateText, startEnd } from "./start";
 import { pullErrorLine, pullErrorSummary } from "./pull";
-import { envPrefix, fill, movesOwnPort, propose, templateError, type Ports } from "./parallel";
+import { envPrefix, fill, movesOwnPort, portMismatch, propose, templateError, type Ports } from "./parallel";
 
 /** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto.
  *  `parallelEnv`: as variáveis que levam as portas no modo paralelo ("SERVER_PORT": "{apiPort}"). */
@@ -877,6 +877,8 @@ async function writeStart(k: string, pane: Pane, isFresh: boolean, prefix = pane
   halted.delete(pane.ptyId);
   pane.prefix = prefix;
   pane.assigned = assigned;
+  // Com porta atribuída, é ela que o SUBINDO espera; a lida da subida anterior (a padrão) é de outra worktree agora.
+  if (assigned !== null) pane.port = assigned;
   const setup = isFresh ? pane.side.setupCommand : null;
   if (!setup && !pane.side.startCommand) return;
   pane.url = null;
@@ -2265,7 +2267,18 @@ async function pollStatus() {
     changed = true;
     const [project, id] = k.split("\u0000");
     const wt = findWt(project, id);
-    if (end === "rodando" || !wt) continue;
+    if (!wt) continue;
+    if (end === "rodando") {
+      // Subiu numa porta que não é a atribuída: o projeto ignorou a variável (-p fixo no script, override do .env).
+      const off = Object.values(panes).find((p) => portMismatch(p.assigned, p.port));
+      if (off) {
+        const what = `${TAB_LABEL[off.tab]} subiu na ${off.port}, não na ${off.assigned}`;
+        const why = el("span", { className: "why", textContent: "· confira o parallelEnv", title: `O parallelEnv ${off.tab === "api" ? "da API" : "do Front"} precisa da variável que o servidor lê para a porta.` });
+        headerNote(true, project, what, noteWho(project, id, wt.label), why, seeTerminal(project, id, off.tab));
+        notifyAway(project, wt.label, what, why);
+      }
+      continue;
+    }
     const what = lateText(down.map(s => TAB_LABEL[s]), deaf.map(s => ({ name: TAB_LABEL[s], port: panes[s]!.port! })));
     const late = down[0] ?? deaf[0];
     const why = errorWhy(project, id, late);
