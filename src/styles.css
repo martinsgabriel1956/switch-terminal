@@ -599,12 +599,12 @@ body:has(header:not(.acted) :is(.halt, .more-item)[data-ends="all"]:is(:hover, :
 
 /* Modo paralelo ligado: a placa do botão fica (fundo flap) e as barras engrossam na cor de quem está de pé.
    Forma e fundo mudam junto com a cor: ligado não depende só do verde. */
-.icon-btn.parallel[aria-pressed="true"] {
+.icon-btn.parallel:is([aria-pressed="true"], .on) {
   background: var(--flap);
   color: var(--run);
 }
 
-.icon-btn.parallel[aria-pressed="true"] .icon {
+.icon-btn.parallel:is([aria-pressed="true"], .on) .icon {
   stroke-width: 3;
 }
 
