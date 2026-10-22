@@ -19,10 +19,11 @@ import { restartRefusal } from "./restart";
 import { deafSides, lateText, startEnd } from "./start";
 import { pullErrorLine, pullErrorSummary } from "./pull";
 
-/** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto. */
-type Side = { path: string; startCommand: string | null; setupCommand: string | null; projectStart: string | null };
+/** `startCommand`: o que sobe (o da branch, senão o do projeto); `projectStart`: o do projeto.
+ *  `parallelEnv`: as variáveis que levam as portas no modo paralelo ("SERVER_PORT": "{apiPort}"). */
+type Side = { path: string; startCommand: string | null; setupCommand: string | null; projectStart: string | null; parallelEnv: Record<string, string> };
 type Worktree = { id: string; label: string; api: Side | null; front: Side | null };
-type Project = { name: string; error: string | null; worktrees: Worktree[] };
+type Project = { name: string; error: string | null; parallel: boolean; worktrees: Worktree[] };
 type Config = { stopTimeoutMs: number; screenReader: boolean; projects: Project[] };
 type Tab = "api" | "front";
 /** `url`: endereço do dev server lido da saída do terminal ("Local: http://localhost:3000"), só enquanto o processo vive.

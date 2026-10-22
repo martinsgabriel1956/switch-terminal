@@ -127,6 +127,7 @@ pub fn run() {
             worktrees::list_editors,
             worktrees::set_editor,
             worktrees::set_screen_reader,
+            worktrees::set_parallel,
             worktrees::missing_deps_install,
             worktrees::lockfile_pm,
             worktrees::worktree_info,
