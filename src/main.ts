@@ -220,8 +220,9 @@ moreMenu.addEventListener("toggle", (e) => {
   const restartPane = ck && current?.wt[tab]?.startCommand ? envs.get(ck)?.panes[tab] : undefined;
   moreMenu.replaceChildren(
     ...cededOthers().map((o) => {
-      const project = o.dataset.key!;
-      const wt = findWt(project, active[project] ?? "");
+      // A chave é projeto\0id: em paralelo, um projeto tem várias de pé.
+      const [project, id] = o.dataset.key!.split("\u0000");
+      const wt = findWt(project, id);
       const b = el(
         "button",
         {
@@ -623,8 +624,14 @@ function flapText(project: string, wt: Worktree, state: LineState) {
 
 const findWt = (project: string, id: string) => config.projects.find((p) => p.name === project)?.worktrees.find((w) => w.id === id);
 
-/** O que trocar para `id` encerraria: a worktree ativa do projeto, se tem algo de pé. */
+const isParallel = (project: string) => !!config.projects.find((p) => p.name === project)?.parallel;
+/** Algo de pé (ou subindo) na worktree: em paralelo, selecioná-la só mostra. */
+const isLive = (project: string, wt: Worktree) => LIVE.includes(lineState(project, wt));
+const liveWts = (project: string) => config.projects.find((p) => p.name === project)?.worktrees.filter((w) => isLive(project, w)) ?? [];
+
+/** O que trocar para `id` encerraria: a worktree ativa do projeto, se tem algo de pé. Em paralelo, nada. */
 function wouldStop(project: string, id: string | null): Worktree | undefined {
+  if (isParallel(project)) return;
   const prev = active[project];
   if (!prev || prev === id) return;
   const wt = findWt(project, prev);
@@ -872,6 +879,12 @@ async function writeStart(k: string, pane: Pane, isFresh: boolean) {
   const cmd = [setup, install, pane.side.startCommand].filter(Boolean).join(" && ");
   invoke("pty_write", { id: pane.ptyId, data: cmd + "\r" });
 }
+/** O start de cada lado da worktree que vai subir. */
+async function startEnv(k: string, env: Env) {
+  Object.values(env.panes).forEach((pane) => writeStart(k, pane, fresh.has(k)));
+  fresh.delete(k);
+}
+
 /** Ctrl+C → espera → SIGKILL; resolve `true` se precisou forçar. */
 const stopPane = (pane: Pane) => invoke<boolean>("pty_stop", { id: pane.ptyId, timeoutMs: config.stopTimeoutMs });
 
@@ -949,7 +962,8 @@ async function toggleRun(all: boolean, want?: Verb) {
   headerNote(false, project, stoppedIn(secs, forced),noteWho(project, wt.id, wt.label, tabs.map((t) => TAB_LABEL[t]).join(" e "), " · "));
   // Reiniciar: com os processos fora, o start de novo, como o Subir. Só se ela ainda é a ativa do projeto e nada a
   // trocou ou fechou no meio: subir a anterior de uma troca deixaria duas worktrees de pé.
-  if (want === "restart" && active[project] === wt.id && !stopping.has(project) && envs.get(k) === env) for (const p of panes) writeStart(k, p, false);
+  // Em paralelo, a vista pode ter mudado no meio e esta continua de pé: basta o env ser o mesmo.
+  if (want === "restart" && (isParallel(project) || active[project] === wt.id) && !stopping.has(project) && envs.get(k) === env) for (const p of panes) writeStart(k, p, false);
   render();
 }
 
@@ -960,14 +974,17 @@ const quiet = new Map<string, number>();
 
 function activate(project: string, wt: Worktree, created: boolean) {
   const prev = active[project];
+  // Em paralelo, `active` é a última vista do projeto.
+  const parallel = isParallel(project);
   if (prev === wt.id && !created) return;
   active[project] = wt.id;
   saveActive();
-  const hushed = !!prev && prev !== wt.id && envs.has(key(project, prev));
+  const hushed = !parallel && !!prev && prev !== wt.id && envs.has(key(project, prev));
   if (hushed) quiet.set(project, (quiet.get(project) ?? 0) + 1);
 
   const run = async () => {
-    const prevEnv = prev && prev !== wt.id ? envs.get(key(project, prev)) : undefined;
+    // Em paralelo, a anterior continua de pé.
+    const prevEnv = !parallel && prev && prev !== wt.id ? envs.get(key(project, prev)) : undefined;
     if (prevEnv) {
       const fromWt = findWt(project, prev);
       await prevEnv.ready;
@@ -1009,10 +1026,10 @@ function activate(project: string, wt: Worktree, created: boolean) {
     const env = envs.get(k);
     // Trocou de novo enquanto parava: quem vier depois na fila sobe a certa.
     if (active[project] === wt.id) {
+      // Em paralelo, voltar para uma que já roda só mostra.
       if (env) {
         await env.ready;
-        Object.values(env.panes).forEach((pane) => writeStart(k, pane, fresh.has(k)));
-        fresh.delete(k);
+        if (!(parallel && isLive(project, wt))) await startEnv(k, env);
       }
       // Abandonada antes de subir: fecha, em vez de ficar PARADA sem nunca ter rodado.
     } else if (env && created && currentKey() !== k) disposeEnv(k, env);
@@ -1538,6 +1555,27 @@ function editButton(project: string, wt: Worktree) {
   return b;
 }
 
+const PARALLEL_ICON = "M5.5 3v10M10.5 3v10";
+
+/** Liga ou desliga o modo paralelo do projeto (grava no config). */
+async function toggleParallel(project: string) {
+  if (stopping.has(project)) return headerNote(false, project, "Troca em andamento · espere ela terminar");
+  const on = !isParallel(project);
+  // Com várias de pé, desligar para as outras: pede confirmação.
+  if (!on && liveWts(project).length > 1) return confirmParallelOff(project);
+  try {
+    await invoke("set_parallel", { project, on });
+  } catch (e) {
+    return headerNote(true, project, "Não gravei o modo paralelo", el("span", { className: "why", textContent: `· ${e}`, title: String(e) }));
+  }
+  await refresh();
+  headerNote(false, project, on ? "Modo paralelo ligado · as worktrees sobem juntas" : "Modo paralelo desligado");
+}
+
+function confirmParallelOff(project: string) {
+  headerNote(false, project, "Pare as outras worktrees antes de desligar o modo paralelo");
+}
+
 // Projetos recolhidos no painel; lembrados entre sessões.
 const collapsed = new Set<string>(load<string[]>("collapsed", []));
 const CHEVRON = "M6 4l4 4-4 4";
@@ -1565,6 +1603,19 @@ function renderBoard() {
     );
     if (p.error) add.setAttribute("aria-disabled", "true");
     add.dataset.key = `add:${p.name}`;
+    const par = el(
+      "button",
+      {
+        type: "button",
+        className: "icon-btn parallel",
+        title: `Modo paralelo em ${p.name}: ${p.parallel ? "ligado, as worktrees sobem juntas" : "desligado, abrir uma encerra a outra"}`,
+        ariaLabel: `Modo paralelo em ${p.name}`,
+        onclick: () => toggleParallel(p.name),
+      },
+      icon(PARALLEL_ICON),
+    );
+    par.setAttribute("aria-pressed", String(p.parallel));
+    par.dataset.key = `parallel:${p.name}`;
     const problem = p.error
       ? el(
           "details",
@@ -1582,7 +1633,8 @@ function renderBoard() {
     if (problem) keyFocusables(problem, `problem:${p.name}`);
     // Recolhido, o projeto ainda mostra a worktree ativa: o que está de pé não some da tela.
     const open = !collapsed.has(p.name);
-    const shownWts = open ? p.worktrees : p.worktrees.filter((wt) => wt.id === active[p.name] || key(p.name, wt.id) === currentKey());
+    // Em paralelo, recolhido mostra todas as de pé.
+    const shownWts = open ? p.worktrees : p.worktrees.filter((wt) => wt.id === active[p.name] || key(p.name, wt.id) === currentKey() || (p.parallel && isLive(p.name, wt)));
     const hidden = p.worktrees.length - shownWts.length;
     const fold = el(
       "button",
@@ -1607,8 +1659,8 @@ function renderBoard() {
     // Ordem do git, fixa: como num painel de partidas, só a palheta vira; a linha não sai do lugar sob o cursor.
     return el(
       "section",
-      { className: `platform${open ? "" : " folded"}` },
-      el("div", { className: "platform-head" }, el("h2", {}, fold), add),
+      { className: `platform${open ? "" : " folded"}${p.parallel ? " parallel" : ""}` },
+      el("div", { className: "platform-head" }, el("h2", {}, fold), par, add),
       // Recolhido, o erro some junto com as linhas: quem recolheu já viu e não quer o vermelho o dia todo.
       open ? problem : null,
       el("ul", { className: "lines" }, ...shownWts.map((wt) => el("li", { className: "row" }, lineButton(p.name, wt), editButton(p.name, wt)))),
@@ -1713,12 +1765,17 @@ new ResizeObserver(fitBranches).observe(board);
 let runningHtml = "";
 
 /** Com o painel recolhido, o cabeçalho mostra o que roda nos outros projetos. */
+function runningOthers() {
+  return config.projects.flatMap((p) => {
+    // Em paralelo, todas as de pé do projeto (também do atual); senão, a ativa de cada outro projeto.
+    const wts = p.parallel ? p.worktrees.filter((w) => isLive(p.name, w)) : p.name !== current?.project ? p.worktrees.filter((w) => w.id === active[p.name]) : [];
+    return wts.filter((w) => key(p.name, w.id) !== currentKey()).map((wt) => ({ p, wt }));
+  });
+}
+
 function renderRunning() {
-  const buttons = config.projects
-    .filter((p) => p.name !== current?.project && active[p.name])
-    .flatMap((p) => {
-      const wt = p.worktrees.find((w) => w.id === active[p.name]);
-      if (!wt) return [];
+  const buttons = runningOthers()
+    .flatMap(({ p, wt }) => {
       const state = lineState(p.name, wt);
       const spoken = say(p.name, wt, state);
       const b = el(
@@ -1737,20 +1794,13 @@ function renderRunning() {
         el("span", { className: "sep", textContent: "/", ariaHidden: "true" }),
         el("span", { className: "label" }, ...labelNodes(wt.label)),
         el("span", { className: "sr", textContent: `: ${spoken}` }),
-        flap(state, `run:${p.name}`, flapText(p.name, wt, state)),
+        flap(state, `run:${key(p.name, wt.id)}`, flapText(p.name, wt, state)),
       );
-      b.dataset.key = p.name;
+      b.dataset.key = key(p.name, wt.id);
       return [b];
     });
   // Outros projetos com falha (SEM API/FRONT): os que não couberem na faixa marcam o botão do painel (fitHeader).
-  toggleBtn.dataset.failing = config.projects
-    .filter((p) => p.name !== current?.project && active[p.name])
-    .filter((p) => {
-      const wt = p.worktrees.find((w) => w.id === active[p.name]);
-      return wt && lineState(p.name, wt) === "part";
-    })
-    .map((p) => p.name)
-    .join("\u0000");
+  toggleBtn.dataset.failing = [...new Set(runningOthers().filter(({ p, wt }) => lineState(p.name, wt) === "part").map(({ p }) => p.name))].join("\u0000");
   const html = buttons.map((b) => b.outerHTML).join("");
   if (html === runningHtml) return;
   runningHtml = html;
@@ -2252,8 +2302,10 @@ function renderPalette(reset = false) {
   // o Enter só fecha a paleta: "trocar" prometia uma troca que não vem.
   const onCurrent = !!items[sel] && currentKey() === key(items[sel].project, items[sel].wt.id);
   // Ativa de outro projeto: o Enter só leva até ela, não troca nada.
-  const onActive = !!items[sel] && active[items[sel].project] === items[sel].wt.id;
-  paletteEnter.textContent = !config.projects.length ? "criar projeto" : onCurrent ? "já é a atual" : onActive ? "ir para" : "trocar";
+  // Em paralelo, a de pé só é mostrada, e a parada sobe junto, sem encerrar nada.
+  const par = !!items[sel] && isParallel(items[sel].project);
+  const onActive = !!items[sel] && (active[items[sel].project] === items[sel].wt.id || (par && isLive(items[sel].project, items[sel].wt)));
+  paletteEnter.textContent = !config.projects.length ? "criar projeto" : onCurrent ? "já é a atual" : onActive ? "ir para" : par ? "subir junto" : "trocar";
   paletteInput.placeholder = config.projects.length ? "Trocar de worktree…" : "Sem projeto: Enter cria o primeiro";
   // Busca sem resultado: o Enter não faz nada, e o rodapé não promete.
   paletteEnter.hidden = (paletteEnter.previousElementSibling as HTMLElement).hidden = !items.length && !!config.projects.length;
