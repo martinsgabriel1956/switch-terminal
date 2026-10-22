@@ -363,6 +363,22 @@
       </form>
     </dialog>
 
+    <dialog id="parallel-off-dialog" class="form" aria-labelledby="parallel-off-title" aria-describedby="parallel-off-what">
+      <form method="dialog" novalidate>
+        <h2 id="parallel-off-title">Desligar o modo paralelo</h2>
+        <p class="hint where"></p>
+        <div id="parallel-off-what">
+          <p class="hint">Volta a uma worktree rodando por vez. Estas param (Ctrl+C, e SIGKILL se passarem do prazo):</p>
+          <div class="stops"></div>
+          <p class="hint keeps"></p>
+        </div>
+        <menu>
+          <button value="ok" class="primary">Desligar e parar</button>
+          <button value="cancel" formnovalidate>Cancelar</button>
+        </menu>
+      </form>
+    </dialog>
+
     <dialog id="ports-dialog" class="form" aria-labelledby="ports-title">
       <form method="dialog" novalidate>
         <h2 id="ports-title">Portas da worktree</h2>

@@ -1024,6 +1024,19 @@ async function toggleRun(all: boolean, want?: Verb) {
     for (const p of panes) writeStart(k, p, false);
     return render(true);
   }
+  await haltTabs(project, wt, env, tabs);
+  // Reiniciar: com os processos fora, o start de novo, como o Subir. Só se ela ainda é a ativa do projeto e nada a
+  // trocou ou fechou no meio: subir a anterior de uma troca deixaria duas worktrees de pé.
+  // Em paralelo, a vista pode ter mudado no meio e esta continua de pé: basta o env ser o mesmo.
+  if (want === "restart" && (isParallel(project) || active[project] === wt.id) && !stopping.has(project) && envs.get(k) === env) for (const p of panes) writeStart(k, p, false);
+  render();
+}
+
+/** Parada à mão (Ctrl+C → prazo → SIGKILL) dos lados dados; o shell fica e o cabeçalho diz quanto levou. Usada pelo
+ *  Parar e pelo desligar do modo paralelo, que para as outras worktrees de pé. */
+async function haltTabs(project: string, wt: Worktree, env: Env, tabs: Tab[]) {
+  const k = key(project, wt.id);
+  const panes = tabs.map((t) => env.panes[t]!);
   const state = { forcing: false, tabs };
   halting.set(k, state);
   starting.delete(k);
@@ -1039,11 +1052,7 @@ async function toggleRun(all: boolean, want?: Verb) {
   halting.delete(k);
   for (const p of panes) busy.delete(p.ptyId);
   const secs = ((Date.now() - t0) / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  headerNote(false, project, stoppedIn(secs, forced),noteWho(project, wt.id, wt.label, tabs.map((t) => TAB_LABEL[t]).join(" e "), " · "));
-  // Reiniciar: com os processos fora, o start de novo, como o Subir. Só se ela ainda é a ativa do projeto e nada a
-  // trocou ou fechou no meio: subir a anterior de uma troca deixaria duas worktrees de pé.
-  // Em paralelo, a vista pode ter mudado no meio e esta continua de pé: basta o env ser o mesmo.
-  if (want === "restart" && (isParallel(project) || active[project] === wt.id) && !stopping.has(project) && envs.get(k) === env) for (const p of panes) writeStart(k, p, false);
+  headerNote(false, project, stoppedIn(secs, forced), noteWho(project, wt.id, wt.label, tabs.map((t) => TAB_LABEL[t]).join(" e "), " · "));
   render();
 }
 
@@ -1652,9 +1661,6 @@ async function toggleParallel(project: string) {
   headerNote(false, project, on ? "Modo paralelo ligado · as worktrees sobem juntas" : "Modo paralelo desligado");
 }
 
-function confirmParallelOff(project: string) {
-  headerNote(false, project, "Pare as outras worktrees antes de desligar o modo paralelo");
-}
 
 // Projetos recolhidos no painel; lembrados entre sessões.
 const collapsed = new Set<string>(load<string[]>("collapsed", []));
@@ -3220,6 +3226,52 @@ portsDialog.addEventListener("close", () => {
   portsAsk?.resolve("cancel");
   portsAsk = null;
 });
+
+// ---------- desligar o modo paralelo ----------
+
+const parallelOffDialog = $<HTMLDialogElement>("#parallel-off-dialog");
+const parallelOffForm = parallelOffDialog.querySelector("form")!;
+let parallelOff: { project: string; keep: string; off: Worktree[] } | null = null;
+
+/** Desligar com várias de pé: fica a vista (a atual, se é deste projeto; senão a última vista dele) e as outras param. */
+function confirmParallelOff(project: string) {
+  const keep = current?.project === project ? current.wt.id : active[project];
+  const off = liveWts(project).filter((w) => w.id !== keep);
+  const kept = findWt(project, keep);
+  parallelOff = { project, keep, off };
+  parallelOffForm.querySelector(".where")!.replaceChildren(el("span", { className: "project", textContent: project }));
+  parallelOffForm.querySelector(".stops")!.replaceChildren(
+    ...off.map((w) => {
+      const names = procs(project, w);
+      return el("p", { className: "preview" }, el("strong", {}, ...labelNodes(w.label)), ...(names.length ? [" ", el("span", { className: "procs", textContent: `(${names.join(", ")})` })] : []));
+    }),
+  );
+  parallelOffForm.querySelector(".keeps")!.replaceChildren(...(kept ? ["Fica rodando: ", el("strong", {}, ...labelNodes(kept.label)), "."] : []));
+  parallelOffDialog.showModal();
+  // Destrutivo: o foco começa no Cancelar, como no Remover.
+  parallelOffForm.querySelector<HTMLButtonElement>('button[value="cancel"]')!.focus();
+}
+
+parallelOffForm.addEventListener("submit", async (e) => {
+  if ((e.submitter as HTMLButtonElement | null)?.value !== "ok" || !parallelOff) return;
+  const { project, keep } = parallelOff;
+  parallelOff = null;
+  try {
+    await invoke("set_parallel", { project, on: false });
+  } catch (err) {
+    return headerNote(true, project, "Não gravei o modo paralelo", el("span", { className: "why", textContent: `· ${err}`, title: String(err) }));
+  }
+  await refresh();
+  // Relidas agora: a lista do diálogo pode ter mudado enquanto ele estava aberto.
+  const off = liveWts(project).filter((w) => w.id !== keep);
+  await Promise.all(off.map((w) => {
+    const env = envs.get(key(project, w.id));
+    return env && haltTabs(project, w, env, Object.keys(env.panes) as Tab[]);
+  }));
+  headerNote(false, project, "Modo paralelo desligado", off.length ? ` · ${off.length} ${off.length > 1 ? "paradas" : "parada"}` : "");
+});
+
+parallelOffDialog.addEventListener("close", () => (parallelOff = null));
 
 // ---------- remover worktree ----------
 
