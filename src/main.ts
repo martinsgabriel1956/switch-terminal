@@ -958,7 +958,8 @@ async function planPorts(project: string, wt: Worktree): Promise<Ports | null | 
   // As padrão livres (e conhecidas, ou ninguém de pé): sobe como sempre.
   if (sidesUp.every((t) => (def[t] === null ? !others : proposal[t] === def[t]))) return null;
   const saved = savedPorts[k];
-  if (saved) {
+  // Só sem perguntar se o parallelEnv continua válido: o config pode ter mudado desde a confirmação, e é o diálogo que diz o erro.
+  if (saved && sidesUp.every((t) => !templateError(wt[t]!.parallelEnv))) {
     const open = await portsOpen([saved.api, saved.front]);
     if (sidesUp.every((t) => saved[t] !== null && !taken.has(saved[t]!) && !open.has(saved[t]!))) return saved;
   }
