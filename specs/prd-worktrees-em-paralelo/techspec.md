@@ -16,20 +16,20 @@ As portas chegam ao dev server por **variáveis de ambiente num prefixo visível
 | `src-tauri/src/lib.rs` | modificado | Registra `set_parallel`. |
 | `src/parallel.ts` | **novo** | Funções puras: portas padrão aprendidas, escolha de portas livres, substituição do modelo e montagem do prefixo `env`, validação do modelo, conferência da porta que subiu. |
 | `src/parallel.test.ts` | **novo** | Testes do módulo acima. |
-| `src/main.ts` | modificado | `activate` e `wouldStop` respeitam o modo; diálogo de portas; `writeStart` aceita o prefixo; interruptor na placa do projeto; desligar o modo; paleta, ENCERRA e `renderRunning` cientes do modo; conferência da porta depois do RODANDO. |
-| `index.html` / `src/styles.css` | modificado | `<dialog id="ports-dialog">`, interruptor na placa, marca de projeto em paralelo, legenda na ajuda. |
+| `src/main.ts` | modificado | `activate` e `wouldStop` respeitam o modo; diálogo de portas; `writeStart` aceita o prefixo; interruptor na placa do projeto; desligar o modo (com `haltTabs`, o miolo do Parar extraído do `toggleRun`); paleta e `renderRunning` cientes do modo; conferência da porta depois do RODANDO; `PORT_RE` ignora URL depois de `=`. |
+| `index.html` / `src/styles.css` | modificado | `<dialog id="ports-dialog">` e `<dialog id="parallel-off-dialog">`, interruptor na placa, a prévia ENCERRA do painel desligada em `.platform.parallel`, legenda na ajuda. |
 
 **Fluxo de dados ao selecionar uma worktree parada num projeto em paralelo:**
 
 1. `select` → `ensureEnv` → `activate`. Em paralelo, `activate` não cria `Stopping` nem para a anterior; só grava `active[project]` (a "última vista", usada para restaurar ao abrir e para o desligar).
-2. Antes do `writeStart`, `planPorts` decide:
-   - todas as portas padrão livres (nenhum env do app as usa, `ports_open` diz fechadas) → sobe sem prefixo (RF3.1);
-   - senão, as portas lembradas desta worktree, se livres → sobe com elas sem perguntar (RF3.5);
+2. Antes do `writeStart`, `planPorts` decide. A proposta sai de `freePorts`: `propose` com as portas tomadas por outros envs do app, conferida no `ports_open`; a porta que responde entra nas tomadas e a proposta anda (até 5 rodadas), para nunca propor uma porta que outro programa usa.
+   - a proposta igual às padrão (todas livres) → sobe sem prefixo (RF3.1);
+   - senão, as portas lembradas desta worktree, se livres e com o `parallelEnv` de cada lado válido → sobe com elas sem perguntar (RF3.5);
    - senão → abre o diálogo com a proposta (RF3.2).
 3. Confirmado: `ports_open` de novo nas portas escolhidas (RF3.4); livres → `writeStart(k, pane, fresh, prefix)` em cada lado; as portas vão para o `localStorage` (`ports`).
 4. `pollStatus` segue como hoje. Quando a worktree vira RODANDO, `checkPort` compara a porta lida da saída (`pane.port`) com a atribuída; se diferem, segunda faixa: "API subiu na 3333, não na 3334 · confira parallelEnv".
 
-**Desligar com várias rodando:** confirmação (diálogo) lista as que param; em seguida, para cada env do projeto fora a "vista", o mesmo caminho do `toggleRun` com todos os lados (`halting` + `stopPane`), em paralelo; `set_parallel(project, false)` só depois da confirmação.
+**Desligar com várias rodando:** confirmação (`#parallel-off-dialog`) lista as que param; depois dela, `set_parallel(project, false)`, a lista relida (pode ter mudado com o diálogo aberto) e, para cada env do projeto fora a "vista", `haltTabs` com todos os lados, em paralelo. `haltTabs` é o miolo do Parar tirado do `toggleRun` (`halting` + `stopPane` + o recado "Parou em"), e redesenha ao terminar.
 
 ## Design de implementação
 
@@ -61,7 +61,7 @@ export function portMismatch(assigned: number | null, seen: number | null): bool
 pub fn set_parallel(project: String, on: bool) -> Result<(), String>; // grava/remove "parallel" no projeto, atômico
 ```
 
-`writeStart(k, pane, isFresh, prefix = "")`: o prefixo entra só antes do `startCommand`, depois do setup e do install (`setup && install && env … npm run dev`).
+`writeStart(k, pane, isFresh, prefix = pane.prefix, assigned = pane.assigned)`: o prefixo entra só antes do `startCommand`, depois do setup e do install (`setup && install && env … npm run dev`). Sem os dois últimos argumentos (Subir, Reiniciar), repete os da subida anterior. Com porta atribuída, `pane.port` passa a ser ela já no start: é por ela que o SUBINDO espera.
 
 ### Modelos de dado
 
@@ -88,7 +88,7 @@ pub fn set_parallel(project: String, on: bool) -> Result<(), String>; // grava/r
 - `ports`: `{ "<projeto>\0<id>": { api, front } }`, as portas confirmadas por worktree (RF3.5). Esquecidas quando a worktree some, junto com `active` e `recent`.
 - `defaultPorts`: `{ "<projeto>": { api, front } }`, a última porta lida de cada lado numa subida **sem** prefixo. É a porta "padrão" (RF3.2, RF3.6). Sem leitura → `null` → o diálogo pede (RF3.7).
 
-**Estado em memória (main.ts):** `assigned: Map<string, Ports>`, as portas com que cada env subiu nesta subida (para `taken`, para a conferência e para a faixa de destino).
+**Estado em memória (main.ts):** no próprio `Pane`, `assigned` (a porta com que o lado subiu; `null` sem prefixo) e `prefix` (o `env '…' ` usado). Servem ao `takenPorts`, à conferência pós-RODANDO, ao aprendizado da porta padrão (só com `assigned === null`) e ao Subir/Reiniciar, que repetem as portas. A faixa de destino mostra a porta lida da saída, como antes.
 
 ### Endpoints de API
 
@@ -140,11 +140,15 @@ Igual ao app hoje: sem log nem métrica. Tudo é dito na tela.
 - **`active[project]` continua um valor só.** Em paralelo, ele passa a significar "a última vista": restaura uma por projeto ao abrir (o conjunto está fora do escopo) e define quem fica ao desligar. Trocar por um conjunto mexeria em toda leitura de `active` sem um requisito que peça isso.
 - **A fila `queues` por projeto continua.** Ela serializa as ativações. Em paralelo nada espera parada, então a fila só atrasa o tempo do diálogo, que é modal de qualquer jeito.
 - **Reiniciar em segundo plano:** a condição `active[project] === wt.id` do `toggleRun` vira "o env ainda existe e não há troca em andamento". Em paralelo, a worktree vista pode não ser a `active` de quando a parada começou.
+- **`activate` mantém a saída cedo quando a worktree já é a ativa** (`prev === wt.id`), também em paralelo. Sem ela, clicar na linha atual depois de um Parar tudo subia tudo de novo; `active` passa a ser a última vista justamente para isso funcionar igual nos dois modos.
+- **Subir e Reiniciar repetem as portas da subida** (`pane.prefix`/`pane.assigned`), inclusive na worktree que ficou de pé depois de desligar o modo. Voltar à porta padrão ali colidiria com a worktree que acabou de parar, se ela subir de novo. A próxima worktree que sobe por troca usa as padrão (RF5.5), porque o `startEnv` passa o prefixo explicitamente.
+- **A leitura de porta ignora URL logo depois de `=`** (`(?<!=)https?://` no `PORT_RE`). O shell ecoa o comando digitado, e o eco do prefixo (`WEB_URL=http://localhost:3001`) era lido como a porta do servidor da API. Vale também fora do modo paralelo: um dev server não anuncia o próprio endereço como atribuição.
+- **A prévia ENCERRA é desligada por CSS** (`.platform:not(.parallel)` na regra de hover), e não deixando de montar a palheta. O "Parar tudo" continua acendendo ENCERRA na linha atual em paralelo, porque ali o clique de fato encerra.
 
 ### Riscos conhecidos
 
 - **Projeto que ignora a env** (override do dotenv, `-p` fixo no script): sobe na porta padrão e colide. Mitigação: o `portMismatch` acusa com a porta lida, e o `EADDRINUSE` aparece no recado de queda que já existe.
-- **`PORT_RE` lendo a porta errada:** o front que imprime a URL da API (`localhost:3334/api`) antes da própria poderia ser lido como a porta dele. Esse risco já existe hoje (o regex pega a última ocorrência do bloco). Ver no teste manual com os dois projetos; se acontecer, a conferência pode dar alarme falso.
+- **`PORT_RE` lendo a porta errada:** aconteceu com o eco do prefixo e foi corrigido (ver Decisões). Resta o caso de um front que imprime a URL da API (`localhost:3334/api`) depois da própria, fora de uma atribuição: o regex pega a última ocorrência do bloco, e a conferência daria alarme falso. Ainda não visto; conferir no teste com os projetos reais.
 - **Recursos compartilhados** (banco, Redis, filas, `RABBIT_MQ_URL`) continuam os mesmos; está fora de escopo. Duas APIs consumindo a mesma fila podem roubar mensagens uma da outra. É limitação documentada, não bug.
 - **Memória:** sem teto (decisão do PRD). Dois `next dev` pesam; nenhum aviso.
 - **Desligar com uma worktree subindo:** a parada usa o caminho do `toggleRun`, que já aceita parar durante SUBINDO.
@@ -180,3 +184,5 @@ Não há `CLAUDE.md` nem diretório de regras. As convenções vêm do código e
 ## Histórico
 
 **2026-10-22**. Documento criado.
+
+**2026-10-22**. Reconciliado com a implementação (sdd-review). Mudou: a proposta de portas é conferida fora do app (`freePorts`); as portas lembradas exigem `parallelEnv` válido; o estado das portas mora no `Pane` (`assigned`, `prefix`), e não num `Map`; o Subir e o Reiniciar repetem as portas da subida; o `PORT_RE` ignora URL depois de `=` (o eco do prefixo dava a porta do outro lado); com porta atribuída, o SUBINDO espera por ela; o `activate` mantém a saída cedo na worktree ativa; a prévia ENCERRA sai por CSS; o desligar usa `haltTabs` e um diálogo próprio.

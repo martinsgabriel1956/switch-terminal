@@ -82,7 +82,7 @@ Por que importa: o modo é reversível, e desligar não pode deixar o projeto nu
 - **RF5.2** Desligar com duas ou mais rodando pede confirmação e lista as worktrees que vão parar. Fica rodando só a que está na tela (ou, se a tela é de outro projeto, a última vista deste).
 - **RF5.3** As que param seguem o mesmo caminho da parada de hoje (Ctrl+C, espera, SIGKILL no prazo), com o mesmo retorno visual.
 - **RF5.4** Cancelar a confirmação deixa o modo ligado e nada para.
-- **RF5.5** Depois de desligado, a próxima worktree que subir usa as portas padrão.
+- **RF5.5** Depois de desligado, a próxima worktree que subir por troca usa as portas padrão. A que ficou de pé mantém as portas dela ao ser parada e subida de novo (Subir, Reiniciar).
 
 ## Experiência do usuário
 
@@ -127,8 +127,10 @@ Esta feature muda duas decisões de produto já implementadas e descritas fora d
 - `PRODUCT.md` (Positioning) e `SPEC.md` (Terminais e ciclo de vida): "uma worktree ativa por projeto" passa a ser o padrão, e não uma regra absoluta.
 - `SPEC.md` (Fora da v1): "injeção de porta por variável de ambiente" entra, restrita ao modo paralelo.
 
-Os dois arquivos serão atualizados quando a feature for implementada (no `sdd-review`), para não descreverem um comportamento que o app ainda não tem.
+Os dois arquivos foram atualizados na reconciliação da implementação (2026-10-22).
 
 ## Histórico
 
 **2026-10-22**. Documento criado.
+
+**2026-10-22**. Reconciliado com a implementação: o RF5.5 diz que a worktree que fica de pé ao desligar o modo mantém as portas dela no Subir e no Reiniciar (voltar à padrão colidiria com a que acabou de parar, se ela subir de novo). `SPEC.md` e `PRODUCT.md` atualizados.
