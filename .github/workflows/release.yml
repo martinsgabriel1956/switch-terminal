@@ -1,6 +1,6 @@
 name: Release
 
-# Toda versão nova que chega na main vira um release com o .deb. A versão mora no tauri.conf.json (o "chore: versão X"
+# Toda versão nova que chega na main vira um release com o .deb, o .rpm e o PKGBUILD do AUR. A versão mora no tauri.conf.json (o "chore: versão X"
 # muda ele junto com package.json e Cargo.toml); se a tag v<versão> já existe, o release já foi feito e nada roda.
 on:
   push:
@@ -40,8 +40,6 @@ jobs:
     if: needs.check.outputs.exists != 'true'
     # 22.04: o .deb linka contra a glibc mais antiga e instala também nas distros mais novas.
     runs-on: ubuntu-22.04
-    env:
-      VERSION: ${{ needs.check.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,29 +56,9 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - run: npm ci
-      - run: npm test
-      - run: npm run tauri build -- --bundles deb
 
-      # Notas: os commits desde a última tag, sem o próprio "chore: versão".
-      - name: Notas
-        run: |
-          prev=$(git describe --tags --abbrev=0 2>/dev/null || true)
-          {
-            echo "## Instalar"
-            echo
-            echo '```bash'
-            echo "sudo apt install ./hotswap_${VERSION}_amd64.deb"
-            echo '```'
-            echo
-            echo "## Mudanças"
-            echo
-            git log --no-merges --format='- %s' ${prev:+$prev..}HEAD | grep -v '^- chore: versão' || true
-          } > notes.md
-          cat notes.md
-
+      # Testes, .deb, notas e o release: o mesmo script que roda à mão.
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "v$VERSION" src-tauri/target/release/bundle/deb/hotswap_${VERSION}_amd64.deb \
-            --target "$GITHUB_SHA" --title "Hotswap $VERSION" --notes-file notes.md
+        run: scripts/release.sh
